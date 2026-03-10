@@ -36,10 +36,7 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
           vscode.commands.executeCommand("grove.copyMcpConfig");
           break;
         case "runTests":
-          // Will be implemented in Phase 1c
-          vscode.window.showInformationMessage(
-            "Test runner not yet implemented",
-          );
+          vscode.commands.executeCommand("grove.runTests");
           break;
       }
     });

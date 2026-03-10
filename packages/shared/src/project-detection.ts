@@ -8,7 +8,7 @@ import { GroveProject, GroveLanguage } from "./types";
  * @returns Array of detected Grove projects
  */
 export async function detectGroveProjects(
-  workspacePath: string
+  workspacePath: string,
 ): Promise<GroveProject[]> {
   const projects: GroveProject[] = [];
   const snipFiles = await findSnipFiles(workspacePath);
@@ -35,7 +35,7 @@ export async function detectGroveProjects(
  */
 async function findSnipFiles(
   dir: string,
-  maxDepth: number = 5
+  maxDepth: number = 5,
 ): Promise<string[]> {
   const results: string[] = [];
 
@@ -71,7 +71,7 @@ async function findSnipFiles(
  * Detect language based on project files.
  */
 export async function detectLanguage(
-  projectPath: string
+  projectPath: string,
 ): Promise<GroveLanguage | null> {
   // Check for Node.js (package.json with jest)
   try {
@@ -156,3 +156,29 @@ export async function validateSnipConfig(snipPath: string): Promise<boolean> {
   }
 }
 
+/**
+ * Find which Grove project contains a given file path.
+ * Returns the project whose rootPath is an ancestor of the file.
+ */
+export function findProjectForFile(
+  filePath: string,
+  projects: GroveProject[],
+): GroveProject | undefined {
+  // Normalize the file path
+  const normalizedFile = path.resolve(filePath);
+
+  // Find all projects that contain this file (file is under project root)
+  const matchingProjects = projects.filter((project) => {
+    const normalizedRoot = path.resolve(project.rootPath);
+    return normalizedFile.startsWith(normalizedRoot + path.sep);
+  });
+
+  if (matchingProjects.length === 0) {
+    return undefined;
+  }
+
+  // Return the most specific match (deepest project root)
+  return matchingProjects.reduce((best, current) =>
+    current.rootPath.length > best.rootPath.length ? current : best,
+  );
+}

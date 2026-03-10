@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { handleReadFile } from "../tools/read-file.js";
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -6,15 +6,14 @@ import * as os from "os";
 
 describe("grove_read_file tool", () => {
   let tempDir: string;
-  const originalEnv = process.env.GROVE_WORKSPACE;
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "grove-test-"));
-    process.env.GROVE_WORKSPACE = tempDir;
+    vi.stubEnv("GROVE_WORKSPACE", tempDir);
   });
 
   afterEach(async () => {
-    process.env.GROVE_WORKSPACE = originalEnv;
+    vi.unstubAllEnvs();
     await fs.rm(tempDir, { recursive: true });
   });
 
@@ -60,7 +59,7 @@ describe("grove_read_file tool", () => {
   });
 
   it("should return error when GROVE_WORKSPACE is not set", async () => {
-    delete process.env.GROVE_WORKSPACE;
+    vi.stubEnv("GROVE_WORKSPACE", "");
     const result = await handleReadFile({ path: "test.txt" });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("GROVE_WORKSPACE");

@@ -41,6 +41,10 @@
       {
         "command": "grove.refreshPanel",
         "title": "Grove: Refresh Panel"
+      },
+      {
+        "command": "grove.runTests",
+        "title": "Grove: Run Tests"
       }
     ]
   },
@@ -54,7 +58,7 @@
     "@mongodb/grove-mcp": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^25.4.0",
     "@types/vscode": "^1.110.0",
     "esbuild": "^0.27.0"
   }

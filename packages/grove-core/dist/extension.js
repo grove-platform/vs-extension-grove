@@ -83,6 +83,7 @@ var require_project_detection = __commonJS({
     exports2.detectGroveProjects = detectGroveProjects2;
     exports2.detectLanguage = detectLanguage;
     exports2.validateSnipConfig = validateSnipConfig;
+    exports2.findProjectForFile = findProjectForFile2;
     var path2 = __importStar(require("path"));
     var fs2 = __importStar(require("fs/promises"));
     async function detectGroveProjects2(workspacePath) {
@@ -180,6 +181,17 @@ var require_project_detection = __commonJS({
         return false;
       }
     }
+    function findProjectForFile2(filePath, projects) {
+      const normalizedFile = path2.resolve(filePath);
+      const matchingProjects = projects.filter((project) => {
+        const normalizedRoot = path2.resolve(project.rootPath);
+        return normalizedFile.startsWith(normalizedRoot + path2.sep);
+      });
+      if (matchingProjects.length === 0) {
+        return void 0;
+      }
+      return matchingProjects.reduce((best, current) => current.rootPath.length > best.rootPath.length ? current : best);
+    }
   }
 });
 
@@ -273,7 +285,8 @@ var require_dist = __commonJS({
 var extension_exports = {};
 __export(extension_exports, {
   activate: () => activate,
-  deactivate: () => deactivate
+  deactivate: () => deactivate,
+  getApi: () => getApi
 });
 module.exports = __toCommonJS(extension_exports);
 var vscode3 = __toESM(require("vscode"));
@@ -384,9 +397,7 @@ var GrovePanelProvider = class {
           vscode2.commands.executeCommand("grove.copyMcpConfig");
           break;
         case "runTests":
-          vscode2.window.showInformationMessage(
-            "Test runner not yet implemented"
-          );
+          vscode2.commands.executeCommand("grove.runTests");
           break;
       }
     });
@@ -505,6 +516,63 @@ var GrovePanelProvider = class {
   }
 };
 
+// src/test-runner-api.ts
+var registeredRunners = /* @__PURE__ */ new Map();
+function registerTestRunner(runner) {
+  registeredRunners.set(runner.language, runner);
+  console.log(`Grove: Registered test runner "${runner.name}" for ${runner.language}`);
+}
+function getTestRunner(language) {
+  return registeredRunners.get(language);
+}
+function listTestRunners() {
+  return Array.from(registeredRunners.keys());
+}
+async function findTestRunnerForProject(projectPath) {
+  for (const runner of registeredRunners.values()) {
+    try {
+      if (await runner.detect(projectPath)) {
+        return runner;
+      }
+    } catch {
+    }
+  }
+  return void 0;
+}
+async function runTests(options) {
+  const { language, ...runOptions } = options;
+  let runner;
+  if (language) {
+    runner = getTestRunner(language);
+    if (!runner) {
+      return {
+        success: false,
+        duration: 0,
+        output: `No test runner registered for language: ${language}. Available: ${listTestRunners().join(", ") || "none"}`
+      };
+    }
+  } else {
+    runner = await findTestRunnerForProject(runOptions.projectPath);
+    if (!runner) {
+      return {
+        success: false,
+        duration: 0,
+        output: `Could not detect test runner for project. Registered runners: ${listTestRunners().join(", ") || "none"}`
+      };
+    }
+  }
+  return runner.run(runOptions);
+}
+function getApi() {
+  return {
+    registerTestRunner,
+    getTestRunner,
+    listTestRunners,
+    findTestRunnerForProject,
+    runTests
+  };
+}
+
 // src/extension.ts
 var statusBarItem;
 var currentStatus = null;
@@ -558,11 +626,71 @@ ${status.projects.length} project(s) found`;
     }
   }
   registerCopyConfigCommand(context);
+  context.subscriptions.push(
+    vscode3.commands.registerCommand("grove.runTests", async () => {
+      const workspaceFolders = vscode3.workspace.workspaceFolders;
+      if (!workspaceFolders) {
+        vscode3.window.showErrorMessage("No workspace folder open");
+        return;
+      }
+      const workspaceRoot = workspaceFolders[0].uri.fsPath;
+      let projectPath = workspaceRoot;
+      const activeFile = vscode3.window.activeTextEditor?.document.uri.fsPath;
+      if (activeFile) {
+        const projects = await (0, import_shared.detectGroveProjects)(workspaceRoot);
+        const project = (0, import_shared.findProjectForFile)(activeFile, projects);
+        if (project) {
+          projectPath = project.rootPath;
+        }
+      }
+      const runner = await findTestRunnerForProject(projectPath);
+      if (!runner) {
+        vscode3.window.showWarningMessage(
+          "No test runner found. Install a Grove language extension (e.g., Grove for Node.js)."
+        );
+        return;
+      }
+      const outputChannel2 = vscode3.window.createOutputChannel("Grove Tests");
+      vscode3.window.withProgress(
+        {
+          location: vscode3.ProgressLocation.Notification,
+          title: `Running ${runner.name} tests...`,
+          cancellable: false
+        },
+        async () => {
+          const result = await runTests({ projectPath });
+          if (result.output) {
+            outputChannel2.clear();
+            outputChannel2.appendLine(`=== Grove Test Results ===`);
+            outputChannel2.appendLine(`Duration: ${result.duration}ms`);
+            outputChannel2.appendLine(`Success: ${result.success}`);
+            outputChannel2.appendLine(``);
+            outputChannel2.appendLine(result.output);
+          }
+          if (result.success) {
+            vscode3.window.showInformationMessage(
+              `Tests passed: ${result.passed ?? 0}/${result.total ?? 0}`
+            );
+          } else {
+            const message = result.total === 0 ? `Test runner failed. Check output for details.` : `Tests failed: ${result.failed ?? 0}/${result.total ?? 0}`;
+            const action = await vscode3.window.showErrorMessage(
+              message,
+              "Show Output"
+            );
+            if (action === "Show Output") {
+              outputChannel2.show();
+            }
+          }
+        }
+      );
+    })
+  );
   const outputChannel = vscode3.window.createOutputChannel("Grove");
   outputChannel.appendLine(
     `Grove activated. Found ${status.projects.length} project(s).`
   );
   context.subscriptions.push(outputChannel);
+  return getApi();
 }
 function deactivate() {
   stopMcpServer();
@@ -570,5 +698,6 @@ function deactivate() {
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   activate,
-  deactivate
+  deactivate,
+  getApi
 });

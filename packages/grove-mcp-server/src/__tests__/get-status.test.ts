@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { handleGetStatus } from "../tools/get-status.js";
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -6,20 +6,19 @@ import * as os from "os";
 
 describe("grove_get_status tool", () => {
   let tempDir: string;
-  const originalEnv = process.env.GROVE_WORKSPACE;
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "grove-test-"));
-    process.env.GROVE_WORKSPACE = tempDir;
+    vi.stubEnv("GROVE_WORKSPACE", tempDir);
   });
 
   afterEach(async () => {
-    process.env.GROVE_WORKSPACE = originalEnv;
+    vi.unstubAllEnvs();
     await fs.rm(tempDir, { recursive: true });
   });
 
   it("should return error when GROVE_WORKSPACE not set", async () => {
-    delete process.env.GROVE_WORKSPACE;
+    vi.stubEnv("GROVE_WORKSPACE", "");
     const result = await handleGetStatus({});
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("GROVE_WORKSPACE");
@@ -53,7 +52,7 @@ describe("grove_get_status tool", () => {
     await fs.writeFile(path.join(tempDir, "snip.js"), "module.exports = {};");
     await fs.writeFile(
       path.join(tempDir, "package.json"),
-      JSON.stringify({ devDependencies: { jest: "^29.0.0" } })
+      JSON.stringify({ devDependencies: { jest: "^29.0.0" } }),
     );
 
     const result = await handleGetStatus({});
@@ -61,4 +60,3 @@ describe("grove_get_status tool", () => {
     expect(status.projects[0].language).toBe("nodejs");
   });
 });
-

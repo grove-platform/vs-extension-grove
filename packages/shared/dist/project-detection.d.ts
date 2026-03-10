@@ -13,4 +13,9 @@ export declare function detectLanguage(projectPath: string): Promise<GroveLangua
  * Validate snip.js configuration.
  */
 export declare function validateSnipConfig(snipPath: string): Promise<boolean>;
+/**
+ * Find which Grove project contains a given file path.
+ * Returns the project whose rootPath is an ancestor of the file.
+ */
+export declare function findProjectForFile(filePath: string, projects: GroveProject[]): GroveProject | undefined;
 //# sourceMappingURL=project-detection.d.ts.map

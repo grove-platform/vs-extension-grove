@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.detectGroveProjects = detectGroveProjects;
 exports.detectLanguage = detectLanguage;
 exports.validateSnipConfig = validateSnipConfig;
+exports.findProjectForFile = findProjectForFile;
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs/promises"));
 /**
@@ -173,5 +174,23 @@ async function validateSnipConfig(snipPath) {
     catch {
         return false;
     }
+}
+/**
+ * Find which Grove project contains a given file path.
+ * Returns the project whose rootPath is an ancestor of the file.
+ */
+function findProjectForFile(filePath, projects) {
+    // Normalize the file path
+    const normalizedFile = path.resolve(filePath);
+    // Find all projects that contain this file (file is under project root)
+    const matchingProjects = projects.filter((project) => {
+        const normalizedRoot = path.resolve(project.rootPath);
+        return normalizedFile.startsWith(normalizedRoot + path.sep);
+    });
+    if (matchingProjects.length === 0) {
+        return undefined;
+    }
+    // Return the most specific match (deepest project root)
+    return matchingProjects.reduce((best, current) => current.rootPath.length > best.rootPath.length ? current : best);
 }
 //# sourceMappingURL=project-detection.js.map
