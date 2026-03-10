@@ -15,10 +15,32 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "grove",
+          "title": "Grove",
+          "icon": "resources/grove-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "grove": [
+        {
+          "type": "webview",
+          "id": "grove.panel",
+          "name": "Grove"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "grove.copyMcpConfig",
         "title": "Grove: Copy MCP Configuration"
+      },
+      {
+        "command": "grove.refreshPanel",
+        "title": "Grove: Refresh Panel"
       }
     ]
   },

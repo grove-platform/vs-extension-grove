@@ -183,6 +183,65 @@ var require_project_detection = __commonJS({
   }
 });
 
+// ../shared/dist/security.js
+var require_security = __commonJS({
+  "../shared/dist/security.js"(exports2) {
+    "use strict";
+    var __createBinding = exports2 && exports2.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __setModuleDefault = exports2 && exports2.__setModuleDefault || (Object.create ? (function(o, v) {
+      Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+      o["default"] = v;
+    });
+    var __importStar = exports2 && exports2.__importStar || /* @__PURE__ */ (function() {
+      var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function(o2) {
+          var ar = [];
+          for (var k in o2) if (Object.prototype.hasOwnProperty.call(o2, k)) ar[ar.length] = k;
+          return ar;
+        };
+        return ownKeys(o);
+      };
+      return function(mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) {
+          for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        }
+        __setModuleDefault(result, mod);
+        return result;
+      };
+    })();
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.isPathWithinBoundary = isPathWithinBoundary;
+    exports2.sanitizePath = sanitizePath;
+    var path2 = __importStar(require("path"));
+    function isPathWithinBoundary(resolvedPath, basePath) {
+      const normalizedResolved = path2.normalize(resolvedPath);
+      const normalizedBase = path2.normalize(basePath);
+      return normalizedResolved.startsWith(normalizedBase + path2.sep) || normalizedResolved === normalizedBase;
+    }
+    function sanitizePath(relativePath) {
+      let sanitized = relativePath.replace(/\0/g, "");
+      sanitized = sanitized.replace(/\\/g, "/");
+      sanitized = sanitized.replace(/^\/+/, "");
+      return sanitized;
+    }
+  }
+});
+
 // ../shared/dist/index.js
 var require_dist = __commonJS({
   "../shared/dist/index.js"(exports2) {
@@ -206,6 +265,7 @@ var require_dist = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     __exportStar(require_types(), exports2);
     __exportStar(require_project_detection(), exports2);
+    __exportStar(require_security(), exports2);
   }
 });
 
@@ -216,7 +276,7 @@ __export(extension_exports, {
   deactivate: () => deactivate
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode2 = __toESM(require("vscode"));
+var vscode3 = __toESM(require("vscode"));
 var import_shared = __toESM(require_dist());
 
 // src/mcp-bridge.ts
@@ -298,31 +358,209 @@ function registerCopyConfigCommand(context) {
   context.subscriptions.push(command);
 }
 
+// src/panel/GrovePanel.ts
+var vscode2 = __toESM(require("vscode"));
+var GrovePanelProvider = class {
+  constructor(_extensionUri, _getStatus) {
+    this._extensionUri = _extensionUri;
+    this._getStatus = _getStatus;
+  }
+  static viewType = "grove.panel";
+  _view;
+  _status = null;
+  async resolveWebviewView(webviewView, _context, _token) {
+    this._view = webviewView;
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [this._extensionUri]
+    };
+    webviewView.webview.html = this._getHtml();
+    webviewView.webview.onDidReceiveMessage(async (message) => {
+      switch (message.command) {
+        case "refresh":
+          await this.refresh();
+          break;
+        case "copyMcpConfig":
+          vscode2.commands.executeCommand("grove.copyMcpConfig");
+          break;
+        case "runTests":
+          vscode2.window.showInformationMessage(
+            "Test runner not yet implemented"
+          );
+          break;
+      }
+    });
+    webviewView.onDidChangeVisibility(() => {
+      if (webviewView.visible) {
+        this.refresh();
+      }
+    });
+    await this.refresh();
+  }
+  async refresh() {
+    if (!this._view) return;
+    this._status = await this._getStatus();
+    this._view.webview.postMessage({
+      command: "updateStatus",
+      status: this._status
+    });
+  }
+  _getHtml() {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+  <title>Grove</title>
+  <style>
+    body {
+      font-family: var(--vscode-font-family);
+      font-size: var(--vscode-font-size);
+      color: var(--vscode-foreground);
+      padding: 10px;
+      margin: 0;
+    }
+    .section { margin-bottom: 16px; }
+    .section-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: var(--vscode-textLink-foreground);
+    }
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 4px 0;
+    }
+    .status-icon { width: 16px; text-align: center; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    button {
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      border: none;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: var(--vscode-font-size);
+    }
+    button:hover { background: var(--vscode-button-hoverBackground); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .setup-wizard {
+      background: var(--vscode-inputValidation-infoBackground);
+      border: 1px solid var(--vscode-inputValidation-infoBorder);
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+    .setup-wizard h3 { margin: 0 0 8px 0; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div id="loading">Loading Grove status...</div>
+  <div id="content" class="hidden"></div>
+  <script>
+    const vscode = acquireVsCodeApi();
+    let currentStatus = null;
+
+    window.addEventListener('message', event => {
+      const message = event.data;
+      if (message.command === 'updateStatus') {
+        currentStatus = message.status;
+        render();
+      }
+    });
+
+    function render() {
+      const loading = document.getElementById('loading');
+      const content = document.getElementById('content');
+      if (!currentStatus) {
+        loading.classList.remove('hidden');
+        content.classList.add('hidden');
+        return;
+      }
+      loading.classList.add('hidden');
+      content.classList.remove('hidden');
+      let html = '';
+      if (!currentStatus.hasProject) {
+        html += '<div class="setup-wizard"><h3>No Grove Project Detected</h3><p>Create a snip.js file to get started, or open a folder containing one.</p></div>';
+      } else {
+        html += '<div class="section"><div class="section-title">Projects</div>';
+        html += currentStatus.projects.map(p => 
+          '<div class="status-row"><span class="status-icon">' + (p.hasValidConfig ? '\u2713' : '!') + '</span><span>' + (p.relativePath || 'Root') + '</span><span>(' + (p.language || 'unknown') + ')</span></div>'
+        ).join('');
+        html += '</div>';
+        html += '<div class="section"><div class="section-title">MongoDB</div><div class="status-row"><span class="status-icon">' + (currentStatus.mongoConnection.connected ? '\u2713' : '\u25CB') + '</span><span>' + (currentStatus.mongoConnection.connected ? 'Connected' : 'Not connected') + '</span></div></div>';
+        html += '<div class="section"><div class="section-title">Actions</div><div class="actions"><button onclick="runTests()">Run Tests</button><button onclick="refresh()">Refresh</button></div></div>';
+      }
+      html += '<div class="section"><div class="section-title">AI Integration</div><button onclick="copyMcpConfig()" style="width: 100%;">Copy MCP Config for Augment</button></div>';
+      content.innerHTML = html;
+    }
+    function refresh() { vscode.postMessage({ command: 'refresh' }); }
+    function copyMcpConfig() { vscode.postMessage({ command: 'copyMcpConfig' }); }
+    function runTests() { vscode.postMessage({ command: 'runTests' }); }
+    refresh();
+  </script>
+</body>
+</html>`;
+  }
+};
+
 // src/extension.ts
 var statusBarItem;
+var currentStatus = null;
+async function getStatus() {
+  const workspaceFolders = vscode3.workspace.workspaceFolders;
+  if (!workspaceFolders) {
+    return {
+      hasProject: false,
+      activeProject: null,
+      projects: [],
+      mongoConnection: { connected: false, clusterType: "unknown" }
+    };
+  }
+  const projects = await (0, import_shared.detectGroveProjects)(workspaceFolders[0].uri.fsPath);
+  currentStatus = {
+    hasProject: projects.length > 0,
+    activeProject: projects[0] ?? null,
+    projects,
+    mongoConnection: { connected: false, clusterType: "unknown" }
+  };
+  return currentStatus;
+}
 async function activate(context) {
   console.log("Grove extension activate() called");
-  statusBarItem = vscode2.window.createStatusBarItem(
-    vscode2.StatusBarAlignment.Left,
+  const panelProvider = new GrovePanelProvider(context.extensionUri, getStatus);
+  context.subscriptions.push(
+    vscode3.window.registerWebviewViewProvider(
+      GrovePanelProvider.viewType,
+      panelProvider
+    )
+  );
+  context.subscriptions.push(
+    vscode3.commands.registerCommand("grove.refreshPanel", () => {
+      panelProvider.refresh();
+    })
+  );
+  statusBarItem = vscode3.window.createStatusBarItem(
+    vscode3.StatusBarAlignment.Left,
     100
   );
   context.subscriptions.push(statusBarItem);
-  const workspaceFolders = vscode2.workspace.workspaceFolders;
-  if (!workspaceFolders) {
-    return;
-  }
-  const projects = await (0, import_shared.detectGroveProjects)(workspaceFolders[0].uri.fsPath);
-  if (projects.length > 0) {
-    statusBarItem.text = `$(tree) Grove: ${projects[0].relativePath}`;
+  const status = await getStatus();
+  if (status.hasProject && status.activeProject) {
+    statusBarItem.text = `$(tree) Grove: ${status.activeProject.relativePath}`;
     statusBarItem.tooltip = `Grove project detected
-${projects.length} project(s) found`;
+${status.projects.length} project(s) found`;
     statusBarItem.show();
-    await startMcpServer(context, workspaceFolders[0].uri.fsPath);
+    const workspaceFolders = vscode3.workspace.workspaceFolders;
+    if (workspaceFolders) {
+      await startMcpServer(context, workspaceFolders[0].uri.fsPath);
+    }
   }
   registerCopyConfigCommand(context);
-  const outputChannel = vscode2.window.createOutputChannel("Grove");
+  const outputChannel = vscode3.window.createOutputChannel("Grove");
   outputChannel.appendLine(
-    `Grove activated. Found ${projects.length} project(s).`
+    `Grove activated. Found ${status.projects.length} project(s).`
   );
   context.subscriptions.push(outputChannel);
 }
