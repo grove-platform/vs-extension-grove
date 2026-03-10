@@ -1,0 +1,39 @@
+{
+  "name": "grove-core",
+  "displayName": "Grove",
+  "description": "MongoDB documentation code example testing platform",
+  "version": "0.0.1",
+  "publisher": "mongodb",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/snip.js"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "grove.copyMcpConfig",
+        "title": "Grove: Copy MCP Configuration"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "watch": "npm run build -- --watch",
+    "lint": "eslint src --ext ts"
+  },
+  "dependencies": {
+    "@grove/shared": "workspace:*",
+    "@mongodb/grove-mcp": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.110.0",
+    "esbuild": "^0.27.0"
+  }
+}

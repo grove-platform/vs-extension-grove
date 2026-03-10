@@ -1,0 +1,25 @@
+{
+  "name": "@mongodb/grove-mcp",
+  "version": "0.0.1",
+  "description": "MCP server for Grove documentation testing platform",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "grove-mcp": "./bin/grove-mcp.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@grove/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "vitest": "^1.2.0"
+  }
+}
