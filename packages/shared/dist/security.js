@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isPathWithinBoundary = isPathWithinBoundary;
 exports.sanitizePath = sanitizePath;
+exports.validateWorkspacePath = validateWorkspacePath;
 const path = __importStar(require("path"));
 /**
  * Validate that a resolved path is within the allowed base directory.
@@ -57,5 +58,13 @@ function sanitizePath(relativePath) {
     // Remove leading slashes (prevent absolute paths)
     sanitized = sanitized.replace(/^\/+/, "");
     return sanitized;
+}
+/**
+ * Validate that a path is within the workspace boundary.
+ * Resolves the path and checks it's within the workspace.
+ */
+function validateWorkspacePath(filePath, workspacePath) {
+    const resolvedPath = path.resolve(filePath);
+    return isPathWithinBoundary(resolvedPath, workspacePath);
 }
 //# sourceMappingURL=security.js.map

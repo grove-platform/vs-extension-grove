@@ -15,6 +15,26 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "Grove",
+      "properties": {
+        "grove.autoDetect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically detect Grove projects on workspace open"
+        },
+        "grove.bluehawkPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to bluehawk CLI (uses npx if empty)"
+        },
+        "grove.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Grove status in the status bar"
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -45,13 +65,19 @@
       {
         "command": "grove.runTests",
         "title": "Grove: Run Tests"
+      },
+      {
+        "command": "grove.createSymlink",
+        "title": "Grove: Create Symlink for Documentation"
       }
     ]
   },
   "scripts": {
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
     "watch": "npm run build -- --watch",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@grove/shared": "workspace:*",
@@ -60,6 +86,7 @@
   "devDependencies": {
     "@types/node": "^25.4.0",
     "@types/vscode": "^1.110.0",
-    "esbuild": "^0.27.0"
+    "esbuild": "^0.27.0",
+    "vitest": "^4.0.18"
   }
 }

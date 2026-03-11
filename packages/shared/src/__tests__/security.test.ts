@@ -1,16 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { isPathWithinBoundary, sanitizePath } from "../security";
+import {
+  isPathWithinBoundary,
+  sanitizePath,
+  validateWorkspacePath,
+} from "../security";
 
 describe("isPathWithinBoundary", () => {
   it("should allow paths within boundary", () => {
     expect(
-      isPathWithinBoundary("/home/user/project/file.txt", "/home/user/project")
+      isPathWithinBoundary("/home/user/project/file.txt", "/home/user/project"),
     ).toBe(true);
   });
 
   it("should reject paths outside boundary", () => {
     expect(
-      isPathWithinBoundary("/home/user/other/file.txt", "/home/user/project")
+      isPathWithinBoundary("/home/user/other/file.txt", "/home/user/project"),
     ).toBe(false);
   });
 
@@ -18,21 +22,24 @@ describe("isPathWithinBoundary", () => {
     expect(
       isPathWithinBoundary(
         "/home/user/project/../other/file.txt",
-        "/home/user/project"
-      )
+        "/home/user/project",
+      ),
     ).toBe(false);
   });
 
   it("should allow the boundary path itself", () => {
     expect(
-      isPathWithinBoundary("/home/user/project", "/home/user/project")
+      isPathWithinBoundary("/home/user/project", "/home/user/project"),
     ).toBe(true);
   });
 
   it("should reject paths that start with boundary prefix but are different", () => {
     // e.g., /home/user/project-evil should not be allowed for /home/user/project
     expect(
-      isPathWithinBoundary("/home/user/project-evil/file.txt", "/home/user/project")
+      isPathWithinBoundary(
+        "/home/user/project-evil/file.txt",
+        "/home/user/project",
+      ),
     ).toBe(false);
   });
 
@@ -40,8 +47,8 @@ describe("isPathWithinBoundary", () => {
     expect(
       isPathWithinBoundary(
         "/home/user/project/deep/nested/path/file.txt",
-        "/home/user/project"
-      )
+        "/home/user/project",
+      ),
     ).toBe(true);
   });
 });
@@ -81,3 +88,43 @@ describe("sanitizePath", () => {
   });
 });
 
+describe("validateWorkspacePath", () => {
+  it("should validate paths within workspace", () => {
+    expect(
+      validateWorkspacePath(
+        "/home/user/project/file.txt",
+        "/home/user/project",
+      ),
+    ).toBe(true);
+  });
+
+  it("should reject paths outside workspace", () => {
+    expect(
+      validateWorkspacePath("/home/user/other/file.txt", "/home/user/project"),
+    ).toBe(false);
+  });
+
+  it("should reject path traversal attempts", () => {
+    expect(
+      validateWorkspacePath(
+        "/home/user/project/../other/file.txt",
+        "/home/user/project",
+      ),
+    ).toBe(false);
+  });
+
+  it("should allow the workspace path itself", () => {
+    expect(
+      validateWorkspacePath("/home/user/project", "/home/user/project"),
+    ).toBe(true);
+  });
+
+  it("should handle nested subdirectories", () => {
+    expect(
+      validateWorkspacePath(
+        "/home/user/project/a/b/c/file.txt",
+        "/home/user/project",
+      ),
+    ).toBe(true);
+  });
+});

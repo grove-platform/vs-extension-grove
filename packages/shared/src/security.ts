@@ -6,7 +6,7 @@ import * as path from "path";
  */
 export function isPathWithinBoundary(
   resolvedPath: string,
-  basePath: string
+  basePath: string,
 ): boolean {
   const normalizedResolved = path.normalize(resolvedPath);
   const normalizedBase = path.normalize(basePath);
@@ -33,3 +33,14 @@ export function sanitizePath(relativePath: string): string {
   return sanitized;
 }
 
+/**
+ * Validate that a path is within the workspace boundary.
+ * Resolves the path and checks it's within the workspace.
+ */
+export function validateWorkspacePath(
+  filePath: string,
+  workspacePath: string,
+): boolean {
+  const resolvedPath = path.resolve(filePath);
+  return isPathWithinBoundary(resolvedPath, workspacePath);
+}

@@ -6,6 +6,6 @@
     "module": "CommonJS",
     "moduleResolution": "Node"
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/__tests__/**/*"]
 }
-

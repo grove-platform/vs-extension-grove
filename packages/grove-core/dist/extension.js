@@ -83,15 +83,15 @@ var require_project_detection = __commonJS({
     exports2.detectGroveProjects = detectGroveProjects2;
     exports2.detectLanguage = detectLanguage;
     exports2.validateSnipConfig = validateSnipConfig;
-    exports2.findProjectForFile = findProjectForFile2;
-    var path2 = __importStar(require("path"));
-    var fs2 = __importStar(require("fs/promises"));
+    exports2.findProjectForFile = findProjectForFile3;
+    var path4 = __importStar(require("path"));
+    var fs4 = __importStar(require("fs/promises"));
     async function detectGroveProjects2(workspacePath) {
       const projects = [];
       const snipFiles = await findSnipFiles(workspacePath);
       for (const snipPath of snipFiles) {
-        const projectRoot = path2.dirname(snipPath);
-        const relativePath = path2.relative(workspacePath, projectRoot) || ".";
+        const projectRoot = path4.dirname(snipPath);
+        const relativePath = path4.relative(workspacePath, projectRoot) || ".";
         const language = await detectLanguage(projectRoot);
         const hasValidConfig = await validateSnipConfig(snipPath);
         projects.push({
@@ -109,9 +109,9 @@ var require_project_detection = __commonJS({
         return results;
       }
       try {
-        const entries = await fs2.readdir(dir, { withFileTypes: true });
+        const entries = await fs4.readdir(dir, { withFileTypes: true });
         for (const entry of entries) {
-          const fullPath = path2.join(dir, entry.name);
+          const fullPath = path4.join(dir, entry.name);
           if (entry.isDirectory()) {
             if (entry.name === "node_modules" || entry.name.startsWith(".")) {
               continue;
@@ -128,8 +128,8 @@ var require_project_detection = __commonJS({
     }
     async function detectLanguage(projectPath) {
       try {
-        const pkgPath = path2.join(projectPath, "package.json");
-        const content = await fs2.readFile(pkgPath, "utf-8");
+        const pkgPath = path4.join(projectPath, "package.json");
+        const content = await fs4.readFile(pkgPath, "utf-8");
         const pkg = JSON.parse(content);
         if (pkg.devDependencies?.jest || pkg.dependencies?.jest || pkg.devDependencies?.vitest || pkg.dependencies?.vitest) {
           return "nodejs";
@@ -140,32 +140,32 @@ var require_project_detection = __commonJS({
       } catch {
       }
       try {
-        await fs2.access(path2.join(projectPath, "pyproject.toml"));
+        await fs4.access(path4.join(projectPath, "pyproject.toml"));
         return "python";
       } catch {
         try {
-          await fs2.access(path2.join(projectPath, "pytest.ini"));
+          await fs4.access(path4.join(projectPath, "pytest.ini"));
           return "python";
         } catch {
         }
       }
       try {
-        await fs2.access(path2.join(projectPath, "go.mod"));
+        await fs4.access(path4.join(projectPath, "go.mod"));
         return "go";
       } catch {
       }
       try {
-        await fs2.access(path2.join(projectPath, "pom.xml"));
+        await fs4.access(path4.join(projectPath, "pom.xml"));
         return "java";
       } catch {
         try {
-          await fs2.access(path2.join(projectPath, "build.gradle"));
+          await fs4.access(path4.join(projectPath, "build.gradle"));
           return "java";
         } catch {
         }
       }
       try {
-        const entries = await fs2.readdir(projectPath);
+        const entries = await fs4.readdir(projectPath);
         if (entries.some((e) => e.endsWith(".csproj"))) {
           return "csharp";
         }
@@ -175,17 +175,17 @@ var require_project_detection = __commonJS({
     }
     async function validateSnipConfig(snipPath) {
       try {
-        const content = await fs2.readFile(snipPath, "utf-8");
+        const content = await fs4.readFile(snipPath, "utf-8");
         return content.includes("module.exports") || content.includes("export default");
       } catch {
         return false;
       }
     }
-    function findProjectForFile2(filePath, projects) {
-      const normalizedFile = path2.resolve(filePath);
+    function findProjectForFile3(filePath, projects) {
+      const normalizedFile = path4.resolve(filePath);
       const matchingProjects = projects.filter((project) => {
-        const normalizedRoot = path2.resolve(project.rootPath);
-        return normalizedFile.startsWith(normalizedRoot + path2.sep);
+        const normalizedRoot = path4.resolve(project.rootPath);
+        return normalizedFile.startsWith(normalizedRoot + path4.sep);
       });
       if (matchingProjects.length === 0) {
         return void 0;
@@ -239,11 +239,11 @@ var require_security = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.isPathWithinBoundary = isPathWithinBoundary;
     exports2.sanitizePath = sanitizePath;
-    var path2 = __importStar(require("path"));
+    var path4 = __importStar(require("path"));
     function isPathWithinBoundary(resolvedPath, basePath) {
-      const normalizedResolved = path2.normalize(resolvedPath);
-      const normalizedBase = path2.normalize(basePath);
-      return normalizedResolved.startsWith(normalizedBase + path2.sep) || normalizedResolved === normalizedBase;
+      const normalizedResolved = path4.normalize(resolvedPath);
+      const normalizedBase = path4.normalize(basePath);
+      return normalizedResolved.startsWith(normalizedBase + path4.sep) || normalizedResolved === normalizedBase;
     }
     function sanitizePath(relativePath) {
       let sanitized = relativePath.replace(/\0/g, "");
@@ -286,11 +286,13 @@ var extension_exports = {};
 __export(extension_exports, {
   activate: () => activate,
   deactivate: () => deactivate,
-  getApi: () => getApi
+  getActiveProject: () => getActiveProject,
+  getApi: () => getApi2,
+  getDetectedProjects: () => getDetectedProjects
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode3 = __toESM(require("vscode"));
-var import_shared = __toESM(require_dist());
+var vscode6 = __toESM(require("vscode"));
+var import_shared3 = __toESM(require_dist());
 
 // src/mcp-bridge.ts
 var path = __toESM(require("path"));
@@ -573,11 +575,266 @@ function getApi() {
   };
 }
 
+// src/diagnostics.ts
+var vscode3 = __toESM(require("vscode"));
+var path2 = __toESM(require("path"));
+var fs2 = __toESM(require("fs/promises"));
+var diagnosticCollection;
+function initDiagnostics(context) {
+  diagnosticCollection = vscode3.languages.createDiagnosticCollection("grove");
+  context.subscriptions.push(diagnosticCollection);
+  return diagnosticCollection;
+}
+async function checkSymlinks(project, workspacePath) {
+  const diagnostics = [];
+  const symlinkPaths = [
+    "source/code-examples/tested",
+    "content/code-examples/tested"
+  ];
+  for (const symlinkRelPath of symlinkPaths) {
+    const symlinkPath = path2.join(workspacePath, symlinkRelPath);
+    try {
+      const stats = await fs2.lstat(symlinkPath);
+      if (stats.isSymbolicLink()) {
+        try {
+          await fs2.access(symlinkPath);
+        } catch {
+          diagnostics.push(
+            new vscode3.Diagnostic(
+              new vscode3.Range(0, 0, 0, 0),
+              `Broken symlink: ${symlinkRelPath} points to a non-existent target`,
+              vscode3.DiagnosticSeverity.Error
+            )
+          );
+        }
+      }
+    } catch {
+      const isDocsProject = await looksLikeDocsProject(workspacePath);
+      if (isDocsProject) {
+        diagnostics.push(
+          new vscode3.Diagnostic(
+            new vscode3.Range(0, 0, 0, 0),
+            `Missing symlink: ${symlinkRelPath}. Run "Grove: Create Symlink" to create it.`,
+            vscode3.DiagnosticSeverity.Warning
+          )
+        );
+      }
+    }
+  }
+  return diagnostics;
+}
+async function looksLikeDocsProject(workspacePath) {
+  const docIndicators = ["snooty.toml", "source/conf.py", "source/index.txt"];
+  for (const indicator of docIndicators) {
+    try {
+      await fs2.access(path2.join(workspacePath, indicator));
+      return true;
+    } catch {
+    }
+  }
+  return false;
+}
+async function refreshDiagnostics(project, workspacePath) {
+  if (!diagnosticCollection) {
+    return;
+  }
+  const snipUri = vscode3.Uri.file(path2.join(project.rootPath, "snip.js"));
+  diagnosticCollection.delete(snipUri);
+  const symlinkDiagnostics = await checkSymlinks(project, workspacePath);
+  if (symlinkDiagnostics.length > 0) {
+    diagnosticCollection.set(snipUri, symlinkDiagnostics);
+  }
+}
+async function refreshAllDiagnostics(projects, workspacePath) {
+  diagnosticCollection?.clear();
+  for (const project of projects) {
+    await refreshDiagnostics(project, workspacePath);
+  }
+}
+
+// src/language-status.ts
+var vscode4 = __toESM(require("vscode"));
+var import_shared = __toESM(require_dist());
+var languageStatusItem;
+function initLanguageStatus(context) {
+  languageStatusItem = vscode4.languages.createLanguageStatusItem(
+    "grove.status",
+    { pattern: "**/*" }
+    // Apply to all files
+  );
+  languageStatusItem.name = "Grove Project";
+  languageStatusItem.text = "$(tree) Grove";
+  languageStatusItem.detail = "No Grove project";
+  languageStatusItem.severity = vscode4.LanguageStatusSeverity.Information;
+  languageStatusItem.command = {
+    title: "Open Grove Panel",
+    command: "workbench.view.extension.grove"
+  };
+  context.subscriptions.push(languageStatusItem);
+  return languageStatusItem;
+}
+function updateLanguageStatus(projects, activeFile) {
+  if (!languageStatusItem) {
+    return;
+  }
+  if (!activeFile || projects.length === 0) {
+    languageStatusItem.text = "$(tree) Grove";
+    languageStatusItem.detail = "No Grove project";
+    languageStatusItem.severity = vscode4.LanguageStatusSeverity.Information;
+    return;
+  }
+  const project = (0, import_shared.findProjectForFile)(activeFile, projects);
+  if (project) {
+    const langIcon = getLanguageIcon(project.language);
+    const langName = project.language ?? "unknown";
+    languageStatusItem.text = `${langIcon} ${project.relativePath || "root"}`;
+    languageStatusItem.detail = `Grove project (${langName})`;
+    languageStatusItem.severity = project.hasValidConfig ? vscode4.LanguageStatusSeverity.Information : vscode4.LanguageStatusSeverity.Warning;
+  } else {
+    languageStatusItem.text = "$(tree) Grove";
+    languageStatusItem.detail = "Not in a Grove project";
+    languageStatusItem.severity = vscode4.LanguageStatusSeverity.Information;
+  }
+}
+function getLanguageIcon(language) {
+  switch (language) {
+    case "nodejs":
+      return "$(symbol-method)";
+    // JS-like icon
+    case "python":
+      return "$(symbol-namespace)";
+    // Python-like icon
+    case "go":
+      return "$(symbol-interface)";
+    // Go-like icon
+    case "java":
+      return "$(symbol-class)";
+    // Java-like icon
+    case "csharp":
+      return "$(symbol-struct)";
+    // C#-like icon
+    case "mongosh":
+      return "$(terminal)";
+    // Shell icon
+    default:
+      return "$(tree)";
+  }
+}
+function registerLanguageStatusHandlers(context, getProjects) {
+  context.subscriptions.push(
+    vscode4.window.onDidChangeActiveTextEditor((editor) => {
+      updateLanguageStatus(
+        getProjects(),
+        editor?.document.uri.fsPath
+      );
+    })
+  );
+  const activeEditor = vscode4.window.activeTextEditor;
+  if (activeEditor) {
+    updateLanguageStatus(getProjects(), activeEditor.document.uri.fsPath);
+  }
+}
+
+// src/symlink.ts
+var vscode5 = __toESM(require("vscode"));
+var path3 = __toESM(require("path"));
+var fs3 = __toESM(require("fs/promises"));
+var import_shared2 = __toESM(require_dist());
+async function createSymlink(symlinkPath, targetPath, workspacePath) {
+  if (!(0, import_shared2.validateWorkspacePath)(symlinkPath, workspacePath)) {
+    throw new Error("Symlink path must be within the workspace");
+  }
+  if (!(0, import_shared2.validateWorkspacePath)(targetPath, workspacePath)) {
+    throw new Error("Target path must be within the workspace");
+  }
+  try {
+    await fs3.access(targetPath);
+  } catch {
+    throw new Error(`Target path does not exist: ${targetPath}`);
+  }
+  const symlinkDir = path3.dirname(symlinkPath);
+  await fs3.mkdir(symlinkDir, { recursive: true });
+  const relativeTarget = path3.relative(symlinkDir, targetPath);
+  await fs3.symlink(relativeTarget, symlinkPath);
+}
+function registerSymlinkCommand(context) {
+  context.subscriptions.push(
+    vscode5.commands.registerCommand("grove.createSymlink", async () => {
+      const workspaceFolders = vscode5.workspace.workspaceFolders;
+      if (!workspaceFolders) {
+        vscode5.window.showErrorMessage("No workspace folder open");
+        return;
+      }
+      const workspacePath = workspaceFolders[0].uri.fsPath;
+      const symlinkRelPath = await vscode5.window.showInputBox({
+        title: "Grove: Create Symlink",
+        prompt: "Enter the relative path for the symlink",
+        value: "source/code-examples/tested",
+        validateInput: (value) => {
+          if (!value) return "Path is required";
+          if (path3.isAbsolute(value)) return "Path must be relative";
+          return void 0;
+        }
+      });
+      if (!symlinkRelPath) {
+        return;
+      }
+      const targetRelPath = await vscode5.window.showInputBox({
+        title: "Grove: Create Symlink",
+        prompt: "Enter the relative path to the target directory",
+        value: "../code-example-tests/content/code-examples/tested",
+        validateInput: (value) => {
+          if (!value) return "Path is required";
+          return void 0;
+        }
+      });
+      if (!targetRelPath) {
+        return;
+      }
+      const symlinkPath = path3.join(workspacePath, symlinkRelPath);
+      const targetPath = path3.resolve(path3.dirname(symlinkPath), targetRelPath);
+      try {
+        await createSymlink(symlinkPath, targetPath, workspacePath);
+        vscode5.window.showInformationMessage(
+          `Created symlink: ${symlinkRelPath} \u2192 ${targetRelPath}`
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode5.window.showErrorMessage(`Failed to create symlink: ${message}`);
+      }
+    })
+  );
+}
+
 // src/extension.ts
 var statusBarItem;
 var currentStatus = null;
+var outputChannel;
+function getDetectedProjects() {
+  return currentStatus?.projects ?? [];
+}
+function getActiveProject() {
+  return currentStatus?.activeProject ?? null;
+}
+function getApi2() {
+  return {
+    // Test runner API
+    ...getApi(),
+    // Project detection API
+    getDetectedProjects,
+    getActiveProject
+  };
+}
+function getConfig() {
+  const config = vscode6.workspace.getConfiguration("grove");
+  return {
+    autoDetect: config.get("autoDetect", true),
+    bluehawkPath: config.get("bluehawkPath", ""),
+    showStatusBar: config.get("showStatusBar", true)
+  };
+}
 async function getStatus() {
-  const workspaceFolders = vscode3.workspace.workspaceFolders;
+  const workspaceFolders = vscode6.workspace.workspaceFolders;
   if (!workspaceFolders) {
     return {
       hasProject: false,
@@ -586,7 +843,7 @@ async function getStatus() {
       mongoConnection: { connected: false, clusterType: "unknown" }
     };
   }
-  const projects = await (0, import_shared.detectGroveProjects)(workspaceFolders[0].uri.fsPath);
+  const projects = await (0, import_shared3.detectGroveProjects)(workspaceFolders[0].uri.fsPath);
   currentStatus = {
     hasProject: projects.length > 0,
     activeProject: projects[0] ?? null,
@@ -595,102 +852,174 @@ async function getStatus() {
   };
   return currentStatus;
 }
+async function detectProjectsWithProgress(workspacePath) {
+  return vscode6.window.withProgress(
+    {
+      location: vscode6.ProgressLocation.Window,
+      title: "Grove: Detecting projects..."
+    },
+    async (progress) => {
+      progress.report({ increment: 0 });
+      const projects = await (0, import_shared3.detectGroveProjects)(workspacePath);
+      progress.report({ increment: 100 });
+      return projects;
+    }
+  );
+}
+async function startMcpServerWithProgress(context, workspacePath) {
+  return vscode6.window.withProgress(
+    {
+      location: vscode6.ProgressLocation.Window,
+      title: "Grove: Starting MCP server..."
+    },
+    async (progress) => {
+      progress.report({ increment: 0 });
+      await startMcpServer(context, workspacePath);
+      progress.report({ increment: 100 });
+    }
+  );
+}
 async function activate(context) {
-  console.log("Grove extension activate() called");
+  outputChannel = vscode6.window.createOutputChannel("Grove", { log: true });
+  context.subscriptions.push(outputChannel);
+  outputChannel.info("Grove extension activating...");
+  const config = getConfig();
   const panelProvider = new GrovePanelProvider(context.extensionUri, getStatus);
   context.subscriptions.push(
-    vscode3.window.registerWebviewViewProvider(
+    vscode6.window.registerWebviewViewProvider(
       GrovePanelProvider.viewType,
       panelProvider
     )
   );
   context.subscriptions.push(
-    vscode3.commands.registerCommand("grove.refreshPanel", () => {
+    vscode6.commands.registerCommand("grove.refreshPanel", () => {
       panelProvider.refresh();
     })
   );
-  statusBarItem = vscode3.window.createStatusBarItem(
-    vscode3.StatusBarAlignment.Left,
+  statusBarItem = vscode6.window.createStatusBarItem(
+    vscode6.StatusBarAlignment.Left,
     100
   );
   context.subscriptions.push(statusBarItem);
-  const status = await getStatus();
+  const workspaceFolders = vscode6.workspace.workspaceFolders;
+  let status;
+  if (config.autoDetect && workspaceFolders) {
+    const projects = await detectProjectsWithProgress(
+      workspaceFolders[0].uri.fsPath
+    );
+    currentStatus = {
+      hasProject: projects.length > 0,
+      activeProject: projects[0] ?? null,
+      projects,
+      mongoConnection: { connected: false, clusterType: "unknown" }
+    };
+    status = currentStatus;
+    outputChannel.info(`Detected ${projects.length} Grove project(s)`);
+  } else {
+    status = await getStatus();
+  }
   if (status.hasProject && status.activeProject) {
-    statusBarItem.text = `$(tree) Grove: ${status.activeProject.relativePath}`;
-    statusBarItem.tooltip = `Grove project detected
+    if (config.showStatusBar) {
+      statusBarItem.text = `$(tree) Grove: ${status.activeProject.relativePath}`;
+      statusBarItem.tooltip = `Grove project detected
 ${status.projects.length} project(s) found`;
-    statusBarItem.show();
-    const workspaceFolders = vscode3.workspace.workspaceFolders;
+      statusBarItem.show();
+    }
     if (workspaceFolders) {
-      await startMcpServer(context, workspaceFolders[0].uri.fsPath);
+      await startMcpServerWithProgress(context, workspaceFolders[0].uri.fsPath);
+      outputChannel.info("MCP server started");
     }
   }
-  registerCopyConfigCommand(context);
   context.subscriptions.push(
-    vscode3.commands.registerCommand("grove.runTests", async () => {
-      const workspaceFolders = vscode3.workspace.workspaceFolders;
-      if (!workspaceFolders) {
-        vscode3.window.showErrorMessage("No workspace folder open");
+    vscode6.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration("grove.showStatusBar")) {
+        const newConfig = getConfig();
+        if (newConfig.showStatusBar && currentStatus?.hasProject) {
+          statusBarItem.show();
+        } else {
+          statusBarItem.hide();
+        }
+      }
+    })
+  );
+  initDiagnostics(context);
+  if (workspaceFolders && status.projects.length > 0) {
+    await refreshAllDiagnostics(
+      status.projects,
+      workspaceFolders[0].uri.fsPath
+    );
+  }
+  initLanguageStatus(context);
+  registerLanguageStatusHandlers(context, getDetectedProjects);
+  const activeEditor = vscode6.window.activeTextEditor;
+  if (activeEditor) {
+    updateLanguageStatus(status.projects, activeEditor.document.uri.fsPath);
+  }
+  registerCopyConfigCommand(context);
+  registerSymlinkCommand(context);
+  context.subscriptions.push(
+    vscode6.commands.registerCommand("grove.runTests", async () => {
+      const workspaceFolders2 = vscode6.workspace.workspaceFolders;
+      if (!workspaceFolders2) {
+        vscode6.window.showErrorMessage("No workspace folder open");
         return;
       }
-      const workspaceRoot = workspaceFolders[0].uri.fsPath;
+      const workspaceRoot = workspaceFolders2[0].uri.fsPath;
       let projectPath = workspaceRoot;
-      const activeFile = vscode3.window.activeTextEditor?.document.uri.fsPath;
+      const activeFile = vscode6.window.activeTextEditor?.document.uri.fsPath;
       if (activeFile) {
-        const projects = await (0, import_shared.detectGroveProjects)(workspaceRoot);
-        const project = (0, import_shared.findProjectForFile)(activeFile, projects);
+        const projects = await (0, import_shared3.detectGroveProjects)(workspaceRoot);
+        const project = (0, import_shared3.findProjectForFile)(activeFile, projects);
         if (project) {
           projectPath = project.rootPath;
         }
       }
       const runner = await findTestRunnerForProject(projectPath);
       if (!runner) {
-        vscode3.window.showWarningMessage(
+        vscode6.window.showWarningMessage(
           "No test runner found. Install a Grove language extension (e.g., Grove for Node.js)."
         );
         return;
       }
-      const outputChannel2 = vscode3.window.createOutputChannel("Grove Tests");
-      vscode3.window.withProgress(
+      const testOutputChannel = vscode6.window.createOutputChannel("Grove Tests");
+      vscode6.window.withProgress(
         {
-          location: vscode3.ProgressLocation.Notification,
+          location: vscode6.ProgressLocation.Notification,
           title: `Running ${runner.name} tests...`,
           cancellable: false
         },
         async () => {
           const result = await runTests({ projectPath });
           if (result.output) {
-            outputChannel2.clear();
-            outputChannel2.appendLine(`=== Grove Test Results ===`);
-            outputChannel2.appendLine(`Duration: ${result.duration}ms`);
-            outputChannel2.appendLine(`Success: ${result.success}`);
-            outputChannel2.appendLine(``);
-            outputChannel2.appendLine(result.output);
+            testOutputChannel.clear();
+            testOutputChannel.appendLine(`=== Grove Test Results ===`);
+            testOutputChannel.appendLine(`Duration: ${result.duration}ms`);
+            testOutputChannel.appendLine(`Success: ${result.success}`);
+            testOutputChannel.appendLine(``);
+            testOutputChannel.appendLine(result.output);
           }
           if (result.success) {
-            vscode3.window.showInformationMessage(
+            vscode6.window.showInformationMessage(
               `Tests passed: ${result.passed ?? 0}/${result.total ?? 0}`
             );
           } else {
             const message = result.total === 0 ? `Test runner failed. Check output for details.` : `Tests failed: ${result.failed ?? 0}/${result.total ?? 0}`;
-            const action = await vscode3.window.showErrorMessage(
+            const action = await vscode6.window.showErrorMessage(
               message,
               "Show Output"
             );
             if (action === "Show Output") {
-              outputChannel2.show();
+              testOutputChannel.show();
             }
           }
         }
       );
     })
   );
-  const outputChannel = vscode3.window.createOutputChannel("Grove");
-  outputChannel.appendLine(
+  outputChannel.info(
     `Grove activated. Found ${status.projects.length} project(s).`
   );
-  context.subscriptions.push(outputChannel);
-  return getApi();
+  return getApi2();
 }
 function deactivate() {
   stopMcpServer();
@@ -699,5 +1028,7 @@ function deactivate() {
 0 && (module.exports = {
   activate,
   deactivate,
-  getApi
+  getActiveProject,
+  getApi,
+  getDetectedProjects
 });
