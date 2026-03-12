@@ -1,8 +1,6 @@
 import * as vscode from "vscode";
 import { detectGroveProjects, findProjectForFile } from "@grove/shared";
 import type { GroveStatus, GroveProject } from "@grove/shared";
-import { startMcpServer, stopMcpServer } from "./mcp-bridge";
-import { registerCopyConfigCommand } from "./commands/copy-config";
 import { GrovePanelProvider } from "./panel/GrovePanel";
 import {
   getApi as getTestRunnerApi,
@@ -123,26 +121,6 @@ async function detectProjectsWithProgress(
   );
 }
 
-/**
- * Start MCP server with progress indicator.
- */
-async function startMcpServerWithProgress(
-  context: vscode.ExtensionContext,
-  workspacePath: string,
-): Promise<void> {
-  return vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Window,
-      title: "Grove: Starting MCP server...",
-    },
-    async (progress) => {
-      progress.report({ increment: 0 });
-      await startMcpServer(context, workspacePath);
-      progress.report({ increment: 100 });
-    },
-  );
-}
-
 export async function activate(context: vscode.ExtensionContext) {
   // Create log output channel
   outputChannel = vscode.window.createOutputChannel("Grove", { log: true });
@@ -201,12 +179,6 @@ export async function activate(context: vscode.ExtensionContext) {
       statusBarItem.tooltip = `Grove project detected\n${status.projects.length} project(s) found`;
       statusBarItem.show();
     }
-
-    // Start MCP server with progress indicator
-    if (workspaceFolders) {
-      await startMcpServerWithProgress(context, workspaceFolders[0].uri.fsPath);
-      outputChannel.info("MCP server started");
-    }
   }
 
   // Listen for configuration changes
@@ -247,7 +219,6 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   // Register commands
-  registerCopyConfigCommand(context);
   registerSymlinkCommand(context);
 
   // Initialize MongoDB connection manager
@@ -410,5 +381,5 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
-  stopMcpServer();
+  // Extension cleanup (if needed in the future)
 }

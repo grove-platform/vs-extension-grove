@@ -60,10 +60,6 @@
     },
     "commands": [
       {
-        "command": "grove.copyMcpConfig",
-        "title": "Grove: Copy MCP Configuration"
-      },
-      {
         "command": "grove.refreshPanel",
         "title": "Grove: Refresh Panel"
       },
@@ -109,8 +105,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@grove/shared": "workspace:*",
-    "@mongodb/grove-mcp": "workspace:*"
+    "@grove/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.4.0",
