@@ -9,6 +9,10 @@ export interface TestRunOptions {
   projectPath: string;
   testFile?: string;
   timeout?: number;
+  /** Additional environment variables to inject into the test process */
+  env?: Record<string, string>;
+  /** Test name pattern for filtering tests (passed to --testNamePattern in Jest, -g in Mocha) */
+  testNamePattern?: string;
 }
 
 export interface TestResult {
@@ -40,7 +44,9 @@ const registeredRunners: Map<string, TestRunner> = new Map();
  */
 export function registerTestRunner(runner: TestRunner): void {
   registeredRunners.set(runner.language, runner);
-  console.log(`Grove: Registered test runner "${runner.name}" for ${runner.language}`);
+  console.log(
+    `Grove: Registered test runner "${runner.name}" for ${runner.language}`,
+  );
 }
 
 /**
@@ -80,7 +86,9 @@ export async function findTestRunnerForProject(
  * Run tests for a project using the appropriate runner.
  * Auto-detects the runner if language is not specified.
  */
-export async function runTests(options: TestRunOptions & { language?: string }): Promise<TestResult> {
+export async function runTests(
+  options: TestRunOptions & { language?: string },
+): Promise<TestResult> {
   const { language, ...runOptions } = options;
 
   let runner: TestRunner | undefined;
@@ -120,4 +128,3 @@ export function getApi() {
     runTests,
   };
 }
-

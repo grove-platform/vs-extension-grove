@@ -182,10 +182,10 @@ var require_project_detection = __commonJS({
       }
     }
     function findProjectForFile2(filePath, projects) {
-      const normalizedFile = path3.resolve(filePath);
+      const normalizedFile = path3.resolve(filePath).replace(/[/\\]+$/, "");
       const matchingProjects = projects.filter((project) => {
-        const normalizedRoot = path3.resolve(project.rootPath);
-        return normalizedFile.startsWith(normalizedRoot + path3.sep);
+        const normalizedRoot = path3.resolve(project.rootPath).replace(/[/\\]+$/, "");
+        return normalizedFile === normalizedRoot || normalizedFile.startsWith(normalizedRoot + path3.sep);
       });
       if (matchingProjects.length === 0) {
         return void 0;
@@ -320,7 +320,7 @@ async function detectJestProject(projectPath) {
   }
 }
 async function runJestTests(options) {
-  const { projectPath, testFile, timeout = DEFAULT_TIMEOUT } = options;
+  const { projectPath, testFile, timeout = DEFAULT_TIMEOUT, env } = options;
   const effectiveTimeout = Math.min(timeout, MAX_TIMEOUT);
   const args = ["test"];
   if (testFile) {
@@ -332,7 +332,7 @@ async function runJestTests(options) {
     let timedOut = false;
     const proc = (0, import_child_process.spawn)("npm", args, {
       cwd: projectPath,
-      env: { ...process.env, CI: "true" },
+      env: { ...process.env, CI: "true", ...env },
       shell: true
     });
     const timeoutId = setTimeout(() => {

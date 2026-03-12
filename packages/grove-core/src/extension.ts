@@ -16,9 +16,11 @@ import {
 import { registerSymlinkCommand } from "./symlink";
 import { MongoConnectionManager } from "./mongo/connection";
 import { registerMongoCommands } from "./mongo/commands";
+import { maskConnectionString } from "./mongo/credentials";
 import { registerLiteralIncludeProviders } from "./rst/LiteralIncludeProviders";
 import { BluehawkPreviewProvider } from "./preview/BluehawkPreview";
 import { containsBluehawkDirectives } from "./preview/bluehawk-runner";
+import { registerTestCodeLens } from "./test-codelens";
 
 let statusBarItem: vscode.StatusBarItem;
 let currentStatus: GroveStatus | null = null;
@@ -241,6 +243,10 @@ export async function activate(context: vscode.ExtensionContext) {
   registerLiteralIncludeProviders(context);
   outputChannel.info("Registered literalinclude providers for RST files");
 
+  // Register test CodeLens providers for test files
+  registerTestCodeLens(context);
+  outputChannel.info("Registered test CodeLens providers");
+
   // Register Bluehawk preview provider
   const bluehawkPreviewProvider = new BluehawkPreviewProvider(
     context.extensionUri,
@@ -305,16 +311,36 @@ export async function activate(context: vscode.ExtensionContext) {
 
       const workspaceRoot = workspaceFolders[0].uri.fsPath;
 
-      // Determine project path from active file or use first detected project
-      let projectPath = workspaceRoot;
+      // Detect all Grove projects in the workspace
+      const projects = await detectGroveProjects(workspaceRoot);
+
+      if (projects.length === 0) {
+        vscode.window.showErrorMessage(
+          "No Grove project detected. Create a snip.js file to define a Grove project.",
+        );
+        return;
+      }
+
+      // Determine project path from active file
+      let projectPath: string | undefined;
       const activeFile = vscode.window.activeTextEditor?.document.uri.fsPath;
 
       if (activeFile) {
-        const projects = await detectGroveProjects(workspaceRoot);
         const project = findProjectForFile(activeFile, projects);
         if (project) {
           projectPath = project.rootPath;
         }
+      }
+
+      // If no project found for active file, show error with guidance
+      if (!projectPath) {
+        const projectList = projects
+          .map((p) => p.relativePath || "root")
+          .join(", ");
+        vscode.window.showErrorMessage(
+          `Cannot determine which Grove project to test. Open a file within a Grove project and try again. Detected projects: ${projectList}`,
+        );
+        return;
       }
 
       const runner = await findTestRunnerForProject(projectPath);
@@ -326,26 +352,61 @@ export async function activate(context: vscode.ExtensionContext) {
         return;
       }
 
+      // Check if we have a MongoDB connection to inject
+      let env: Record<string, string> | undefined;
+      let connectionString: string | null = null;
+      const usingUiConnection = mongoConnectionManager?.status.connected;
+
+      if (usingUiConnection) {
+        connectionString = mongoConnectionManager.getConnectionStringForTests();
+        if (connectionString) {
+          env = { CONNECTION_STRING: connectionString };
+        }
+      }
+
       const testOutputChannel =
         vscode.window.createOutputChannel("Grove Tests");
+
+      // Build progress title with indicator if using UI connection
+      const progressTitle = usingUiConnection
+        ? `Running ${runner.name} tests (using Grove MongoDB connection)...`
+        : `Running ${runner.name} tests...`;
 
       vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: `Running ${runner.name} tests...`,
+          title: progressTitle,
           cancellable: false,
         },
         async () => {
-          const result = await runTests({ projectPath });
+          const result = await runTests({ projectPath, env });
+
+          // Sanitize output to mask connection string if it appears
+          let sanitizedOutput = result.output ?? "";
+          if (connectionString && sanitizedOutput.includes(connectionString)) {
+            const masked = maskConnectionString(connectionString);
+            sanitizedOutput = sanitizedOutput.replaceAll(
+              connectionString,
+              masked,
+            );
+            outputChannel.warn(
+              "Connection string was detected in test output and has been masked.",
+            );
+          }
 
           // Always log output to channel
-          if (result.output) {
+          if (sanitizedOutput) {
             testOutputChannel.clear();
             testOutputChannel.appendLine(`=== Grove Test Results ===`);
             testOutputChannel.appendLine(`Duration: ${result.duration}ms`);
             testOutputChannel.appendLine(`Success: ${result.success}`);
+            if (usingUiConnection) {
+              testOutputChannel.appendLine(
+                `MongoDB: Using Grove extension connection`,
+              );
+            }
             testOutputChannel.appendLine(``);
-            testOutputChannel.appendLine(result.output);
+            testOutputChannel.appendLine(sanitizedOutput);
           }
 
           if (result.success) {

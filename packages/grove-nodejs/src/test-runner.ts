@@ -6,6 +6,8 @@ export interface TestRunOptions {
   projectPath: string;
   testFile?: string;
   timeout?: number;
+  /** Additional environment variables to inject into the test process */
+  env?: Record<string, string>;
 }
 
 export interface TestResult {
@@ -55,7 +57,7 @@ export async function detectJestProject(projectPath: string): Promise<boolean> {
 export async function runJestTests(
   options: TestRunOptions,
 ): Promise<TestResult> {
-  const { projectPath, testFile, timeout = DEFAULT_TIMEOUT } = options;
+  const { projectPath, testFile, timeout = DEFAULT_TIMEOUT, env } = options;
   const effectiveTimeout = Math.min(timeout, MAX_TIMEOUT);
 
   // Use the project's npm test script, optionally with a specific file
@@ -70,9 +72,11 @@ export async function runJestTests(
     let output = "";
     let timedOut = false;
 
+    // Merge injected env vars with process.env
+    // Injected vars (like CONNECTION_STRING from Grove UI) take precedence
     const proc = spawn("npm", args, {
       cwd: projectPath,
-      env: { ...process.env, CI: "true" },
+      env: { ...process.env, CI: "true", ...env },
       shell: true,
     });
 

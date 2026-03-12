@@ -180,12 +180,18 @@ async function validateSnipConfig(snipPath) {
  * Returns the project whose rootPath is an ancestor of the file.
  */
 function findProjectForFile(filePath, projects) {
-    // Normalize the file path
-    const normalizedFile = path.resolve(filePath);
+    // Normalize the file path and remove any trailing slashes
+    const normalizedFile = path.resolve(filePath).replace(/[/\\]+$/, "");
     // Find all projects that contain this file (file is under project root)
     const matchingProjects = projects.filter((project) => {
-        const normalizedRoot = path.resolve(project.rootPath);
-        return normalizedFile.startsWith(normalizedRoot + path.sep);
+        // Normalize and remove trailing slashes for consistent comparison
+        const normalizedRoot = path
+            .resolve(project.rootPath)
+            .replace(/[/\\]+$/, "");
+        // Check if file is inside the project directory
+        // File must start with root path followed by a path separator
+        return (normalizedFile === normalizedRoot ||
+            normalizedFile.startsWith(normalizedRoot + path.sep));
     });
     if (matchingProjects.length === 0) {
         return undefined;

@@ -94,8 +94,19 @@
       {
         "command": "grove.literalinclude.view",
         "title": "Grove: View Literalinclude File"
+      },
+      {
+        "command": "grove.runTestBlock",
+        "title": "Grove: Run Test Block"
+      },
+      {
+        "command": "grove.debugTestBlock",
+        "title": "Grove: Debug Test Block"
       }
-    ]
+    ],
+    "configurationDefaults": {
+      "editor.codeLensFontSize": 14
+    }
   },
   "scripts": {
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
@@ -105,7 +116,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@grove/shared": "workspace:*"
+    "@grove/shared": "workspace:*",
+    "mongodb": "^7.1.0"
   },
   "devDependencies": {
     "@types/node": "^25.4.0",

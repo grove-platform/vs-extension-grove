@@ -216,6 +216,18 @@ export class MongoConnectionManager {
   }
 
   /**
+   * Get the raw connection string for injection into test processes.
+   * Only available when connected.
+   *
+   * Security note: This exposes the connection string (including credentials)
+   * for passing to child processes. The connection string will be visible
+   * in the process environment.
+   */
+  getConnectionStringForTests(): string | null {
+    return this.connectionString;
+  }
+
+  /**
    * Detect cluster type from connection string.
    */
   private detectClusterType(
