@@ -21,6 +21,7 @@ import { registerLiteralIncludeProviders } from "./rst/LiteralIncludeProviders";
 import { BluehawkPreviewProvider } from "./preview/BluehawkPreview";
 import { containsBluehawkDirectives } from "./preview/bluehawk-runner";
 import { registerTestCodeLens } from "./test-codelens";
+import { registerSnippetCodeLens } from "./snippet-codelens";
 
 let statusBarItem: vscode.StatusBarItem;
 let currentStatus: GroveStatus | null = null;
@@ -246,6 +247,10 @@ export async function activate(context: vscode.ExtensionContext) {
   // Register test CodeLens providers for test files
   registerTestCodeLens(context);
   outputChannel.info("Registered test CodeLens providers");
+
+  // Register snippet CodeLens providers for Bluehawk snippets
+  registerSnippetCodeLens(context);
+  outputChannel.info("Registered snippet CodeLens providers");
 
   // Register Bluehawk preview provider
   const bluehawkPreviewProvider = new BluehawkPreviewProvider(

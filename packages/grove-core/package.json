@@ -102,6 +102,14 @@
       {
         "command": "grove.debugTestBlock",
         "title": "Grove: Debug Test Block"
+      },
+      {
+        "command": "grove.findSnippetReferences",
+        "title": "Grove: Find Snippet References"
+      },
+      {
+        "command": "grove.peekSnippetReferences",
+        "title": "Grove: Peek Snippet References"
       }
     ],
     "configurationDefaults": {
@@ -109,7 +117,7 @@
     }
   },
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:@vscode/ripgrep --format=cjs --platform=node",
     "watch": "npm run build -- --watch",
     "lint": "eslint src --ext ts",
     "test": "vitest run",
@@ -117,6 +125,7 @@
   },
   "dependencies": {
     "@grove/shared": "workspace:*",
+    "@vscode/ripgrep": "^1.17.1",
     "mongodb": "^7.1.0"
   },
   "devDependencies": {

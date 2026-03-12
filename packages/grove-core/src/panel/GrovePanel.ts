@@ -32,9 +32,6 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
         case "refresh":
           await this.refresh();
           break;
-        case "copyMcpConfig":
-          vscode.commands.executeCommand("grove.copyMcpConfig");
-          break;
         case "runTests":
           vscode.commands.executeCommand("grove.runTests");
           break;
@@ -172,11 +169,9 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
         // Actions section
         html += '<div class="section"><div class="section-title">Actions</div><div class="actions"><button onclick="runTests()">Run Tests</button><button onclick="refresh()">Refresh</button></div></div>';
       }
-      html += '<div class="section"><div class="section-title">AI Integration</div><button onclick="copyMcpConfig()" style="width: 100%;">Copy MCP Config for Augment</button></div>';
       content.innerHTML = html;
     }
     function refresh() { vscode.postMessage({ command: 'refresh' }); }
-    function copyMcpConfig() { vscode.postMessage({ command: 'copyMcpConfig' }); }
     function runTests() { vscode.postMessage({ command: 'runTests' }); }
     function connectMongo() { vscode.postMessage({ command: 'connectMongo' }); }
     function disconnectMongo() { vscode.postMessage({ command: 'disconnectMongo' }); }

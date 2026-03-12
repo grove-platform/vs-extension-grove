@@ -22581,8 +22581,8 @@ var require_mongocryptd_manager = __commonJS({
        */
       async spawn() {
         const cmdName = this.spawnPath || "mongocryptd";
-        const { spawn } = require("child_process");
-        this._child = spawn(cmdName, this.spawnArgs, {
+        const { spawn: spawn2 } = require("child_process");
+        this._child = spawn2(cmdName, this.spawnArgs, {
           stdio: "ignore",
           detached: true
         });
@@ -32476,7 +32476,7 @@ __export(extension_exports, {
   getDetectedProjects: () => getDetectedProjects
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode15 = __toESM(require("vscode"));
+var vscode20 = __toESM(require("vscode"));
 var import_shared4 = __toESM(require_dist());
 
 // src/panel/GrovePanel.ts
@@ -32500,9 +32500,6 @@ var GrovePanelProvider = class {
       switch (message.command) {
         case "refresh":
           await this.refresh();
-          break;
-        case "copyMcpConfig":
-          vscode.commands.executeCommand("grove.copyMcpConfig");
           break;
         case "runTests":
           vscode.commands.executeCommand("grove.runTests");
@@ -32634,11 +32631,9 @@ var GrovePanelProvider = class {
         // Actions section
         html += '<div class="section"><div class="section-title">Actions</div><div class="actions"><button onclick="runTests()">Run Tests</button><button onclick="refresh()">Refresh</button></div></div>';
       }
-      html += '<div class="section"><div class="section-title">AI Integration</div><button onclick="copyMcpConfig()" style="width: 100%;">Copy MCP Config for Augment</button></div>';
       content.innerHTML = html;
     }
     function refresh() { vscode.postMessage({ command: 'refresh' }); }
-    function copyMcpConfig() { vscode.postMessage({ command: 'copyMcpConfig' }); }
     function runTests() { vscode.postMessage({ command: 'runTests' }); }
     function connectMongo() { vscode.postMessage({ command: 'connectMongo' }); }
     function disconnectMongo() { vscode.postMessage({ command: 'disconnectMongo' }); }
@@ -34697,6 +34692,334 @@ function extractErrorMessage(output) {
   return errorLines.length > 0 ? errorLines.join("\n") : void 0;
 }
 
+// src/snippet-codelens/index.ts
+var vscode19 = __toESM(require("vscode"));
+
+// src/snippet-codelens/SnippetCodeLensProvider.ts
+var vscode17 = __toESM(require("vscode"));
+
+// src/snippet-codelens/snippet-parser.ts
+var vscode15 = __toESM(require("vscode"));
+var SNIPPET_START_PATTERN = /(?:\/\/|#|\/\*|--|<!--)\s*:snippet-start:\s*(\S+)/;
+function mightContainSnippets(document) {
+  const ext = document.uri.fsPath.split(".").pop()?.toLowerCase();
+  const skipExtensions = ["png", "jpg", "gif", "svg", "ico", "woff", "ttf", "pdf", "zip"];
+  if (ext && skipExtensions.includes(ext)) {
+    return false;
+  }
+  const text = document.getText();
+  return text.includes(":snippet-start:");
+}
+function parseSnippetBlocks(document) {
+  const blocks = [];
+  if (!mightContainSnippets(document)) {
+    return blocks;
+  }
+  for (let lineNum = 0; lineNum < document.lineCount; lineNum++) {
+    const line = document.lineAt(lineNum);
+    const match = line.text.match(SNIPPET_START_PATTERN);
+    if (match) {
+      const snippetName = match[1];
+      blocks.push({
+        name: snippetName,
+        line: lineNum,
+        range: new vscode15.Range(
+          new vscode15.Position(lineNum, 0),
+          new vscode15.Position(lineNum, line.text.length)
+        ),
+        filePath: document.uri.fsPath
+      });
+    }
+  }
+  return blocks;
+}
+
+// src/snippet-codelens/ripgrep-searcher.ts
+var vscode16 = __toESM(require("vscode"));
+var import_child_process2 = require("child_process");
+var import_ripgrep = require("@vscode/ripgrep");
+var CACHE_TTL_MS = 5 * 60 * 1e3;
+var CACHE_MAX_ENTRIES = 50;
+var referenceCache = /* @__PURE__ */ new Map();
+function getCacheKey(snippetName, sourceExt) {
+  return `${snippetName}:${sourceExt ?? "*"}`;
+}
+function getCachedReferences(key) {
+  const entry = referenceCache.get(key);
+  if (!entry) {
+    return void 0;
+  }
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    referenceCache.delete(key);
+    return void 0;
+  }
+  referenceCache.delete(key);
+  referenceCache.set(key, entry);
+  return entry.references;
+}
+function setCachedReferences(key, references) {
+  while (referenceCache.size >= CACHE_MAX_ENTRIES) {
+    const oldestKey = referenceCache.keys().next().value;
+    if (oldestKey) {
+      referenceCache.delete(oldestKey);
+    }
+  }
+  referenceCache.set(key, {
+    references,
+    timestamp: Date.now()
+  });
+}
+async function findSnippetReferencesWithRipgrep(snippetName, sourceFileUri) {
+  const sourceExt = sourceFileUri ? sourceFileUri.fsPath.split(".").pop()?.toLowerCase() : void 0;
+  const cacheKey = getCacheKey(snippetName, sourceExt);
+  const cached = getCachedReferences(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const workspaceFolders = vscode16.workspace.workspaceFolders;
+  if (!workspaceFolders || workspaceFolders.length === 0) {
+    return [];
+  }
+  const references = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const folder of workspaceFolders) {
+    const results = await runRipgrep(
+      snippetName,
+      folder.uri.fsPath,
+      snippetName,
+      sourceExt
+    );
+    for (const ref of results) {
+      const key = `${ref.uri.fsPath}:${ref.line}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        references.push(ref);
+      }
+    }
+  }
+  setCachedReferences(cacheKey, references);
+  return references;
+}
+async function runRipgrep(pattern, cwd, snippetName, sourceExt) {
+  return new Promise((resolve3) => {
+    const references = [];
+    const args = [
+      "--json",
+      "--glob",
+      "content/**/source/**/*.rst",
+      "--glob",
+      "content/**/source/**/*.txt",
+      "--ignore-case",
+      pattern
+    ];
+    const rg = (0, import_child_process2.spawn)(import_ripgrep.rgPath, args, {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    const timeout = setTimeout(() => {
+      rg.kill();
+    }, 3e4);
+    rg.stdout.on("data", (data) => {
+      stdout += data.toString();
+    });
+    rg.on("close", () => {
+      clearTimeout(timeout);
+      const lines = stdout.split("\n").filter((line) => line.trim());
+      for (const line of lines) {
+        try {
+          const json = JSON.parse(line);
+          if (json.type === "match" && json.data) {
+            const data = json.data;
+            const filePath = data.path?.text;
+            const lineNumber = data.line_number;
+            const lineText = data.lines?.text || "";
+            const isSnippetOption = lineText.includes(`:snippet: ${snippetName}`) || lineText.includes(`:snippet:${snippetName}`);
+            const isSnippetFile = lineText.includes(`.snippet.${snippetName}.`);
+            if (!isSnippetOption && !isSnippetFile) {
+              continue;
+            }
+            if (sourceExt && !lineText.includes(`.${sourceExt}`)) {
+              continue;
+            }
+            if (filePath && lineNumber) {
+              const column = data.submatches?.[0]?.start ?? 0;
+              const absolutePath = filePath.startsWith("/") ? filePath : `${cwd}/${filePath}`;
+              references.push({
+                uri: vscode16.Uri.file(absolutePath),
+                line: lineNumber - 1,
+                // Convert to 0-based
+                column,
+                matchedText: lineText.trim()
+              });
+            }
+          }
+        } catch {
+        }
+      }
+      resolve3(references);
+    });
+    rg.on("error", () => {
+      resolve3([]);
+    });
+  });
+}
+
+// src/snippet-codelens/SnippetCodeLensProvider.ts
+var SnippetCodeLensProvider = class {
+  _onDidChangeCodeLenses = new vscode17.EventEmitter();
+  onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
+  async provideCodeLenses(document) {
+    if (!mightContainSnippets(document)) {
+      return [];
+    }
+    const blocks = parseSnippetBlocks(document);
+    const lenses = [];
+    const referenceCounts = await Promise.all(
+      blocks.map(async (block) => {
+        const refs = await findSnippetReferencesWithRipgrep(
+          block.name,
+          document.uri
+        );
+        return refs.length;
+      })
+    );
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
+      const refCount = referenceCounts[i];
+      const lensRange = new vscode17.Range(
+        new vscode17.Position(block.line, 0),
+        new vscode17.Position(block.line, 0)
+      );
+      const refLabel = refCount === 1 ? "1 reference" : `${refCount} references`;
+      lenses.push(
+        new vscode17.CodeLens(lensRange, {
+          title: `$(references)  ${refLabel}`,
+          command: "grove.peekSnippetReferences",
+          arguments: [document.uri, block.name, block.line],
+          tooltip: `View ${refLabel} to snippet "${block.name}"`
+        })
+      );
+    }
+    return lenses;
+  }
+  refresh() {
+    this._onDidChangeCodeLenses.fire();
+  }
+};
+
+// src/snippet-codelens/reference-searcher.ts
+var vscode18 = __toESM(require("vscode"));
+async function openSnippetSearch(snippetName) {
+  const searchQuery = `${snippetName}`;
+  await vscode18.commands.executeCommand("workbench.action.findInFiles", {
+    query: searchQuery,
+    filesToInclude: "**/*.{rst,txt}",
+    triggerSearch: true,
+    isRegex: false,
+    isCaseSensitive: true
+  });
+}
+
+// src/snippet-codelens/index.ts
+var snippetCodeLensProvider;
+function registerSnippetCodeLens(context) {
+  snippetCodeLensProvider = new SnippetCodeLensProvider();
+  const selectors = [
+    { language: "javascript", scheme: "file" },
+    { language: "typescript", scheme: "file" },
+    { language: "javascriptreact", scheme: "file" },
+    { language: "typescriptreact", scheme: "file" },
+    { language: "python", scheme: "file" },
+    { language: "java", scheme: "file" },
+    { language: "csharp", scheme: "file" },
+    { language: "cpp", scheme: "file" },
+    { language: "c", scheme: "file" },
+    { language: "go", scheme: "file" },
+    { language: "rust", scheme: "file" },
+    { language: "ruby", scheme: "file" },
+    { language: "php", scheme: "file" },
+    { language: "swift", scheme: "file" },
+    { language: "kotlin", scheme: "file" },
+    { language: "scala", scheme: "file" },
+    { language: "shellscript", scheme: "file" },
+    { language: "yaml", scheme: "file" },
+    { language: "json", scheme: "file" }
+  ];
+  context.subscriptions.push(
+    vscode19.languages.registerCodeLensProvider(
+      selectors,
+      snippetCodeLensProvider
+    )
+  );
+  context.subscriptions.push(
+    vscode19.commands.registerCommand(
+      "grove.findSnippetReferences",
+      async (_uri, snippetName, _line) => {
+        await openSnippetSearch(snippetName);
+      }
+    )
+  );
+  context.subscriptions.push(
+    vscode19.commands.registerCommand(
+      "grove.peekSnippetReferences",
+      async (uri, snippetName, line) => {
+        await peekSnippetReferences(uri, snippetName, line);
+      }
+    )
+  );
+}
+async function peekSnippetReferences(uri, snippetName, _line) {
+  const references = await vscode19.window.withProgress(
+    {
+      location: vscode19.ProgressLocation.Notification,
+      title: `Finding references to "${snippetName}"...`,
+      cancellable: false
+    },
+    async () => {
+      return await findSnippetReferencesWithRipgrep(snippetName, uri);
+    }
+  );
+  if (references.length === 0) {
+    vscode19.window.showInformationMessage(
+      `No RST files reference snippet "${snippetName}"`
+    );
+    return;
+  }
+  const workspaceFolder = vscode19.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+  const items = references.map((ref) => {
+    const fullPath = ref.uri.fsPath;
+    const relativePath = fullPath.startsWith(workspaceFolder) ? fullPath.slice(workspaceFolder.length + 1) : fullPath;
+    const parts = relativePath.split("/");
+    const fileName = parts.pop() ?? relativePath;
+    const directory = parts.join("/");
+    return {
+      label: `$(file) ${fileName}`,
+      description: `line ${ref.line + 1}`,
+      detail: `$(folder) ${directory}`,
+      uri: ref.uri,
+      line: ref.line,
+      column: ref.column
+    };
+  });
+  const selected = await vscode19.window.showQuickPick(items, {
+    title: `References to "${snippetName}" (${references.length} found)`,
+    placeHolder: "Select a reference to open",
+    matchOnDescription: true,
+    matchOnDetail: true
+  });
+  if (selected) {
+    const doc = await vscode19.workspace.openTextDocument(selected.uri);
+    const editor = await vscode19.window.showTextDocument(doc);
+    const position = new vscode19.Position(selected.line, selected.column);
+    editor.selection = new vscode19.Selection(position, position);
+    editor.revealRange(
+      new vscode19.Range(position, position),
+      vscode19.TextEditorRevealType.InCenter
+    );
+  }
+}
+
 // src/extension.ts
 var statusBarItem;
 var currentStatus = null;
@@ -34718,7 +35041,7 @@ function getApi2() {
   };
 }
 function getConfig() {
-  const config = vscode15.workspace.getConfiguration("grove");
+  const config = vscode20.workspace.getConfiguration("grove");
   return {
     autoDetect: config.get("autoDetect", true),
     bluehawkPath: config.get("bluehawkPath", ""),
@@ -34726,7 +35049,7 @@ function getConfig() {
   };
 }
 async function getStatus() {
-  const workspaceFolders = vscode15.workspace.workspaceFolders;
+  const workspaceFolders = vscode20.workspace.workspaceFolders;
   const mongoStatus = mongoConnectionManager?.status ?? {
     connected: false,
     clusterType: "unknown"
@@ -34753,9 +35076,9 @@ async function getStatus() {
   return currentStatus;
 }
 async function detectProjectsWithProgress(workspacePath) {
-  return vscode15.window.withProgress(
+  return vscode20.window.withProgress(
     {
-      location: vscode15.ProgressLocation.Window,
+      location: vscode20.ProgressLocation.Window,
       title: "Grove: Detecting projects..."
     },
     async (progress) => {
@@ -34767,28 +35090,28 @@ async function detectProjectsWithProgress(workspacePath) {
   );
 }
 async function activate(context) {
-  outputChannel = vscode15.window.createOutputChannel("Grove", { log: true });
+  outputChannel = vscode20.window.createOutputChannel("Grove", { log: true });
   context.subscriptions.push(outputChannel);
   outputChannel.info("Grove extension activating...");
   const config = getConfig();
   const panelProvider = new GrovePanelProvider(context.extensionUri, getStatus);
   context.subscriptions.push(
-    vscode15.window.registerWebviewViewProvider(
+    vscode20.window.registerWebviewViewProvider(
       GrovePanelProvider.viewType,
       panelProvider
     )
   );
   context.subscriptions.push(
-    vscode15.commands.registerCommand("grove.refreshPanel", () => {
+    vscode20.commands.registerCommand("grove.refreshPanel", () => {
       panelProvider.refresh();
     })
   );
-  statusBarItem = vscode15.window.createStatusBarItem(
-    vscode15.StatusBarAlignment.Left,
+  statusBarItem = vscode20.window.createStatusBarItem(
+    vscode20.StatusBarAlignment.Left,
     100
   );
   context.subscriptions.push(statusBarItem);
-  const workspaceFolders = vscode15.workspace.workspaceFolders;
+  const workspaceFolders = vscode20.workspace.workspaceFolders;
   let status;
   if (config.autoDetect && workspaceFolders) {
     const projects = await detectProjectsWithProgress(
@@ -34814,7 +35137,7 @@ ${status.projects.length} project(s) found`;
     }
   }
   context.subscriptions.push(
-    vscode15.workspace.onDidChangeConfiguration((e) => {
+    vscode20.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("grove.showStatusBar")) {
         const newConfig = getConfig();
         if (newConfig.showStatusBar && currentStatus?.hasProject) {
@@ -34834,7 +35157,7 @@ ${status.projects.length} project(s) found`;
   }
   initLanguageStatus(context);
   registerLanguageStatusHandlers(context, getDetectedProjects);
-  const activeEditor = vscode15.window.activeTextEditor;
+  const activeEditor = vscode20.window.activeTextEditor;
   if (activeEditor) {
     updateLanguageStatus(status.projects, activeEditor.document.uri.fsPath);
   }
@@ -34853,29 +35176,31 @@ ${status.projects.length} project(s) found`;
   outputChannel.info("Registered literalinclude providers for RST files");
   registerTestCodeLens(context);
   outputChannel.info("Registered test CodeLens providers");
+  registerSnippetCodeLens(context);
+  outputChannel.info("Registered snippet CodeLens providers");
   const bluehawkPreviewProvider = new BluehawkPreviewProvider(
     context.extensionUri
   );
   context.subscriptions.push(
-    vscode15.window.registerWebviewViewProvider(
+    vscode20.window.registerWebviewViewProvider(
       BluehawkPreviewProvider.viewType,
       bluehawkPreviewProvider
     )
   );
   context.subscriptions.push(
-    vscode15.commands.registerCommand("grove.openBluehawkPreview", async () => {
-      const editor = vscode15.window.activeTextEditor;
+    vscode20.commands.registerCommand("grove.openBluehawkPreview", async () => {
+      const editor = vscode20.window.activeTextEditor;
       if (!editor) {
-        vscode15.window.showWarningMessage("No active editor");
+        vscode20.window.showWarningMessage("No active editor");
         return;
       }
       await bluehawkPreviewProvider.updatePreview(editor.document);
-      await vscode15.commands.executeCommand("grove.bluehawkPreview.focus");
+      await vscode20.commands.executeCommand("grove.bluehawkPreview.focus");
     }),
-    vscode15.commands.registerCommand(
+    vscode20.commands.registerCommand(
       "grove.refreshBluehawkPreview",
       async () => {
-        const editor = vscode15.window.activeTextEditor;
+        const editor = vscode20.window.activeTextEditor;
         if (editor) {
           await bluehawkPreviewProvider.updatePreview(editor.document);
         }
@@ -34883,14 +35208,14 @@ ${status.projects.length} project(s) found`;
     )
   );
   context.subscriptions.push(
-    vscode15.workspace.onDidSaveTextDocument(async (document) => {
+    vscode20.workspace.onDidSaveTextDocument(async (document) => {
       if (containsBluehawkDirectives(document.getText())) {
         await bluehawkPreviewProvider.updatePreview(document);
       }
     })
   );
   context.subscriptions.push(
-    vscode15.window.onDidChangeActiveTextEditor(async (editor) => {
+    vscode20.window.onDidChangeActiveTextEditor(async (editor) => {
       if (editor && containsBluehawkDirectives(editor.document.getText())) {
         bluehawkPreviewProvider.debouncedUpdate(editor.document);
       }
@@ -34898,22 +35223,22 @@ ${status.projects.length} project(s) found`;
   );
   outputChannel.info("Registered Bluehawk preview provider");
   context.subscriptions.push(
-    vscode15.commands.registerCommand("grove.runTests", async () => {
-      const workspaceFolders2 = vscode15.workspace.workspaceFolders;
+    vscode20.commands.registerCommand("grove.runTests", async () => {
+      const workspaceFolders2 = vscode20.workspace.workspaceFolders;
       if (!workspaceFolders2) {
-        vscode15.window.showErrorMessage("No workspace folder open");
+        vscode20.window.showErrorMessage("No workspace folder open");
         return;
       }
       const workspaceRoot = workspaceFolders2[0].uri.fsPath;
       const projects = await (0, import_shared4.detectGroveProjects)(workspaceRoot);
       if (projects.length === 0) {
-        vscode15.window.showErrorMessage(
+        vscode20.window.showErrorMessage(
           "No Grove project detected. Create a snip.js file to define a Grove project."
         );
         return;
       }
       let projectPath;
-      const activeFile = vscode15.window.activeTextEditor?.document.uri.fsPath;
+      const activeFile = vscode20.window.activeTextEditor?.document.uri.fsPath;
       if (activeFile) {
         const project = (0, import_shared4.findProjectForFile)(activeFile, projects);
         if (project) {
@@ -34922,14 +35247,14 @@ ${status.projects.length} project(s) found`;
       }
       if (!projectPath) {
         const projectList = projects.map((p) => p.relativePath || "root").join(", ");
-        vscode15.window.showErrorMessage(
+        vscode20.window.showErrorMessage(
           `Cannot determine which Grove project to test. Open a file within a Grove project and try again. Detected projects: ${projectList}`
         );
         return;
       }
       const runner = await findTestRunnerForProject(projectPath);
       if (!runner) {
-        vscode15.window.showWarningMessage(
+        vscode20.window.showWarningMessage(
           "No test runner found. Install a Grove language extension (e.g., Grove for Node.js)."
         );
         return;
@@ -34943,11 +35268,11 @@ ${status.projects.length} project(s) found`;
           env = { CONNECTION_STRING: connectionString };
         }
       }
-      const testOutputChannel = vscode15.window.createOutputChannel("Grove Tests");
+      const testOutputChannel = vscode20.window.createOutputChannel("Grove Tests");
       const progressTitle = usingUiConnection ? `Running ${runner.name} tests (using Grove MongoDB connection)...` : `Running ${runner.name} tests...`;
-      vscode15.window.withProgress(
+      vscode20.window.withProgress(
         {
-          location: vscode15.ProgressLocation.Notification,
+          location: vscode20.ProgressLocation.Notification,
           title: progressTitle,
           cancellable: false
         },
@@ -34978,12 +35303,12 @@ ${status.projects.length} project(s) found`;
             testOutputChannel.appendLine(sanitizedOutput);
           }
           if (result.success) {
-            vscode15.window.showInformationMessage(
+            vscode20.window.showInformationMessage(
               `Tests passed: ${result.passed ?? 0}/${result.total ?? 0}`
             );
           } else {
             const message = result.total === 0 ? `Test runner failed. Check output for details.` : `Tests failed: ${result.failed ?? 0}/${result.total ?? 0}`;
-            const action = await vscode15.window.showErrorMessage(
+            const action = await vscode20.window.showErrorMessage(
               message,
               "Show Output"
             );
