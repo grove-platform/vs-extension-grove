@@ -16,10 +16,16 @@ import {
   updateLanguageStatus,
 } from "./language-status";
 import { registerSymlinkCommand } from "./symlink";
+import { MongoConnectionManager } from "./mongo/connection";
+import { registerMongoCommands } from "./mongo/commands";
+import { registerLiteralIncludeProviders } from "./rst/LiteralIncludeProviders";
+import { BluehawkPreviewProvider } from "./preview/BluehawkPreview";
+import { containsBluehawkDirectives } from "./preview/bluehawk-runner";
 
 let statusBarItem: vscode.StatusBarItem;
 let currentStatus: GroveStatus | null = null;
 let outputChannel: vscode.LogOutputChannel;
+let mongoConnectionManager: MongoConnectionManager;
 
 /**
  * Get the current detected projects.
@@ -65,12 +71,23 @@ function getConfig() {
 
 async function getStatus(): Promise<GroveStatus> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
+
+  // Get MongoDB connection status
+  const mongoStatus = mongoConnectionManager?.status ?? {
+    connected: false,
+    clusterType: "unknown" as const,
+  };
+  const mongoConnection = {
+    connected: mongoStatus.connected,
+    clusterType: mongoStatus.clusterType,
+  };
+
   if (!workspaceFolders) {
     return {
       hasProject: false,
       activeProject: null,
       projects: [],
-      mongoConnection: { connected: false, clusterType: "unknown" },
+      mongoConnection,
     };
   }
 
@@ -80,7 +97,7 @@ async function getStatus(): Promise<GroveStatus> {
     hasProject: projects.length > 0,
     activeProject: projects[0] ?? null,
     projects,
-    mongoConnection: { connected: false, clusterType: "unknown" },
+    mongoConnection,
   };
 
   return currentStatus;
@@ -232,6 +249,79 @@ export async function activate(context: vscode.ExtensionContext) {
   // Register commands
   registerCopyConfigCommand(context);
   registerSymlinkCommand(context);
+
+  // Initialize MongoDB connection manager
+  mongoConnectionManager = new MongoConnectionManager(context.secrets);
+
+  // Register MongoDB commands with callback to refresh panel on connection changes
+  registerMongoCommands(context, mongoConnectionManager, () => {
+    panelProvider.refresh();
+  });
+
+  // Attempt to reconnect using stored credentials
+  mongoConnectionManager.reconnect().then((connected) => {
+    if (connected) {
+      outputChannel.info("Reconnected to MongoDB using stored credentials");
+      panelProvider.refresh();
+    }
+  });
+
+  // Register literalinclude providers for RST files
+  registerLiteralIncludeProviders(context);
+  outputChannel.info("Registered literalinclude providers for RST files");
+
+  // Register Bluehawk preview provider
+  const bluehawkPreviewProvider = new BluehawkPreviewProvider(
+    context.extensionUri,
+  );
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      BluehawkPreviewProvider.viewType,
+      bluehawkPreviewProvider,
+    ),
+  );
+
+  // Register Bluehawk preview commands
+  context.subscriptions.push(
+    vscode.commands.registerCommand("grove.openBluehawkPreview", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.showWarningMessage("No active editor");
+        return;
+      }
+      await bluehawkPreviewProvider.updatePreview(editor.document);
+      // Focus the Bluehawk preview panel
+      await vscode.commands.executeCommand("grove.bluehawkPreview.focus");
+    }),
+    vscode.commands.registerCommand(
+      "grove.refreshBluehawkPreview",
+      async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+          await bluehawkPreviewProvider.updatePreview(editor.document);
+        }
+      },
+    ),
+  );
+
+  // Update Bluehawk preview on document save
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument(async (document) => {
+      if (containsBluehawkDirectives(document.getText())) {
+        await bluehawkPreviewProvider.updatePreview(document);
+      }
+    }),
+  );
+
+  // Update Bluehawk preview when active editor changes
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+      if (editor && containsBluehawkDirectives(editor.document.getText())) {
+        bluehawkPreviewProvider.debouncedUpdate(editor.document);
+      }
+    }),
+  );
+  outputChannel.info("Registered Bluehawk preview provider");
 
   // Register run tests command (delegates to language-specific runner)
   context.subscriptions.push(

@@ -38,6 +38,15 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
         case "runTests":
           vscode.commands.executeCommand("grove.runTests");
           break;
+        case "connectMongo":
+          vscode.commands.executeCommand("grove.connectMongo");
+          break;
+        case "disconnectMongo":
+          vscode.commands.executeCommand("grove.disconnectMongo");
+          break;
+        case "showDatabases":
+          vscode.commands.executeCommand("grove.showDatabases");
+          break;
       }
     });
 
@@ -142,11 +151,25 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
         html += '<div class="setup-wizard"><h3>No Grove Project Detected</h3><p>Create a snip.js file to get started, or open a folder containing one.</p></div>';
       } else {
         html += '<div class="section"><div class="section-title">Projects</div>';
-        html += currentStatus.projects.map(p => 
+        html += currentStatus.projects.map(p =>
           '<div class="status-row"><span class="status-icon">' + (p.hasValidConfig ? '✓' : '!') + '</span><span>' + (p.relativePath || 'Root') + '</span><span>(' + (p.language || 'unknown') + ')</span></div>'
         ).join('');
         html += '</div>';
-        html += '<div class="section"><div class="section-title">MongoDB</div><div class="status-row"><span class="status-icon">' + (currentStatus.mongoConnection.connected ? '✓' : '○') + '</span><span>' + (currentStatus.mongoConnection.connected ? 'Connected' : 'Not connected') + '</span></div></div>';
+        // MongoDB section with connection status and actions
+        html += '<div class="section"><div class="section-title">MongoDB</div>';
+        const mongoConnected = currentStatus.mongoConnection.connected;
+        const clusterType = currentStatus.mongoConnection.clusterType;
+        html += '<div class="status-row"><span class="status-icon">' + (mongoConnected ? '✓' : '○') + '</span>';
+        html += '<span>' + (mongoConnected ? 'Connected (' + clusterType + ')' : 'Not connected') + '</span></div>';
+        html += '<div class="actions" style="margin-top: 8px;">';
+        if (mongoConnected) {
+          html += '<button onclick="showDatabases()">Show Databases</button>';
+          html += '<button onclick="disconnectMongo()">Disconnect</button>';
+        } else {
+          html += '<button onclick="connectMongo()" style="grid-column: span 2;">Connect to MongoDB</button>';
+        }
+        html += '</div></div>';
+        // Actions section
         html += '<div class="section"><div class="section-title">Actions</div><div class="actions"><button onclick="runTests()">Run Tests</button><button onclick="refresh()">Refresh</button></div></div>';
       }
       html += '<div class="section"><div class="section-title">AI Integration</div><button onclick="copyMcpConfig()" style="width: 100%;">Copy MCP Config for Augment</button></div>';
@@ -155,6 +178,9 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
     function refresh() { vscode.postMessage({ command: 'refresh' }); }
     function copyMcpConfig() { vscode.postMessage({ command: 'copyMcpConfig' }); }
     function runTests() { vscode.postMessage({ command: 'runTests' }); }
+    function connectMongo() { vscode.postMessage({ command: 'connectMongo' }); }
+    function disconnectMongo() { vscode.postMessage({ command: 'disconnectMongo' }); }
+    function showDatabases() { vscode.postMessage({ command: 'showDatabases' }); }
     refresh();
   </script>
 </body>

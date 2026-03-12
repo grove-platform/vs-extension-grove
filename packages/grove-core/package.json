@@ -50,6 +50,11 @@
           "type": "webview",
           "id": "grove.panel",
           "name": "Grove"
+        },
+        {
+          "type": "webview",
+          "id": "grove.bluehawkPreview",
+          "name": "Bluehawk Preview"
         }
       ]
     },
@@ -69,6 +74,30 @@
       {
         "command": "grove.createSymlink",
         "title": "Grove: Create Symlink for Documentation"
+      },
+      {
+        "command": "grove.connectMongo",
+        "title": "Grove: Connect to MongoDB"
+      },
+      {
+        "command": "grove.disconnectMongo",
+        "title": "Grove: Disconnect from MongoDB"
+      },
+      {
+        "command": "grove.showDatabases",
+        "title": "Grove: Show MongoDB Databases"
+      },
+      {
+        "command": "grove.openBluehawkPreview",
+        "title": "Grove: Open Bluehawk Preview"
+      },
+      {
+        "command": "grove.refreshBluehawkPreview",
+        "title": "Grove: Refresh Bluehawk Preview"
+      },
+      {
+        "command": "grove.literalinclude.view",
+        "title": "Grove: View Literalinclude File"
       }
     ]
   },

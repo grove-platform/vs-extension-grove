@@ -239,6 +239,7 @@ var require_security = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.isPathWithinBoundary = isPathWithinBoundary;
     exports2.sanitizePath = sanitizePath;
+    exports2.validateWorkspacePath = validateWorkspacePath;
     var path3 = __importStar(require("path"));
     function isPathWithinBoundary(resolvedPath, basePath) {
       const normalizedResolved = path3.normalize(resolvedPath);
@@ -250,6 +251,10 @@ var require_security = __commonJS({
       sanitized = sanitized.replace(/\\/g, "/");
       sanitized = sanitized.replace(/^\/+/, "");
       return sanitized;
+    }
+    function validateWorkspacePath(filePath, workspacePath) {
+      const resolvedPath = path3.resolve(filePath);
+      return isPathWithinBoundary(resolvedPath, workspacePath);
     }
   }
 });
