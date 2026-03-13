@@ -129,9 +129,6 @@ export class LiteralIncludeCodeLensProvider implements vscode.CodeLensProvider {
       // Position the lens on the literalinclude directive line itself
       // This makes the lens appear directly above the directive with minimal gap
       const directiveLine = ref.range.start.line;
-      console.log(
-        `[Grove Debug] Lens for "${ref.targetPath}" at line ${directiveLine} (0-indexed), editor line ${directiveLine + 1}`,
-      );
       const lensRange = new vscode.Range(
         new vscode.Position(directiveLine, 0),
         new vscode.Position(directiveLine, 0),

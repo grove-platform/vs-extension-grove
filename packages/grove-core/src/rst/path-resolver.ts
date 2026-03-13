@@ -7,6 +7,7 @@
 
 import * as path from "path";
 import * as fs from "fs";
+import { isPathWithinBoundary } from "@grove/shared";
 
 export interface ResolvedPath {
   /** Absolute path to the resolved file */
@@ -124,17 +125,12 @@ function checkPathExists(
   absolutePath: string,
   workspaceRoot?: string,
 ): ResolvedPath {
-  // Security: Ensure path is within workspace
-  if (workspaceRoot) {
-    const normalizedPath = path.normalize(absolutePath);
-    const normalizedRoot = path.normalize(workspaceRoot);
-    if (!normalizedPath.startsWith(normalizedRoot)) {
-      return {
-        absolutePath,
-        exists: false,
-        error: "Path is outside workspace boundaries",
-      };
-    }
+  if (workspaceRoot && !isPathWithinBoundary(absolutePath, workspaceRoot)) {
+    return {
+      absolutePath,
+      exists: false,
+      error: "Path is outside workspace boundaries",
+    };
   }
 
   const exists = fs.existsSync(absolutePath);

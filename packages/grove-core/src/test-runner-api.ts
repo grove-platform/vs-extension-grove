@@ -5,6 +5,8 @@
  * test runners with grove-core using this API.
  */
 
+import { getLogChannel, isLoggerInitialized } from "./logger";
+
 export interface TestRunOptions {
   projectPath: string;
   testFile?: string;
@@ -44,9 +46,12 @@ const registeredRunners: Map<string, TestRunner> = new Map();
  */
 export function registerTestRunner(runner: TestRunner): void {
   registeredRunners.set(runner.language, runner);
-  console.log(
-    `Grove: Registered test runner "${runner.name}" for ${runner.language}`,
-  );
+  // Only log if logger is initialized (not in tests)
+  if (isLoggerInitialized()) {
+    getLogChannel().info(
+      `Registered test runner "${runner.name}" for ${runner.language}`,
+    );
+  }
 }
 
 /**

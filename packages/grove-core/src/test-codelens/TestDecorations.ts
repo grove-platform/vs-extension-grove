@@ -7,7 +7,12 @@
 
 import * as vscode from "vscode";
 import { testResultStore, type TestResult } from "./TestResultStore";
-import { parseTestBlocks, isTestFile, buildTestNamePattern } from "./test-parser";
+import {
+  parseTestBlocks,
+  isTestFile,
+  buildTestNamePattern,
+} from "./test-parser";
+import { formatTimeAgo } from "./utils";
 
 let passDecorationType: vscode.TextEditorDecorationType;
 let failDecorationType: vscode.TextEditorDecorationType;
@@ -75,9 +80,7 @@ export function initTestDecorations(context: vscode.ExtensionContext): void {
 /**
  * Update decorations for a specific editor based on stored test results.
  */
-export function updateDecorationsForEditor(
-  editor: vscode.TextEditor,
-): void {
+export function updateDecorationsForEditor(editor: vscode.TextEditor): void {
   const document = editor.document;
 
   // Only process test files
@@ -123,7 +126,10 @@ export function updateDecorationsForEditor(
 /**
  * Create a hover message for a decoration.
  */
-function createHoverMessage(result: TestResult, testName: string): vscode.MarkdownString {
+function createHoverMessage(
+  result: TestResult,
+  testName: string,
+): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   const icon = result.passed ? "✅" : "❌";
   const status = result.passed ? "Passed" : "Failed";
@@ -138,18 +144,3 @@ function createHoverMessage(result: TestResult, testName: string): vscode.Markdo
 
   return md;
 }
-
-/**
- * Format a timestamp as a relative time string.
- */
-function formatTimeAgo(date: Date): string {
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-
-  if (seconds < 60) return "just now";
-  if (seconds < 120) return "1 minute ago";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`;
-  if (seconds < 7200) return "1 hour ago";
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
-  return date.toLocaleDateString();
-}
-

@@ -141,10 +141,3 @@ export async function refreshAllDiagnostics(
     await refreshDiagnostics(project, workspacePath);
   }
 }
-
-/**
- * Clear all diagnostics.
- */
-export function clearDiagnostics(): void {
-  diagnosticCollection?.clear();
-}

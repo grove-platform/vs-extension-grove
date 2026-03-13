@@ -15,8 +15,11 @@ import {
 } from "./TestDecorations";
 import { testResultStore } from "./TestResultStore";
 import { parseTestBlocks, buildTestNamePattern } from "./test-parser";
-import { findTestRunnerForProject, runTests } from "../test-runner-api";
-import { findProjectForFile, detectGroveProjects } from "@grove/shared";
+import {
+  resolveProject,
+  executeTests,
+  displayTestResults,
+} from "../test-execution";
 
 // Module-level provider instance for access from runTestBlock
 let codeLensProvider: TestCodeLensProvider;
@@ -93,38 +96,10 @@ async function runTestBlock(
   blockType: string,
   debug: boolean,
 ): Promise<void> {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders) {
-    vscode.window.showErrorMessage("No workspace folder open");
-    return;
-  }
+  const resolved = await resolveProject(uri.fsPath);
+  if (!resolved) return;
 
-  const workspaceRoot = workspaceFolders[0].uri.fsPath;
-  const filePath = uri.fsPath;
-
-  // Detect projects and find the one containing this file
-  const projects = await detectGroveProjects(workspaceRoot);
-  const project = findProjectForFile(filePath, projects);
-
-  if (!project) {
-    vscode.window.showErrorMessage(
-      "This file is not within a Grove project. Create a snip.js file to define a project.",
-    );
-    return;
-  }
-
-  const runner = await findTestRunnerForProject(project.rootPath);
-
-  if (!runner) {
-    vscode.window.showWarningMessage(
-      "No test runner found. Install a Grove language extension (e.g., Grove for Node.js).",
-    );
-    return;
-  }
-
-  const testOutputChannel = vscode.window.createOutputChannel("Grove Tests");
-
-  // Build display text
+  const project = resolved.project;
   const displayType = blockType === "describe" ? "suite" : "test";
   const action = debug ? "Debugging" : "Running";
 
@@ -139,14 +114,13 @@ async function runTestBlock(
         cancellable: false,
       },
       async () => {
-        // Get relative path for testFile option
-        const relativeTestFile = path.relative(project.rootPath, filePath);
+        const relativeTestFile = path.relative(project.rootPath, uri.fsPath);
 
-        const result = await runTests({
-          projectPath: project.rootPath,
+        const outcome = await executeTests(project.rootPath, {
           testFile: relativeTestFile,
           testNamePattern,
         });
+        if (!outcome) return;
 
         // Find the line number for this test block
         const document = await vscode.workspace.openTextDocument(uri);
@@ -154,16 +128,15 @@ async function runTestBlock(
         const block = blocks.find(
           (b) => buildTestNamePattern(b) === testNamePattern,
         );
-        const line = block?.line ?? 0;
 
         // Store the test result for decorations and hover
         testResultStore.set(uri, testNamePattern, {
-          passed: result.success,
-          duration: result.duration,
-          line,
-          errorMessage: result.success
+          passed: outcome.result.success,
+          duration: outcome.result.duration,
+          line: block?.line ?? 0,
+          errorMessage: outcome.result.success
             ? undefined
-            : extractErrorMessage(result.output),
+            : extractErrorMessage(outcome.result.output),
         });
 
         // Update decorations in the active editor
@@ -172,30 +145,11 @@ async function runTestBlock(
           updateDecorationsForEditor(editor);
         }
 
-        // Log output
-        if (result.output) {
-          testOutputChannel.clear();
-          testOutputChannel.appendLine(`=== Grove Test Results ===`);
-          testOutputChannel.appendLine(`Test: ${testName}`);
-          testOutputChannel.appendLine(`Duration: ${result.duration}ms`);
-          testOutputChannel.appendLine(`Success: ${result.success}`);
-          testOutputChannel.appendLine(``);
-          testOutputChannel.appendLine(result.output);
-        }
-
-        if (result.success) {
-          vscode.window.showInformationMessage(
-            `✓ ${displayType} passed: "${testName}"`,
-          );
-        } else {
-          const action = await vscode.window.showErrorMessage(
-            `✗ ${displayType} failed: "${testName}"`,
-            "Show Output",
-          );
-          if (action === "Show Output") {
-            testOutputChannel.show();
-          }
-        }
+        displayTestResults(
+          outcome.result.output ?? "",
+          outcome.result,
+          testName,
+        );
       },
     );
   } finally {

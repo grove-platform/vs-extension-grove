@@ -1,12 +1,13 @@
 import * as vscode from "vscode";
-import { detectGroveProjects, findProjectForFile } from "@grove/shared";
+import { detectGroveProjects } from "@grove/shared";
 import type { GroveStatus, GroveProject } from "@grove/shared";
 import { GrovePanelProvider } from "./panel/GrovePanel";
+import { getApi as getTestRunnerApi } from "./test-runner-api";
 import {
-  getApi as getTestRunnerApi,
-  runTests,
-  findTestRunnerForProject,
-} from "./test-runner-api";
+  resolveProject,
+  executeTests,
+  displayTestResults,
+} from "./test-execution";
 import { initDiagnostics, refreshAllDiagnostics } from "./diagnostics";
 import {
   initLanguageStatus,
@@ -22,9 +23,9 @@ import { BluehawkPreviewProvider } from "./preview/BluehawkPreview";
 import { containsBluehawkDirectives } from "./preview/bluehawk-runner";
 import { registerTestCodeLens } from "./test-codelens";
 import { registerSnippetCodeLens } from "./snippet-codelens";
+import { initLogger, getLogChannel } from "./logger";
 
 let currentStatus: GroveStatus | null = null;
-let outputChannel: vscode.LogOutputChannel;
 let mongoConnectionManager: MongoConnectionManager;
 
 /**
@@ -123,9 +124,9 @@ async function detectProjectsWithProgress(
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-  // Create log output channel
-  outputChannel = vscode.window.createOutputChannel("Grove", { log: true });
-  context.subscriptions.push(outputChannel);
+  // Initialize centralized logger
+  initLogger(context);
+  const outputChannel = getLogChannel();
   outputChannel.info("Grove extension activating...");
 
   const config = getConfig();
@@ -276,54 +277,10 @@ export async function activate(context: vscode.ExtensionContext) {
   // Register run tests command (delegates to language-specific runner)
   context.subscriptions.push(
     vscode.commands.registerCommand("grove.runTests", async () => {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (!workspaceFolders) {
-        vscode.window.showErrorMessage("No workspace folder open");
-        return;
-      }
+      const resolved = await resolveProject();
+      if (!resolved) return;
 
-      const workspaceRoot = workspaceFolders[0].uri.fsPath;
-
-      // Detect all Grove projects in the workspace
-      const projects = await detectGroveProjects(workspaceRoot);
-
-      if (projects.length === 0) {
-        vscode.window.showErrorMessage(
-          "No Grove project detected. Create a snip.js file to define a Grove project.",
-        );
-        return;
-      }
-
-      // Determine project path from active file
-      let projectPath: string | undefined;
-      const activeFile = vscode.window.activeTextEditor?.document.uri.fsPath;
-
-      if (activeFile) {
-        const project = findProjectForFile(activeFile, projects);
-        if (project) {
-          projectPath = project.rootPath;
-        }
-      }
-
-      // If no project found for active file, show error with guidance
-      if (!projectPath) {
-        const projectList = projects
-          .map((p) => p.relativePath || "root")
-          .join(", ");
-        vscode.window.showErrorMessage(
-          `Cannot determine which Grove project to test. Open a file within a Grove project and try again. Detected projects: ${projectList}`,
-        );
-        return;
-      }
-
-      const runner = await findTestRunnerForProject(projectPath);
-
-      if (!runner) {
-        vscode.window.showWarningMessage(
-          "No test runner found. Install a Grove language extension (e.g., Grove for Node.js).",
-        );
-        return;
-      }
+      const projectPath = resolved.project.rootPath;
 
       // Check if we have a MongoDB connection to inject
       let env: Record<string, string> | undefined;
@@ -337,13 +294,10 @@ export async function activate(context: vscode.ExtensionContext) {
         }
       }
 
-      const testOutputChannel =
-        vscode.window.createOutputChannel("Grove Tests");
-
       // Build progress title with indicator if using UI connection
       const progressTitle = usingUiConnection
-        ? `Running ${runner.name} tests (using Grove MongoDB connection)...`
-        : `Running ${runner.name} tests...`;
+        ? "Running tests (using Grove MongoDB connection)..."
+        : "Running tests...";
 
       vscode.window.withProgress(
         {
@@ -352,10 +306,11 @@ export async function activate(context: vscode.ExtensionContext) {
           cancellable: false,
         },
         async () => {
-          const result = await runTests({ projectPath, env });
+          const outcome = await executeTests(projectPath, { env });
+          if (!outcome) return;
 
           // Sanitize output to mask connection string if it appears
-          let sanitizedOutput = result.output ?? "";
+          let sanitizedOutput = outcome.result.output ?? "";
           if (connectionString && sanitizedOutput.includes(connectionString)) {
             const masked = maskConnectionString(connectionString);
             sanitizedOutput = sanitizedOutput.replaceAll(
@@ -367,40 +322,16 @@ export async function activate(context: vscode.ExtensionContext) {
             );
           }
 
-          // Always log output to channel
-          if (sanitizedOutput) {
-            testOutputChannel.clear();
-            testOutputChannel.appendLine(`=== Grove Test Results ===`);
-            testOutputChannel.appendLine(`Duration: ${result.duration}ms`);
-            testOutputChannel.appendLine(`Success: ${result.success}`);
-            if (usingUiConnection) {
-              testOutputChannel.appendLine(
-                `MongoDB: Using Grove extension connection`,
-              );
-            }
-            testOutputChannel.appendLine(``);
-            testOutputChannel.appendLine(sanitizedOutput);
-          }
+          const extraLines = usingUiConnection
+            ? ["MongoDB: Using Grove extension connection"]
+            : undefined;
 
-          if (result.success) {
-            vscode.window.showInformationMessage(
-              `Tests passed: ${result.passed ?? 0}/${result.total ?? 0}`,
-            );
-          } else {
-            // Show error with "Show Output" button
-            const message =
-              result.total === 0
-                ? `Test runner failed. Check output for details.`
-                : `Tests failed: ${result.failed ?? 0}/${result.total ?? 0}`;
-
-            const action = await vscode.window.showErrorMessage(
-              message,
-              "Show Output",
-            );
-            if (action === "Show Output") {
-              testOutputChannel.show();
-            }
-          }
+          displayTestResults(
+            sanitizedOutput,
+            outcome.result,
+            outcome.runner.name,
+            extraLines,
+          );
         },
       );
     }),

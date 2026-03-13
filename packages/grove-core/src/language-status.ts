@@ -109,10 +109,7 @@ export function registerLanguageStatusHandlers(
   // Update on active editor change
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor((editor) => {
-      updateLanguageStatus(
-        getProjects(),
-        editor?.document.uri.fsPath,
-      );
+      updateLanguageStatus(getProjects(), editor?.document.uri.fsPath);
     }),
   );
 
@@ -122,12 +119,3 @@ export function registerLanguageStatusHandlers(
     updateLanguageStatus(getProjects(), activeEditor.document.uri.fsPath);
   }
 }
-
-/**
- * Dispose of the language status item.
- */
-export function disposeLanguageStatus(): void {
-  languageStatusItem?.dispose();
-  languageStatusItem = undefined;
-}
-
