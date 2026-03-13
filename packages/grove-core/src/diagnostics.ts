@@ -11,6 +11,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
 import type { GroveProject } from "@grove/shared";
+import { profile } from "@grove/shared";
 
 let diagnosticCollection: vscode.DiagnosticCollection;
 
@@ -120,7 +121,9 @@ export async function refreshDiagnostics(
   diagnosticCollection.delete(snipUri);
 
   // Check for issues
-  const symlinkDiagnostics = await checkSymlinks(project, workspacePath);
+  const symlinkDiagnostics = await profile("Diagnostics.checkSymlinks", () =>
+    checkSymlinks(project, workspacePath),
+  );
 
   // Set diagnostics on the snip.js file
   if (symlinkDiagnostics.length > 0) {
@@ -137,7 +140,9 @@ export async function refreshAllDiagnostics(
 ): Promise<void> {
   diagnosticCollection?.clear();
 
-  for (const project of projects) {
-    await refreshDiagnostics(project, workspacePath);
-  }
+  await profile("Diagnostics.refreshAll", async () => {
+    for (const project of projects) {
+      await refreshDiagnostics(project, workspacePath);
+    }
+  });
 }

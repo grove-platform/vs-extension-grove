@@ -8,6 +8,7 @@
 import * as vscode from "vscode";
 import { spawn } from "child_process";
 import { rgPath } from "@vscode/ripgrep";
+import { profile } from "@grove/shared";
 
 export interface SnippetReference {
   uri: vscode.Uri;
@@ -123,11 +124,8 @@ export async function findSnippetReferencesWithRipgrep(
   const seen = new Set<string>(); // For deduplication
 
   for (const folder of workspaceFolders) {
-    const results = await runRipgrep(
-      snippetName,
-      folder.uri.fsPath,
-      snippetName,
-      sourceExt,
+    const results = await profile("Ripgrep.search", () =>
+      runRipgrep(snippetName, folder.uri.fsPath, snippetName, sourceExt),
     );
 
     // Deduplicate results

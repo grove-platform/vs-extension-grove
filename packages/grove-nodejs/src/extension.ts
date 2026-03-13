@@ -1,7 +1,11 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { runJestTests, detectJestProject } from "./test-runner";
-import { detectGroveProjects, findProjectForFile } from "@grove/shared";
+import {
+  detectGroveProjects,
+  findProjectForFile,
+  profile,
+} from "@grove/shared";
 
 // Type definition for grove-core API
 interface GroveCoreApi {
@@ -101,7 +105,9 @@ export async function activate(context: vscode.ExtensionContext) {
           cancellable: false,
         },
         async () => {
-          const result = await runJestTests({ projectPath });
+          const result = await profile("NodeJS.runJestTests", () =>
+            runJestTests({ projectPath }),
+          );
 
           // Log output to channel
           if (result.output) {
@@ -161,7 +167,9 @@ export async function activate(context: vscode.ExtensionContext) {
           cancellable: false,
         },
         async () => {
-          const result = await runJestTests({ projectPath, testFile });
+          const result = await profile("NodeJS.runJestTestFile", () =>
+            runJestTests({ projectPath, testFile }),
+          );
 
           // Log output to channel
           if (result.output) {

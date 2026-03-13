@@ -33,6 +33,9 @@ import {
   isProfilingEnabled,
   formatReport,
   clearStats,
+  profile,
+  mark,
+  measure,
 } from "@grove/shared";
 
 let currentStatus: GroveStatus | null = null;
@@ -134,6 +137,8 @@ async function detectProjectsWithProgress(
 }
 
 export async function activate(context: vscode.ExtensionContext) {
+  mark("activation.start");
+
   // Initialize centralized logger
   initLogger(context);
   const outputChannel = getLogChannel();
@@ -141,6 +146,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Initialize performance profiler (only active in development mode)
   initProfiler(context, outputChannel);
+  mark("activation.profilerReady");
 
   // Initialize project cache with file-system watcher
   const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -172,8 +178,8 @@ export async function activate(context: vscode.ExtensionContext) {
   let status: GroveStatus;
 
   if (config.autoDetect && workspaceFolders) {
-    const projects = await detectProjectsWithProgress(
-      workspaceFolders[0].uri.fsPath,
+    const projects = await profile("activation.detectProjects", () =>
+      detectProjectsWithProgress(workspaceFolders[0].uri.fsPath),
     );
     currentStatus = {
       hasProject: projects.length > 0,
@@ -186,15 +192,15 @@ export async function activate(context: vscode.ExtensionContext) {
   } else {
     status = await getStatus();
   }
+  mark("activation.projectsDetected");
 
   // Initialize diagnostics collection
   initDiagnostics(context);
 
   // Refresh diagnostics asynchronously — don't block activation
   if (workspaceFolders && status.projects.length > 0) {
-    refreshAllDiagnostics(
-      status.projects,
-      workspaceFolders[0].uri.fsPath,
+    profile("activation.refreshDiagnostics", () =>
+      refreshAllDiagnostics(status.projects, workspaceFolders[0].uri.fsPath),
     ).catch((err) => {
       outputChannel.error("Failed to refresh diagnostics on startup", err);
     });
@@ -233,7 +239,9 @@ export async function activate(context: vscode.ExtensionContext) {
   });
 
   // Attempt to reconnect using stored credentials
-  mongoConnectionManager.reconnect().then((connected) => {
+  profile("activation.mongoReconnect", () =>
+    mongoConnectionManager.reconnect(),
+  ).then((connected) => {
     if (connected) {
       outputChannel.info("Reconnected to MongoDB using stored credentials");
       panelProvider.refresh();
@@ -251,6 +259,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // Register snippet CodeLens providers for Bluehawk snippets
   registerSnippetCodeLens(context);
   outputChannel.info("Registered snippet CodeLens providers");
+  mark("activation.providersRegistered");
 
   // Register Bluehawk preview provider
   const bluehawkPreviewProvider = new BluehawkPreviewProvider(
@@ -394,6 +403,25 @@ export async function activate(context: vscode.ExtensionContext) {
       clearStats();
       vscode.window.showInformationMessage("Performance statistics cleared.");
     }),
+  );
+
+  // Record activation timing
+  mark("activation.complete");
+  measure("activation.total", "activation.start", "activation.complete");
+  measure(
+    "activation.initialization",
+    "activation.start",
+    "activation.profilerReady",
+  );
+  measure(
+    "activation.projectDetection",
+    "activation.profilerReady",
+    "activation.projectsDetected",
+  );
+  measure(
+    "activation.providerRegistration",
+    "activation.projectsDetected",
+    "activation.providersRegistered",
   );
 
   outputChannel.info(

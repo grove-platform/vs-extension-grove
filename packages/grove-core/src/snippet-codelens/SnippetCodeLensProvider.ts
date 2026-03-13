@@ -8,6 +8,7 @@
 import * as vscode from "vscode";
 import { parseSnippetBlocks, mightContainSnippets } from "./snippet-parser";
 import { findSnippetReferencesWithRipgrep } from "./ripgrep-searcher";
+import { profile, profileSync } from "@grove/shared";
 
 export class SnippetCodeLensProvider implements vscode.CodeLensProvider {
   private _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
@@ -21,18 +22,24 @@ export class SnippetCodeLensProvider implements vscode.CodeLensProvider {
       return [];
     }
 
-    const blocks = parseSnippetBlocks(document);
+    const blocks = profileSync("SnippetCodeLens.parseBlocks", () =>
+      parseSnippetBlocks(document),
+    );
     const lenses: vscode.CodeLens[] = [];
 
     // Fetch reference counts for all snippets in parallel
-    const referenceCounts = await Promise.all(
-      blocks.map(async (block) => {
-        const refs = await findSnippetReferencesWithRipgrep(
-          block.name,
-          document.uri,
-        );
-        return refs.length;
-      }),
+    const referenceCounts = await profile(
+      "SnippetCodeLens.fetchAllReferences",
+      () =>
+        Promise.all(
+          blocks.map(async (block) => {
+            const refs = await findSnippetReferencesWithRipgrep(
+              block.name,
+              document.uri,
+            );
+            return refs.length;
+          }),
+        ),
     );
 
     for (let i = 0; i < blocks.length; i++) {

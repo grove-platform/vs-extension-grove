@@ -6,7 +6,7 @@
  */
 
 import * as vscode from "vscode";
-import { detectGroveProjects } from "@grove/shared";
+import { detectGroveProjects, profile } from "@grove/shared";
 import type { GroveProject } from "@grove/shared";
 import { getLogChannel, isLoggerInitialized } from "./logger";
 
@@ -45,7 +45,9 @@ export async function getCachedProjects(): Promise<GroveProject[]> {
     return [];
   }
 
-  cachedProjects = await detectGroveProjects(workspaceRoot);
+  cachedProjects = await profile("ProjectCache.detectProjects", () =>
+    detectGroveProjects(workspaceRoot!),
+  );
   if (isLoggerInitialized()) {
     getLogChannel().info(
       `Project cache populated: ${cachedProjects.length} project(s)`,
@@ -63,4 +65,3 @@ export function invalidate(): void {
     getLogChannel().debug("Project cache invalidated");
   }
 }
-

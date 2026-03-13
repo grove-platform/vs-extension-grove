@@ -12,6 +12,7 @@ import {
   containsBluehawkDirectives,
   BluehawkResult,
 } from "./bluehawk-runner";
+import { profile } from "@grove/shared";
 
 export class BluehawkPreviewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = "grove.bluehawkPreview";
@@ -79,7 +80,9 @@ export class BluehawkPreviewProvider implements vscode.WebviewViewProvider {
     });
 
     // Run bluehawk
-    const result = await runBluehawkDryRun(document.uri.fsPath);
+    const result = await profile("Bluehawk.dryRun", () =>
+      runBluehawkDryRun(document.uri.fsPath),
+    );
 
     // Send result to webview
     this._view.webview.postMessage({

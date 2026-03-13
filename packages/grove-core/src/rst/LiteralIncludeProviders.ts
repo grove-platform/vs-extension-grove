@@ -17,6 +17,7 @@ import {
   type DirectiveRef,
 } from "./directive-parser";
 import { resolveDirectivePath } from "./path-resolver";
+import { profile, profileSync } from "@grove/shared";
 
 /**
  * Get the workspace root for the current document.
@@ -137,16 +138,22 @@ export class RstDirectiveCodeLensProvider implements vscode.CodeLensProvider {
   async provideCodeLenses(
     document: vscode.TextDocument,
   ): Promise<vscode.CodeLens[]> {
-    const refs = parseDirectives(document);
+    const refs = profileSync("RstCodeLens.parseDirectives", () =>
+      parseDirectives(document),
+    );
     const lenses: vscode.CodeLens[] = [];
     const workspaceRoot = getWorkspaceRoot(document);
 
     for (const ref of refs) {
-      const resolved = await resolveDirectivePath(
-        document.uri.fsPath,
-        ref.targetPath,
-        workspaceRoot,
-        { resolveSymlinks: ref.needsSymlinkResolution },
+      const resolved = await profile("RstCodeLens.resolvePath", () =>
+        resolveDirectivePath(
+          document.uri.fsPath,
+          ref.targetPath,
+          workspaceRoot,
+          {
+            resolveSymlinks: ref.needsSymlinkResolution,
+          },
+        ),
       );
 
       // Position the lens on the directive line itself
@@ -219,11 +226,10 @@ export class RstDirectiveDefinitionProvider
     }
 
     const workspaceRoot = getWorkspaceRoot(document);
-    const resolved = await resolveDirectivePath(
-      document.uri.fsPath,
-      ref.targetPath,
-      workspaceRoot,
-      { resolveSymlinks: ref.needsSymlinkResolution },
+    const resolved = await profile("RstDefinition.resolvePath", () =>
+      resolveDirectivePath(document.uri.fsPath, ref.targetPath, workspaceRoot, {
+        resolveSymlinks: ref.needsSymlinkResolution,
+      }),
     );
 
     if (!resolved.exists) {
@@ -273,16 +279,22 @@ export class RstDirectiveLinkProvider implements vscode.DocumentLinkProvider {
   async provideDocumentLinks(
     document: vscode.TextDocument,
   ): Promise<vscode.DocumentLink[]> {
-    const refs = parseDirectives(document);
+    const refs = profileSync("RstLinks.parseDirectives", () =>
+      parseDirectives(document),
+    );
     const links: vscode.DocumentLink[] = [];
     const workspaceRoot = getWorkspaceRoot(document);
 
     for (const ref of refs) {
-      const resolved = await resolveDirectivePath(
-        document.uri.fsPath,
-        ref.targetPath,
-        workspaceRoot,
-        { resolveSymlinks: ref.needsSymlinkResolution },
+      const resolved = await profile("RstLinks.resolvePath", () =>
+        resolveDirectivePath(
+          document.uri.fsPath,
+          ref.targetPath,
+          workspaceRoot,
+          {
+            resolveSymlinks: ref.needsSymlinkResolution,
+          },
+        ),
       );
 
       if (resolved.exists) {

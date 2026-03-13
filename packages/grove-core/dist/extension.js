@@ -266,10 +266,10 @@ var require_profiler = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.initProfiler = initProfiler2;
     exports2.isProfilingEnabled = isProfilingEnabled2;
-    exports2.profile = profile;
-    exports2.profileSync = profileSync;
-    exports2.mark = mark;
-    exports2.measure = measure;
+    exports2.profile = profile8;
+    exports2.profileSync = profileSync3;
+    exports2.mark = mark2;
+    exports2.measure = measure2;
     exports2.getStats = getStats;
     exports2.getAllStats = getAllStats;
     exports2.formatReport = formatReport2;
@@ -293,7 +293,7 @@ var require_profiler = __commonJS({
     function isProfilingEnabled2() {
       return _isEnabled;
     }
-    async function profile(name, fn) {
+    async function profile8(name, fn) {
       if (!_isEnabled) {
         return fn();
       }
@@ -305,7 +305,7 @@ var require_profiler = __commonJS({
         recordTiming(name, elapsed);
       }
     }
-    function profileSync(name, fn) {
+    function profileSync3(name, fn) {
       if (!_isEnabled) {
         return fn();
       }
@@ -317,7 +317,7 @@ var require_profiler = __commonJS({
         recordTiming(name, elapsed);
       }
     }
-    function mark(name) {
+    function mark2(name) {
       if (!_isEnabled) {
         return;
       }
@@ -326,7 +326,7 @@ var require_profiler = __commonJS({
         timestamp: performance.now()
       });
     }
-    function measure(name, startMark, endMark) {
+    function measure2(name, startMark, endMark) {
       if (!_isEnabled) {
         return void 0;
       }
@@ -32916,7 +32916,10 @@ async function getCachedProjects() {
   if (!workspaceRoot) {
     return [];
   }
-  cachedProjects = await (0, import_shared.detectGroveProjects)(workspaceRoot);
+  cachedProjects = await (0, import_shared.profile)(
+    "ProjectCache.detectProjects",
+    () => (0, import_shared.detectGroveProjects)(workspaceRoot)
+  );
   if (isLoggerInitialized()) {
     getLogChannel().info(
       `Project cache populated: ${cachedProjects.length} project(s)`
@@ -33010,6 +33013,7 @@ function displayTestResults(output, result, label, extraLines) {
 var vscode5 = __toESM(require("vscode"));
 var path = __toESM(require("path"));
 var fs = __toESM(require("fs/promises"));
+var import_shared3 = __toESM(require_dist());
 var diagnosticCollection;
 function initDiagnostics(context) {
   diagnosticCollection = vscode5.languages.createDiagnosticCollection("grove");
@@ -33071,21 +33075,26 @@ async function refreshDiagnostics(project, workspacePath) {
   }
   const snipUri = vscode5.Uri.file(path.join(project.rootPath, "snip.js"));
   diagnosticCollection.delete(snipUri);
-  const symlinkDiagnostics = await checkSymlinks(project, workspacePath);
+  const symlinkDiagnostics = await (0, import_shared3.profile)(
+    "Diagnostics.checkSymlinks",
+    () => checkSymlinks(project, workspacePath)
+  );
   if (symlinkDiagnostics.length > 0) {
     diagnosticCollection.set(snipUri, symlinkDiagnostics);
   }
 }
 async function refreshAllDiagnostics(projects, workspacePath) {
   diagnosticCollection?.clear();
-  for (const project of projects) {
-    await refreshDiagnostics(project, workspacePath);
-  }
+  await (0, import_shared3.profile)("Diagnostics.refreshAll", async () => {
+    for (const project of projects) {
+      await refreshDiagnostics(project, workspacePath);
+    }
+  });
 }
 
 // src/language-status.ts
 var vscode6 = __toESM(require("vscode"));
-var import_shared3 = __toESM(require_dist());
+var import_shared4 = __toESM(require_dist());
 var languageStatusItem;
 function initLanguageStatus(context) {
   languageStatusItem = vscode6.languages.createLanguageStatusItem(
@@ -33114,7 +33123,7 @@ function updateLanguageStatus(projects, activeFile) {
     languageStatusItem.severity = vscode6.LanguageStatusSeverity.Information;
     return;
   }
-  const project = (0, import_shared3.findProjectForFile)(activeFile, projects);
+  const project = (0, import_shared4.findProjectForFile)(activeFile, projects);
   if (project) {
     const langIcon = getLanguageIcon(project.language);
     const langName = project.language ?? "unknown";
@@ -33167,12 +33176,12 @@ function registerLanguageStatusHandlers(context, getProjects) {
 var vscode7 = __toESM(require("vscode"));
 var path2 = __toESM(require("path"));
 var fs2 = __toESM(require("fs/promises"));
-var import_shared4 = __toESM(require_dist());
+var import_shared5 = __toESM(require_dist());
 async function createSymlink(symlinkPath, targetPath, workspacePath) {
-  if (!(0, import_shared4.validateWorkspacePath)(symlinkPath, workspacePath)) {
+  if (!(0, import_shared5.validateWorkspacePath)(symlinkPath, workspacePath)) {
     throw new Error("Symlink path must be within the workspace");
   }
-  if (!(0, import_shared4.validateWorkspacePath)(targetPath, workspacePath)) {
+  if (!(0, import_shared5.validateWorkspacePath)(targetPath, workspacePath)) {
     throw new Error("Target path must be within the workspace");
   }
   try {
@@ -33721,7 +33730,7 @@ function findDirectiveAtPosition(document, position) {
 // src/rst/path-resolver.ts
 var path3 = __toESM(require("path"));
 var fs3 = __toESM(require("fs"));
-var import_shared5 = __toESM(require_dist());
+var import_shared6 = __toESM(require_dist());
 function findSourceDir(startPath) {
   let current = startPath;
   const root = path3.parse(current).root;
@@ -33787,7 +33796,7 @@ async function resolveDirectivePath(rstFilePath, targetPath, workspaceRoot2, opt
   };
 }
 function checkPathExists(absolutePath, workspaceRoot2) {
-  if (workspaceRoot2 && !(0, import_shared5.isPathWithinBoundary)(absolutePath, workspaceRoot2)) {
+  if (workspaceRoot2 && !(0, import_shared6.isPathWithinBoundary)(absolutePath, workspaceRoot2)) {
     return {
       absolutePath,
       exists: false,
@@ -33833,6 +33842,7 @@ async function resolveSymlinkPath(startDir, targetPath) {
 }
 
 // src/rst/LiteralIncludeProviders.ts
+var import_shared7 = __toESM(require_dist());
 function getWorkspaceRoot(document) {
   const workspaceFolder = vscode10.workspace.getWorkspaceFolder(document.uri);
   return workspaceFolder?.uri.fsPath;
@@ -33891,15 +33901,23 @@ var RstDirectiveCodeLensProvider = class {
   _onDidChangeCodeLenses = new vscode10.EventEmitter();
   onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
   async provideCodeLenses(document) {
-    const refs = parseDirectives(document);
+    const refs = (0, import_shared7.profileSync)(
+      "RstCodeLens.parseDirectives",
+      () => parseDirectives(document)
+    );
     const lenses = [];
     const workspaceRoot2 = getWorkspaceRoot(document);
     for (const ref of refs) {
-      const resolved = await resolveDirectivePath(
-        document.uri.fsPath,
-        ref.targetPath,
-        workspaceRoot2,
-        { resolveSymlinks: ref.needsSymlinkResolution }
+      const resolved = await (0, import_shared7.profile)(
+        "RstCodeLens.resolvePath",
+        () => resolveDirectivePath(
+          document.uri.fsPath,
+          ref.targetPath,
+          workspaceRoot2,
+          {
+            resolveSymlinks: ref.needsSymlinkResolution
+          }
+        )
       );
       const directiveLine = ref.range.start.line;
       const lensRange = new vscode10.Range(
@@ -33951,11 +33969,11 @@ var RstDirectiveDefinitionProvider = class {
       return void 0;
     }
     const workspaceRoot2 = getWorkspaceRoot(document);
-    const resolved = await resolveDirectivePath(
-      document.uri.fsPath,
-      ref.targetPath,
-      workspaceRoot2,
-      { resolveSymlinks: ref.needsSymlinkResolution }
+    const resolved = await (0, import_shared7.profile)(
+      "RstDefinition.resolvePath",
+      () => resolveDirectivePath(document.uri.fsPath, ref.targetPath, workspaceRoot2, {
+        resolveSymlinks: ref.needsSymlinkResolution
+      })
     );
     if (!resolved.exists) {
       return void 0;
@@ -33990,15 +34008,23 @@ var RstDirectiveDefinitionProvider = class {
 };
 var RstDirectiveLinkProvider = class {
   async provideDocumentLinks(document) {
-    const refs = parseDirectives(document);
+    const refs = (0, import_shared7.profileSync)(
+      "RstLinks.parseDirectives",
+      () => parseDirectives(document)
+    );
     const links = [];
     const workspaceRoot2 = getWorkspaceRoot(document);
     for (const ref of refs) {
-      const resolved = await resolveDirectivePath(
-        document.uri.fsPath,
-        ref.targetPath,
-        workspaceRoot2,
-        { resolveSymlinks: ref.needsSymlinkResolution }
+      const resolved = await (0, import_shared7.profile)(
+        "RstLinks.resolvePath",
+        () => resolveDirectivePath(
+          document.uri.fsPath,
+          ref.targetPath,
+          workspaceRoot2,
+          {
+            resolveSymlinks: ref.needsSymlinkResolution
+          }
+        )
       );
       if (resolved.exists) {
         const link = new vscode10.DocumentLink(
@@ -34247,6 +34273,7 @@ function detectLanguage(filePath) {
 }
 
 // src/preview/BluehawkPreview.ts
+var import_shared8 = __toESM(require_dist());
 var BluehawkPreviewProvider = class {
   constructor(_extensionUri) {
     this._extensionUri = _extensionUri;
@@ -34294,7 +34321,10 @@ var BluehawkPreviewProvider = class {
       command: "loading",
       fileName: path6.basename(document.uri.fsPath)
     });
-    const result = await runBluehawkDryRun(document.uri.fsPath);
+    const result = await (0, import_shared8.profile)(
+      "Bluehawk.dryRun",
+      () => runBluehawkDryRun(document.uri.fsPath)
+    );
     this._view.webview.postMessage({
       command: "preview",
       result,
@@ -35061,6 +35091,7 @@ function parseSnippetBlocks(document) {
 var vscode19 = __toESM(require("vscode"));
 var import_child_process2 = require("child_process");
 var import_ripgrep = require("@vscode/ripgrep");
+var import_shared9 = __toESM(require_dist());
 var CACHE_TTL_MS = 5 * 60 * 1e3;
 var CACHE_MAX_ENTRIES = 50;
 var referenceCache = /* @__PURE__ */ new Map();
@@ -35106,11 +35137,9 @@ async function findSnippetReferencesWithRipgrep(snippetName, sourceFileUri) {
   const references = [];
   const seen = /* @__PURE__ */ new Set();
   for (const folder of workspaceFolders) {
-    const results = await runRipgrep(
-      snippetName,
-      folder.uri.fsPath,
-      snippetName,
-      sourceExt
+    const results = await (0, import_shared9.profile)(
+      "Ripgrep.search",
+      () => runRipgrep(snippetName, folder.uri.fsPath, snippetName, sourceExt)
     );
     for (const ref of results) {
       const key = `${ref.uri.fsPath}:${ref.line}`;
@@ -35189,6 +35218,7 @@ async function runRipgrep(pattern, cwd, snippetName, sourceExt) {
 }
 
 // src/snippet-codelens/SnippetCodeLensProvider.ts
+var import_shared10 = __toESM(require_dist());
 var SnippetCodeLensProvider = class {
   _onDidChangeCodeLenses = new vscode20.EventEmitter();
   onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
@@ -35196,16 +35226,22 @@ var SnippetCodeLensProvider = class {
     if (!mightContainSnippets(document)) {
       return [];
     }
-    const blocks = parseSnippetBlocks(document);
+    const blocks = (0, import_shared10.profileSync)(
+      "SnippetCodeLens.parseBlocks",
+      () => parseSnippetBlocks(document)
+    );
     const lenses = [];
-    const referenceCounts = await Promise.all(
-      blocks.map(async (block) => {
-        const refs = await findSnippetReferencesWithRipgrep(
-          block.name,
-          document.uri
-        );
-        return refs.length;
-      })
+    const referenceCounts = await (0, import_shared10.profile)(
+      "SnippetCodeLens.fetchAllReferences",
+      () => Promise.all(
+        blocks.map(async (block) => {
+          const refs = await findSnippetReferencesWithRipgrep(
+            block.name,
+            document.uri
+          );
+          return refs.length;
+        })
+      )
     );
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
@@ -35344,7 +35380,7 @@ async function peekSnippetReferences(uri, snippetName, _line) {
 }
 
 // src/extension.ts
-var import_shared6 = __toESM(require_dist());
+var import_shared11 = __toESM(require_dist());
 var currentStatus = null;
 var mongoConnectionManager;
 function getDetectedProjects() {
@@ -35411,10 +35447,12 @@ async function detectProjectsWithProgress(_workspacePath) {
   );
 }
 async function activate(context) {
+  (0, import_shared11.mark)("activation.start");
   initLogger(context);
   const outputChannel = getLogChannel();
   outputChannel.info("Grove extension activating...");
-  (0, import_shared6.initProfiler)(context, outputChannel);
+  (0, import_shared11.initProfiler)(context, outputChannel);
+  (0, import_shared11.mark)("activation.profilerReady");
   const workspaceFolders = vscode23.workspace.workspaceFolders;
   const workspaceRoot2 = workspaceFolders?.[0]?.uri.fsPath;
   if (workspaceRoot2) {
@@ -35436,8 +35474,9 @@ async function activate(context) {
   );
   let status;
   if (config.autoDetect && workspaceFolders) {
-    const projects = await detectProjectsWithProgress(
-      workspaceFolders[0].uri.fsPath
+    const projects = await (0, import_shared11.profile)(
+      "activation.detectProjects",
+      () => detectProjectsWithProgress(workspaceFolders[0].uri.fsPath)
     );
     currentStatus = {
       hasProject: projects.length > 0,
@@ -35450,11 +35489,12 @@ async function activate(context) {
   } else {
     status = await getStatus();
   }
+  (0, import_shared11.mark)("activation.projectsDetected");
   initDiagnostics(context);
   if (workspaceFolders && status.projects.length > 0) {
-    refreshAllDiagnostics(
-      status.projects,
-      workspaceFolders[0].uri.fsPath
+    (0, import_shared11.profile)(
+      "activation.refreshDiagnostics",
+      () => refreshAllDiagnostics(status.projects, workspaceFolders[0].uri.fsPath)
     ).catch((err) => {
       outputChannel.error("Failed to refresh diagnostics on startup", err);
     });
@@ -35476,7 +35516,10 @@ async function activate(context) {
   registerMongoCommands(context, mongoConnectionManager, () => {
     panelProvider.refresh();
   });
-  mongoConnectionManager.reconnect().then((connected) => {
+  (0, import_shared11.profile)(
+    "activation.mongoReconnect",
+    () => mongoConnectionManager.reconnect()
+  ).then((connected) => {
     if (connected) {
       outputChannel.info("Reconnected to MongoDB using stored credentials");
       panelProvider.refresh();
@@ -35488,6 +35531,7 @@ async function activate(context) {
   outputChannel.info("Registered test CodeLens providers");
   registerSnippetCodeLens(context);
   outputChannel.info("Registered snippet CodeLens providers");
+  (0, import_shared11.mark)("activation.providersRegistered");
   const bluehawkPreviewProvider = new BluehawkPreviewProvider(
     context.extensionUri
   );
@@ -35580,13 +35624,13 @@ async function activate(context) {
   );
   context.subscriptions.push(
     vscode23.commands.registerCommand("grove.showPerformanceReport", () => {
-      if (!(0, import_shared6.isProfilingEnabled)()) {
+      if (!(0, import_shared11.isProfilingEnabled)()) {
         vscode23.window.showInformationMessage(
           "Performance profiling is only available in development mode."
         );
         return;
       }
-      const report = (0, import_shared6.formatReport)();
+      const report = (0, import_shared11.formatReport)();
       outputChannel.info("\n" + report);
       outputChannel.show();
       vscode23.window.showInformationMessage(
@@ -35594,15 +35638,32 @@ async function activate(context) {
       );
     }),
     vscode23.commands.registerCommand("grove.clearPerformanceStats", () => {
-      if (!(0, import_shared6.isProfilingEnabled)()) {
+      if (!(0, import_shared11.isProfilingEnabled)()) {
         vscode23.window.showInformationMessage(
           "Performance profiling is only available in development mode."
         );
         return;
       }
-      (0, import_shared6.clearStats)();
+      (0, import_shared11.clearStats)();
       vscode23.window.showInformationMessage("Performance statistics cleared.");
     })
+  );
+  (0, import_shared11.mark)("activation.complete");
+  (0, import_shared11.measure)("activation.total", "activation.start", "activation.complete");
+  (0, import_shared11.measure)(
+    "activation.initialization",
+    "activation.start",
+    "activation.profilerReady"
+  );
+  (0, import_shared11.measure)(
+    "activation.projectDetection",
+    "activation.profilerReady",
+    "activation.projectsDetected"
+  );
+  (0, import_shared11.measure)(
+    "activation.providerRegistration",
+    "activation.projectsDetected",
+    "activation.providersRegistered"
   );
   outputChannel.info(
     `Grove activated. Found ${status.projects.length} project(s).`

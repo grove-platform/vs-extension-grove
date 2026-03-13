@@ -266,7 +266,7 @@ var require_profiler = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.initProfiler = initProfiler;
     exports2.isProfilingEnabled = isProfilingEnabled;
-    exports2.profile = profile;
+    exports2.profile = profile2;
     exports2.profileSync = profileSync;
     exports2.mark = mark;
     exports2.measure = measure;
@@ -293,7 +293,7 @@ var require_profiler = __commonJS({
     function isProfilingEnabled() {
       return _isEnabled;
     }
-    async function profile(name, fn) {
+    async function profile2(name, fn) {
       if (!_isEnabled) {
         return fn();
       }
@@ -603,7 +603,10 @@ async function activate(context) {
           cancellable: false
         },
         async () => {
-          const result = await runJestTests({ projectPath });
+          const result = await (0, import_shared.profile)(
+            "NodeJS.runJestTests",
+            () => runJestTests({ projectPath })
+          );
           if (result.output) {
             outputChannel.clear();
             outputChannel.appendLine(`=== Jest Test Results ===`);
@@ -649,7 +652,10 @@ async function activate(context) {
           cancellable: false
         },
         async () => {
-          const result = await runJestTests({ projectPath, testFile });
+          const result = await (0, import_shared.profile)(
+            "NodeJS.runJestTestFile",
+            () => runJestTests({ projectPath, testFile })
+          );
           if (result.output) {
             outputChannel.clear();
             outputChannel.appendLine(`=== Jest Test Results: ${testFile} ===`);
