@@ -259,6 +259,166 @@ var require_security = __commonJS({
   }
 });
 
+// ../shared/dist/profiler.js
+var require_profiler = __commonJS({
+  "../shared/dist/profiler.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.initProfiler = initProfiler2;
+    exports2.isProfilingEnabled = isProfilingEnabled2;
+    exports2.profile = profile;
+    exports2.profileSync = profileSync;
+    exports2.mark = mark;
+    exports2.measure = measure;
+    exports2.getStats = getStats;
+    exports2.getAllStats = getAllStats;
+    exports2.formatReport = formatReport2;
+    exports2.logReport = logReport;
+    exports2.clearStats = clearStats2;
+    exports2.clearMarks = clearMarks;
+    var _isEnabled = false;
+    var _stats = /* @__PURE__ */ new Map();
+    var _marks = /* @__PURE__ */ new Map();
+    var _logger;
+    var EXTENSION_MODE_DEVELOPMENT = 2;
+    function initProfiler2(context, logger) {
+      _isEnabled = context.extensionMode === EXTENSION_MODE_DEVELOPMENT;
+      _stats.clear();
+      _marks.clear();
+      _logger = logger;
+      if (_isEnabled && _logger) {
+        _logger.info("Performance profiler enabled (development mode)");
+      }
+    }
+    function isProfilingEnabled2() {
+      return _isEnabled;
+    }
+    async function profile(name, fn) {
+      if (!_isEnabled) {
+        return fn();
+      }
+      const start = performance.now();
+      try {
+        return await fn();
+      } finally {
+        const elapsed = performance.now() - start;
+        recordTiming(name, elapsed);
+      }
+    }
+    function profileSync(name, fn) {
+      if (!_isEnabled) {
+        return fn();
+      }
+      const start = performance.now();
+      try {
+        return fn();
+      } finally {
+        const elapsed = performance.now() - start;
+        recordTiming(name, elapsed);
+      }
+    }
+    function mark(name) {
+      if (!_isEnabled) {
+        return;
+      }
+      _marks.set(name, {
+        name,
+        timestamp: performance.now()
+      });
+    }
+    function measure(name, startMark, endMark) {
+      if (!_isEnabled) {
+        return void 0;
+      }
+      const start = _marks.get(startMark);
+      if (!start) {
+        return void 0;
+      }
+      let endTime;
+      if (endMark) {
+        const end = _marks.get(endMark);
+        if (!end) {
+          return void 0;
+        }
+        endTime = end.timestamp;
+      } else {
+        endTime = performance.now();
+      }
+      const elapsed = endTime - start.timestamp;
+      recordTiming(name, elapsed);
+      return elapsed;
+    }
+    function recordTiming(name, elapsedMs) {
+      const existing = _stats.get(name);
+      if (existing) {
+        existing.count += 1;
+        existing.totalMs += elapsedMs;
+        existing.minMs = Math.min(existing.minMs, elapsedMs);
+        existing.maxMs = Math.max(existing.maxMs, elapsedMs);
+        existing.lastMs = elapsedMs;
+      } else {
+        _stats.set(name, {
+          count: 1,
+          totalMs: elapsedMs,
+          minMs: elapsedMs,
+          maxMs: elapsedMs,
+          lastMs: elapsedMs
+        });
+      }
+    }
+    function getStats(name) {
+      return _stats.get(name);
+    }
+    function getAllStats() {
+      return new Map(_stats);
+    }
+    function formatReport2() {
+      if (_stats.size === 0) {
+        return "No profiling data collected.";
+      }
+      const lines = [
+        "\u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
+        "\u2502                        Grove Performance Report                            \u2502",
+        "\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524",
+        "\u2502 Operation                          \u2502 Count \u2502   Avg   \u2502   Min   \u2502   Max     \u2502",
+        "\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524"
+      ];
+      const sorted = [..._stats.entries()].sort((a, b) => b[1].totalMs - a[1].totalMs);
+      for (const [name, stats] of sorted) {
+        const avg = stats.totalMs / stats.count;
+        const displayName = name.length > 34 ? name.slice(0, 31) + "..." : name;
+        lines.push(`\u2502 ${displayName.padEnd(34)} \u2502 ${String(stats.count).padStart(5)} \u2502 ${formatMs(avg)} \u2502 ${formatMs(stats.minMs)} \u2502 ${formatMs(stats.maxMs)} \u2502`);
+      }
+      lines.push("\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518");
+      return lines.join("\n");
+    }
+    function formatMs(ms) {
+      if (ms < 1) {
+        return `${(ms * 1e3).toFixed(0)}\xB5s`.padStart(7);
+      } else if (ms < 1e3) {
+        return `${ms.toFixed(1)}ms`.padStart(7);
+      } else {
+        return `${(ms / 1e3).toFixed(2)}s`.padStart(7);
+      }
+    }
+    function logReport() {
+      if (!_isEnabled || !_logger) {
+        return;
+      }
+      _logger.info("\n" + formatReport2());
+    }
+    function clearStats2() {
+      _stats.clear();
+      _marks.clear();
+    }
+    function clearMarks(...names) {
+      for (const name of names) {
+        _marks.delete(name);
+      }
+    }
+  }
+});
+
 // ../shared/dist/index.js
 var require_dist = __commonJS({
   "../shared/dist/index.js"(exports2) {
@@ -283,6 +443,7 @@ var require_dist = __commonJS({
     __exportStar(require_types(), exports2);
     __exportStar(require_project_detection(), exports2);
     __exportStar(require_security(), exports2);
+    __exportStar(require_profiler(), exports2);
   }
 });
 
@@ -35183,6 +35344,7 @@ async function peekSnippetReferences(uri, snippetName, _line) {
 }
 
 // src/extension.ts
+var import_shared6 = __toESM(require_dist());
 var currentStatus = null;
 var mongoConnectionManager;
 function getDetectedProjects() {
@@ -35252,6 +35414,7 @@ async function activate(context) {
   initLogger(context);
   const outputChannel = getLogChannel();
   outputChannel.info("Grove extension activating...");
+  (0, import_shared6.initProfiler)(context, outputChannel);
   const workspaceFolders = vscode23.workspace.workspaceFolders;
   const workspaceRoot2 = workspaceFolders?.[0]?.uri.fsPath;
   if (workspaceRoot2) {
@@ -35413,6 +35576,32 @@ async function activate(context) {
           );
         }
       );
+    })
+  );
+  context.subscriptions.push(
+    vscode23.commands.registerCommand("grove.showPerformanceReport", () => {
+      if (!(0, import_shared6.isProfilingEnabled)()) {
+        vscode23.window.showInformationMessage(
+          "Performance profiling is only available in development mode."
+        );
+        return;
+      }
+      const report = (0, import_shared6.formatReport)();
+      outputChannel.info("\n" + report);
+      outputChannel.show();
+      vscode23.window.showInformationMessage(
+        "Performance report logged to Grove output channel."
+      );
+    }),
+    vscode23.commands.registerCommand("grove.clearPerformanceStats", () => {
+      if (!(0, import_shared6.isProfilingEnabled)()) {
+        vscode23.window.showInformationMessage(
+          "Performance profiling is only available in development mode."
+        );
+        return;
+      }
+      (0, import_shared6.clearStats)();
+      vscode23.window.showInformationMessage("Performance statistics cleared.");
     })
   );
   outputChannel.info(

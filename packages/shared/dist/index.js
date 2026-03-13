@@ -17,4 +17,5 @@ Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./types"), exports);
 __exportStar(require("./project-detection"), exports);
 __exportStar(require("./security"), exports);
+__exportStar(require("./profiler"), exports);
 //# sourceMappingURL=index.js.map

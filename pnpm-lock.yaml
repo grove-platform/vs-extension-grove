@@ -67,6 +67,9 @@ importers:
       '@types/node':
         specifier: ^25.4.0
         version: 25.4.0
+      '@types/vscode':
+        specifier: ^1.110.0
+        version: 1.110.0
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@25.4.0)

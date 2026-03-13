@@ -102,6 +102,61 @@ pnpm --filter grove-core test
 2. Press `F5` to launch the Extension Development Host
 3. The development instance will have all Grove extensions loaded
 
+### Performance Profiler
+
+Grove includes a built-in performance profiler (via `@grove/shared`) for measuring the impact of new features. **The profiler is only active in development mode** (`ExtensionMode.Development`) and has zero overhead in production builds.
+
+#### Initialization
+
+```typescript
+import { initProfiler } from "@grove/shared";
+
+export async function activate(context: vscode.ExtensionContext) {
+  // Initialize with optional logger for output
+  initProfiler(context, outputChannel);
+}
+```
+
+#### Usage
+
+**Profile async/sync functions:**
+
+```typescript
+import { profile, profileSync } from "@grove/shared";
+
+// Async operations
+const result = await profile("findReferences", () =>
+  findSnippetReferencesWithRipgrep(name, uri),
+);
+
+// Sync operations
+const blocks = profileSync("parseBlocks", () => parseSnippetBlocks(document));
+```
+
+**Mark/measure for multi-step operations:**
+
+```typescript
+import { mark, measure } from "@grove/shared";
+
+mark("activation.start");
+await initializeProviders();
+mark("activation.providersReady");
+measure(
+  "activation.providers",
+  "activation.start",
+  "activation.providersReady",
+);
+```
+
+#### Viewing Reports
+
+In development mode, use the Command Palette:
+
+- `Grove: Show Performance Report (Debug)` - View collected metrics
+- `Grove: Clear Performance Statistics (Debug)` - Reset all data
+
+Reports show operation count, average, min, and max times sorted by total time.
+
 ## Architecture
 
 Grove uses a **core + language extensions** architecture:
@@ -123,6 +178,7 @@ Grove uses a **core + language extensions** architecture:
 ├─────────────────────────────────────────────────────────┤
 │  @grove/shared (workspace package)                       │
 │  ├── Project Detection                                   │
+│  ├── Performance Profiler                                │
 │  ├── Type Definitions                                    │
 │  └── Security Utilities                                  │
 └─────────────────────────────────────────────────────────┘

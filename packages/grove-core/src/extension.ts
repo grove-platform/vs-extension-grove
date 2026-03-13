@@ -28,6 +28,12 @@ import {
   getCachedProjects,
   invalidate as invalidateProjectCache,
 } from "./project-cache";
+import {
+  initProfiler,
+  isProfilingEnabled,
+  formatReport,
+  clearStats,
+} from "@grove/shared";
 
 let currentStatus: GroveStatus | null = null;
 let mongoConnectionManager: MongoConnectionManager;
@@ -132,6 +138,9 @@ export async function activate(context: vscode.ExtensionContext) {
   initLogger(context);
   const outputChannel = getLogChannel();
   outputChannel.info("Grove extension activating...");
+
+  // Initialize performance profiler (only active in development mode)
+  initProfiler(context, outputChannel);
 
   // Initialize project cache with file-system watcher
   const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -356,6 +365,34 @@ export async function activate(context: vscode.ExtensionContext) {
           );
         },
       );
+    }),
+  );
+
+  // Register profiler commands (only functional in development mode)
+  context.subscriptions.push(
+    vscode.commands.registerCommand("grove.showPerformanceReport", () => {
+      if (!isProfilingEnabled()) {
+        vscode.window.showInformationMessage(
+          "Performance profiling is only available in development mode.",
+        );
+        return;
+      }
+      const report = formatReport();
+      outputChannel.info("\n" + report);
+      outputChannel.show();
+      vscode.window.showInformationMessage(
+        "Performance report logged to Grove output channel.",
+      );
+    }),
+    vscode.commands.registerCommand("grove.clearPerformanceStats", () => {
+      if (!isProfilingEnabled()) {
+        vscode.window.showInformationMessage(
+          "Performance profiling is only available in development mode.",
+        );
+        return;
+      }
+      clearStats();
+      vscode.window.showInformationMessage("Performance statistics cleared.");
     }),
   );
 

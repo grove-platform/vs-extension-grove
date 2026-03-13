@@ -73,6 +73,14 @@
       {
         "command": "grove.openBluehawkPreview",
         "title": "Grove: Open Bluehawk Preview"
+      },
+      {
+        "command": "grove.showPerformanceReport",
+        "title": "Grove: Show Performance Report (Debug)"
+      },
+      {
+        "command": "grove.clearPerformanceStats",
+        "title": "Grove: Clear Performance Statistics (Debug)"
       }
     ],
     "configurationDefaults": {
