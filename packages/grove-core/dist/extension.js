@@ -33270,7 +33270,7 @@ var MongoConnectionManager = class {
    */
   detectClusterType(connectionString) {
     if (connectionString.includes("mongodb+srv://")) {
-      return "atlas";
+      return "Atlas";
     }
     if (connectionString.includes("localhost") || connectionString.includes("127.0.0.1")) {
       return "local";
@@ -33419,82 +33419,136 @@ var vscode10 = __toESM(require("vscode"));
 var path4 = __toESM(require("path"));
 var fs4 = __toESM(require("fs"));
 
-// src/rst/literalinclude-parser.ts
+// src/rst/directive-parser.ts
 var vscode9 = __toESM(require("vscode"));
-function parseLiteralIncludes(document) {
+function parseDirectives(document) {
   const refs = [];
-  const directivePattern = /^(\s*)\.\.\s+literalinclude::\s+(.+?)\s*$/;
+  const simpleDirectivePattern = /^(\s*)\.\.\s+(literalinclude|include)::\s+(.+?)\s*$/;
+  const ioDirectivePattern = /^(\s+)\.\.\s+(input|output)::\s+(.+?)\s*$/;
   for (let lineNum = 0; lineNum < document.lineCount; lineNum++) {
     const line = document.lineAt(lineNum);
-    const match = line.text.match(directivePattern);
-    if (!match) {
+    const text = line.text;
+    let match = text.match(simpleDirectivePattern);
+    if (match) {
+      const ref = parseSimpleDirective(
+        document,
+        lineNum,
+        match[1],
+        match[2],
+        match[3]
+      );
+      refs.push(ref);
       continue;
     }
-    const indent = match[1];
-    const targetPath = match[2].trim();
-    const pathStartChar = line.text.indexOf(targetPath);
-    const pathStart = new vscode9.Position(lineNum, pathStartChar);
-    const pathEnd = new vscode9.Position(
-      lineNum,
-      pathStartChar + targetPath.length
-    );
-    const ref = {
-      range: new vscode9.Range(
-        new vscode9.Position(lineNum, 0),
-        new vscode9.Position(lineNum, line.text.length)
-      ),
-      pathRange: new vscode9.Range(pathStart, pathEnd),
-      targetPath
-    };
-    const optionIndent = indent + "   ";
-    let nextLineNum = lineNum + 1;
-    while (nextLineNum < document.lineCount) {
-      const nextLine = document.lineAt(nextLineNum).text;
-      if (!nextLine.startsWith(optionIndent) || !nextLine.includes(":")) {
-        if (nextLine.trim() === "" || nextLine.startsWith(indent + "   ")) {
-          nextLineNum++;
-          continue;
-        }
-        break;
-      }
-      const optionMatch = nextLine.match(/^\s+:([a-z-]+):\s*(.*)$/);
-      if (optionMatch) {
-        const [, optionName, optionValue] = optionMatch;
-        switch (optionName) {
-          case "snippet":
-            ref.snippetName = optionValue.trim();
-            break;
-          case "start-after":
-            ref.startAfter = optionValue.trim();
-            break;
-          case "end-before":
-            ref.endBefore = optionValue.trim();
-            break;
-          case "lines":
-            ref.lines = optionValue.trim();
-            break;
-          case "language":
-            ref.language = optionValue.trim();
-            break;
-          case "emphasize-lines":
-            ref.emphasizeLines = optionValue.trim();
-            break;
-          case "dedent":
-            const dedentVal = parseInt(optionValue.trim(), 10);
-            if (!isNaN(dedentVal)) {
-              ref.dedent = dedentVal;
-            }
-            break;
-        }
-      }
-      nextLineNum++;
+    match = text.match(ioDirectivePattern);
+    if (match) {
+      const ref = parseIoDirective(
+        document,
+        lineNum,
+        match[2],
+        match[3]
+      );
+      refs.push(ref);
     }
-    refs.push(ref);
   }
   return refs;
 }
-function findLiteralIncludeAtPosition(document, position) {
-  const refs = parseLiteralIncludes(document);
+function parseSimpleDirective(document, lineNum, indent, type, targetPath) {
+  const line = document.lineAt(lineNum);
+  targetPath = targetPath.trim();
+  const pathStartChar = line.text.indexOf(targetPath);
+  const pathStart = new vscode9.Position(lineNum, pathStartChar);
+  const pathEnd = new vscode9.Position(
+    lineNum,
+    pathStartChar + targetPath.length
+  );
+  const ref = {
+    type,
+    range: new vscode9.Range(
+      new vscode9.Position(lineNum, 0),
+      new vscode9.Position(lineNum, line.text.length)
+    ),
+    pathRange: new vscode9.Range(pathStart, pathEnd),
+    targetPath,
+    // include:: never needs symlink resolution, literalinclude:: does
+    needsSymlinkResolution: type === "literalinclude"
+  };
+  const optionIndent = indent + "   ";
+  let nextLineNum = lineNum + 1;
+  while (nextLineNum < document.lineCount) {
+    const nextLine = document.lineAt(nextLineNum).text;
+    if (!nextLine.startsWith(optionIndent) || !nextLine.includes(":")) {
+      if (nextLine.trim() === "" || nextLine.startsWith(indent + "   ")) {
+        nextLineNum++;
+        continue;
+      }
+      break;
+    }
+    const optionMatch = nextLine.match(/^\s+:([a-z-]+):\s*(.*)$/);
+    if (optionMatch) {
+      const [, optionName, optionValue] = optionMatch;
+      switch (optionName) {
+        case "snippet":
+          ref.snippetName = optionValue.trim();
+          break;
+        case "start-after":
+          ref.startAfter = optionValue.trim();
+          break;
+        case "end-before":
+          ref.endBefore = optionValue.trim();
+          break;
+        case "lines":
+          ref.lines = optionValue.trim();
+          break;
+        case "language":
+          ref.language = optionValue.trim();
+          break;
+      }
+    }
+    nextLineNum++;
+  }
+  return ref;
+}
+function parseIoDirective(document, lineNum, type, targetPath) {
+  const line = document.lineAt(lineNum);
+  targetPath = targetPath.trim();
+  const pathStartChar = line.text.indexOf(targetPath);
+  const pathStart = new vscode9.Position(lineNum, pathStartChar);
+  const pathEnd = new vscode9.Position(
+    lineNum,
+    pathStartChar + targetPath.length
+  );
+  const ref = {
+    type,
+    range: new vscode9.Range(
+      new vscode9.Position(lineNum, 0),
+      new vscode9.Position(lineNum, line.text.length)
+    ),
+    pathRange: new vscode9.Range(pathStart, pathEnd),
+    targetPath,
+    // io-code-block input/output may reference code-examples
+    needsSymlinkResolution: true
+  };
+  let nextLineNum = lineNum + 1;
+  while (nextLineNum < document.lineCount) {
+    const nextLine = document.lineAt(nextLineNum).text;
+    const optionMatch = nextLine.match(/^\s+:([a-z-]+):\s*(.*)$/);
+    if (optionMatch) {
+      const [, optionName, optionValue] = optionMatch;
+      if (optionName === "language") {
+        ref.language = optionValue.trim();
+      }
+      nextLineNum++;
+    } else if (nextLine.trim() === "") {
+      nextLineNum++;
+    } else {
+      break;
+    }
+  }
+  return ref;
+}
+function findDirectiveAtPosition(document, position) {
+  const refs = parseDirectives(document);
   for (const ref of refs) {
     if (ref.range.contains(position) || ref.pathRange.contains(position)) {
       return ref;
@@ -33523,7 +33577,8 @@ function findSourceDir(startPath) {
   }
   return void 0;
 }
-async function resolveLiteralIncludePath(rstFilePath, targetPath, workspaceRoot2) {
+async function resolveDirectivePath(rstFilePath, targetPath, workspaceRoot2, options = {}) {
+  const { resolveSymlinks = true } = options;
   if (targetPath.startsWith("/")) {
     const sourceDir2 = findSourceDir(rstFilePath);
     if (sourceDir2) {
@@ -33548,9 +33603,11 @@ async function resolveLiteralIncludePath(rstFilePath, targetPath, workspaceRoot2
       exists: true
     };
   }
-  const symlinkResult = await resolveSymlinkPath(rstDir, targetPath);
-  if (symlinkResult.exists) {
-    return symlinkResult;
+  if (resolveSymlinks) {
+    const symlinkResult = await resolveSymlinkPath(rstDir, targetPath);
+    if (symlinkResult.exists) {
+      return symlinkResult;
+    }
   }
   const sourceDir = findSourceDir(rstFilePath);
   if (sourceDir) {
@@ -33655,18 +33712,33 @@ function resolveTestFilePath(resolvedSnippetPath, workspaceRoot2) {
   );
   return { testFilePath, snippetName };
 }
-var LiteralIncludeCodeLensProvider = class {
+function getDirectiveLabel(ref) {
+  switch (ref.type) {
+    case "literalinclude":
+      return "\u{1F4C4} view";
+    case "include":
+      return "\u{1F4C4} view";
+    case "input":
+      return "\u{1F4E5} input";
+    case "output":
+      return "\u{1F4E4} output";
+    default:
+      return "\u{1F4C4} view";
+  }
+}
+var RstDirectiveCodeLensProvider = class {
   _onDidChangeCodeLenses = new vscode10.EventEmitter();
   onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
   async provideCodeLenses(document) {
-    const refs = parseLiteralIncludes(document);
+    const refs = parseDirectives(document);
     const lenses = [];
     const workspaceRoot2 = getWorkspaceRoot(document);
     for (const ref of refs) {
-      const resolved = await resolveLiteralIncludePath(
+      const resolved = await resolveDirectivePath(
         document.uri.fsPath,
         ref.targetPath,
-        workspaceRoot2
+        workspaceRoot2,
+        { resolveSymlinks: ref.needsSymlinkResolution }
       );
       const directiveLine = ref.range.start.line;
       const lensRange = new vscode10.Range(
@@ -33676,23 +33748,25 @@ var LiteralIncludeCodeLensProvider = class {
       if (resolved.exists) {
         lenses.push(
           new vscode10.CodeLens(lensRange, {
-            title: "\u{1F4C4} view",
+            title: getDirectiveLabel(ref),
             command: "grove.literalinclude.view",
             arguments: [resolved.absolutePath, ref.snippetName, ref.startAfter]
           })
         );
-        const testFileResult = resolveTestFilePath(
-          resolved.absolutePath,
-          workspaceRoot2
-        );
-        if (testFileResult && fs4.existsSync(testFileResult.testFilePath)) {
-          lenses.push(
-            new vscode10.CodeLens(lensRange, {
-              title: `\u{1F9EA} test: ${testFileResult.snippetName}`,
-              command: "grove.literalinclude.view",
-              arguments: [testFileResult.testFilePath, ref.snippetName]
-            })
+        if (ref.type !== "include") {
+          const testFileResult = resolveTestFilePath(
+            resolved.absolutePath,
+            workspaceRoot2
           );
+          if (testFileResult && fs4.existsSync(testFileResult.testFilePath)) {
+            lenses.push(
+              new vscode10.CodeLens(lensRange, {
+                title: `\u{1F9EA} test: ${testFileResult.snippetName}`,
+                command: "grove.literalinclude.view",
+                arguments: [testFileResult.testFilePath, ref.snippetName]
+              })
+            );
+          }
         }
       } else {
         lenses.push(
@@ -33709,17 +33783,18 @@ var LiteralIncludeCodeLensProvider = class {
     this._onDidChangeCodeLenses.fire();
   }
 };
-var LiteralIncludeDefinitionProvider = class {
+var RstDirectiveDefinitionProvider = class {
   async provideDefinition(document, position) {
-    const ref = findLiteralIncludeAtPosition(document, position);
+    const ref = findDirectiveAtPosition(document, position);
     if (!ref) {
       return void 0;
     }
     const workspaceRoot2 = getWorkspaceRoot(document);
-    const resolved = await resolveLiteralIncludePath(
+    const resolved = await resolveDirectivePath(
       document.uri.fsPath,
       ref.targetPath,
-      workspaceRoot2
+      workspaceRoot2,
+      { resolveSymlinks: ref.needsSymlinkResolution }
     );
     if (!resolved.exists) {
       return void 0;
@@ -33752,16 +33827,17 @@ var LiteralIncludeDefinitionProvider = class {
     return new vscode10.Location(targetUri, new vscode10.Position(0, 0));
   }
 };
-var LiteralIncludeLinkProvider = class {
+var RstDirectiveLinkProvider = class {
   async provideDocumentLinks(document) {
-    const refs = parseLiteralIncludes(document);
+    const refs = parseDirectives(document);
     const links = [];
     const workspaceRoot2 = getWorkspaceRoot(document);
     for (const ref of refs) {
-      const resolved = await resolveLiteralIncludePath(
+      const resolved = await resolveDirectivePath(
         document.uri.fsPath,
         ref.targetPath,
-        workspaceRoot2
+        workspaceRoot2,
+        { resolveSymlinks: ref.needsSymlinkResolution }
       );
       if (resolved.exists) {
         const link = new vscode10.DocumentLink(
@@ -33856,15 +33932,15 @@ function registerLiteralIncludeProviders(context) {
     context.subscriptions.push(
       vscode10.languages.registerCodeLensProvider(
         selector,
-        new LiteralIncludeCodeLensProvider()
+        new RstDirectiveCodeLensProvider()
       ),
       vscode10.languages.registerDefinitionProvider(
         selector,
-        new LiteralIncludeDefinitionProvider()
+        new RstDirectiveDefinitionProvider()
       ),
       vscode10.languages.registerDocumentLinkProvider(
         selector,
-        new LiteralIncludeLinkProvider()
+        new RstDirectiveLinkProvider()
       )
     );
   }

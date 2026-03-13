@@ -6,12 +6,13 @@ The core VS Code extension for the MongoDB documentation code example testing pl
 
 Grove Core activates automatically when VS Code opens a workspace containing a `snip.js` file (the Grove project configuration). It provides:
 
-- **Project Detection** - Automatically discovers Grove projects and determines their language
-- **Symlink Management** - Creates and validates symlinks from docs projects to shared snippet output directories
-- **Bluehawk Preview** - Live preview of Bluehawk snippet output
-- **RST Literalinclude Navigation** - Code lenses and go-to-definition for RST file includes
-- **MongoDB Connection** - Secure credential storage and database listing
-- **Test Runner API** - Extensibility point for language-specific test runners
+- **Project Detection** - Automatically discovers Grove projects with caching and file system watching
+- **RST Directive Navigation** - CodeLens, go-to-definition, and clickable links for `literalinclude::`, `include::`, and `io-code-block` directives
+- **Test CodeLens** - Run/Debug buttons above `describe`/`it`/`test` blocks in test files
+- **Snippet References** - Reference counts and navigation for Bluehawk `:snippet-start:` tags
+- **Bluehawk Preview** - Live preview of extracted Bluehawk snippets
+- **MongoDB Connection** - Secure credential storage with connection string injection for tests
+- **Symlink Management** - Creates symlinks from docs projects to shared snippet output
 
 ## Architecture
 
@@ -19,7 +20,10 @@ Grove Core activates automatically when VS Code opens a workspace containing a `
 grove-core/
 ├── src/
 │   ├── extension.ts          # Main entry point and VS Code lifecycle
+│   ├── project-cache.ts      # Cached project detection with FileSystemWatcher
+│   ├── test-execution.ts     # Shared test execution logic
 │   ├── test-runner-api.ts    # API for language extensions to register test runners
+│   ├── logger.ts             # Centralized logging (Grove output channel)
 │   ├── diagnostics.ts        # Inline editor diagnostics (symlink warnings)
 │   ├── language-status.ts    # Per-file Grove status in editor
 │   ├── symlink.ts            # Symlink creation and validation
@@ -29,11 +33,18 @@ grove-core/
 │   │   ├── BluehawkPreview.ts    # Bluehawk preview webview
 │   │   └── bluehawk-runner.ts    # CLI wrapper for bluehawk snip
 │   ├── rst/
-│   │   ├── LiteralIncludeProviders.ts  # CodeLens, Definition, Links
-│   │   ├── literalinclude-parser.ts    # RST directive parser
+│   │   ├── LiteralIncludeProviders.ts  # CodeLens, Definition, Links for RST
+│   │   ├── directive-parser.ts         # Generic RST directive parser
 │   │   └── path-resolver.ts            # Symlink-aware path resolution
+│   ├── test-codelens/
+│   │   ├── TestCodeLensProvider.ts     # Run/Debug CodeLens for tests
+│   │   ├── TestHoverProvider.ts        # Hover details for test results
+│   │   └── TestDecorations.ts          # Pass/fail highlighting
+│   ├── snippet-codelens/
+│   │   ├── SnippetCodeLensProvider.ts  # Reference count CodeLens
+│   │   └── ripgrep-searcher.ts         # Fast snippet reference search
 │   └── mongo/
-│       ├── connection.ts     # MongoDB client lifecycle
+│       ├── connection.ts     # MongoDB client lifecycle (lazy-loaded)
 │       ├── commands.ts       # VS Code command handlers
 │       └── credentials.ts    # SecretStorage wrapper
 └── package.json              # Extension manifest and contributions
@@ -45,12 +56,13 @@ grove-core/
 
 The extension activates on the `workspaceContains:**/snip.js` event. On activation, it:
 
-1. Creates a log output channel (`Grove`)
-2. Detects Grove projects with a progress indicator
-3. Initializes the status bar, diagnostics, and language status
-4. Registers all commands and providers
-5. Attempts MongoDB reconnection with stored credentials
-6. Returns the API for language extensions
+1. Initializes the centralized logger (`Grove` output channel)
+2. Sets up the project cache with a `FileSystemWatcher` on `**/snip.js`
+3. Detects Grove projects with a progress indicator
+4. Initializes diagnostics and language status
+5. Registers all CodeLens providers, commands, and language features
+6. Attempts MongoDB reconnection with stored credentials
+7. Returns the API for language extensions
 
 ### Commands
 
@@ -73,45 +85,79 @@ The extension activates on the `workspaceContains:**/snip.js` event. On activati
 
 Grove contributes an activity bar container (`grove`) with two webview views:
 
-- **Grove Panel** (`grove.panel`) - Shows detected projects, MongoDB status, and actions
-- **Bluehawk Preview** (`grove.bluehawkPreview`) - Live preview of extracted snippets
+- **Grove Panel** (`grove.panel`) - Shows detected projects, MongoDB connection status, and quick actions (Run Tests, Connect/Disconnect MongoDB, Show Databases)
+- **Bluehawk Preview** (`grove.bluehawkPreview`) - Live preview of extracted snippets with syntax highlighting
 
 ## Features
 
-### Project Detection
+### Project Detection & Caching
 
 Uses `@grove/shared` to scan the workspace for `snip.js` files. Each project's language is detected by parsing the `START_DIRECTORY` constant (e.g., `javascript/driver/examples` → `nodejs`).
 
-```typescript
-const projects = await detectGroveProjects(workspacePath);
+Projects are cached and automatically refreshed when:
+
+- A `snip.js` file is created or deleted (via `FileSystemWatcher`)
+- The user manually refreshes the Grove panel
+
+### RST Directive Support
+
+Provides CodeLens, go-to-definition, and clickable links for file-referencing RST directives:
+
+| Directive                              | CodeLens         | Description                            |
+| -------------------------------------- | ---------------- | -------------------------------------- |
+| `.. literalinclude:: /path`            | 📄 view, 🧪 test | Code examples with syntax highlighting |
+| `.. include:: /path`                   | 📄 view          | RST content inclusion                  |
+| `.. input:: /path` (in io-code-block)  | 📥 input         | Input examples                         |
+| `.. output:: /path` (in io-code-block) | 📤 output        | Output examples                        |
+
+Features:
+
+- **Symlink-aware resolution** - Follows symlinks for code-example paths
+- **Snippet navigation** - Jumps to `:snippet:` or `:start-after:` markers
+- **Test file linking** - "🧪 test" CodeLens links to the original test file in `code-example-tests/`
+
+### Test CodeLens
+
+Provides Run/Debug buttons above test blocks in JavaScript/TypeScript files:
+
+| Block Type              | CodeLens Actions  |
+| ----------------------- | ----------------- |
+| `describe(...)`         | ▶ Run, ▶▶ Run All |
+| `it(...)` / `test(...)` | ▶ Run, 🐛 Debug   |
+
+Features:
+
+- **Running indicator** - Shows `$(sync~spin) Running...` during test execution
+- **Pass/fail decorations** - Highlights test blocks with results
+- **Hover details** - Shows test duration and error messages
+- **MongoDB injection** - Passes `CONNECTION_STRING` env var when connected
+
+### Snippet Reference CodeLens
+
+Shows reference counts for Bluehawk `:snippet-start:` tags:
+
+```
+$(references) 3 references    ← Above each :snippet-start:
 ```
 
-### Diagnostics
-
-Reports issues on `snip.js` files when symlinks are missing or broken. Docs projects (detected by `snooty.toml` or `source/conf.py` presence) show warnings for missing `source/code-examples/tested` symlinks.
-
-### Language Status
-
-Shows the current file's Grove project in the editor language status area. Updates automatically when switching between files in different projects.
-
-### RST Literalinclude Support
-
-Provides three language features for RST/TXT files:
-
-1. **CodeLens** - "📄 view" and "🧪 test" links above each `literalinclude` directive
-2. **Definition Provider** - Ctrl+Click navigation to the referenced file
-3. **Document Links** - Clickable file paths within directives
-
-The CodeLens resolves snippet files back to their original test files in `code-example-tests/`, enabling quick navigation from documentation to source.
+- Uses `ripgrep` for fast reference searching across RST files
+- Click to see all references in a quick pick
 
 ### Bluehawk Preview
 
-Runs `bluehawk snip --dry-run` on the active file and displays extracted snippets in a webview panel. The preview:
+Runs `bluehawk snip` on the active file and displays extracted snippets in a webview panel:
 
 - Updates automatically on file save
 - Debounces updates during active editing
-- Detects Bluehawk directives (`:snippet-start:`, `:remove-start:`, etc.)
-- Provides syntax highlighting based on file type
+- Syntax highlighting based on file type
+
+### Diagnostics
+
+Reports issues on `snip.js` files when symlinks are missing or broken. Docs projects (detected by `snooty.toml` or `source/conf.py`) show warnings for missing `source/code-examples/tested` symlinks.
+
+### Language Status
+
+Shows the current file's Grove project in the editor language status area. Updates automatically when switching between files.
 
 ### MongoDB Connection
 
@@ -121,16 +167,16 @@ Manages MongoDB connections with:
 - **Cluster detection** - Identifies Atlas (`mongodb+srv://`) vs local connections
 - **Sample databases** - Lists `sample_*` databases for Grove tests
 - **Lazy loading** - MongoDB driver imported only when connecting
+- **Test injection** - Injects `CONNECTION_STRING` env var when running tests
 
 ### Symlink Management
 
-Creates portable relative symlinks from Snooty documentation projects to the shared Bluehawk output directory. The typical structure is:
+Creates portable relative symlinks from Snooty documentation projects to the shared Bluehawk output directory:
 
 ```
 code-example-tests/
 ├── javascript/driver/examples/...     # Test source files
 ├── content/code-examples/tested/      # Bluehawk snippet output
-│   └── javascript/driver/...
 
 docs-node/
 ├── snooty.toml
@@ -138,8 +184,6 @@ docs-node/
     └── code-examples/
         └── tested → ../../../code-example-tests/content/code-examples/tested
 ```
-
-Each docs project's `source/code-examples/tested/` symlinks to `code-example-tests/content/code-examples/tested/`, allowing RST `literalinclude` directives to reference the extracted snippet files. Validates paths are within the workspace and creates parent directories as needed.
 
 ## Extension API
 
@@ -178,6 +222,8 @@ Language extensions should:
 ## Dependencies
 
 - **`@grove/shared`** - Workspace package with project detection and security utilities
+- **`@vscode/ripgrep`** - Fast file searching for snippet references
+- **`mongodb`** - MongoDB driver (lazy-loaded on first connection)
 - **VS Code API** - Webview, SecretStorage, Diagnostics, LanguageStatus, CodeLens
 
 ## Development
@@ -190,8 +236,8 @@ pnpm build
 # Run tests
 pnpm test
 
-# Watch mode
-pnpm --filter grove-core watch
+# Launch Extension Development Host
+code --extensionDevelopmentPath=./packages/grove-core /path/to/test/workspace
 ```
 
 ## License

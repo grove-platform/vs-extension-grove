@@ -22,7 +22,7 @@ export interface SampleDatabase {
 
 export interface ConnectionStatus {
   connected: boolean;
-  clusterType: "atlas" | "local" | "unknown";
+  clusterType: "Atlas" | "local" | "unknown";
   host?: string;
   error?: string;
 }
@@ -232,9 +232,9 @@ export class MongoConnectionManager {
    */
   private detectClusterType(
     connectionString: string,
-  ): "atlas" | "local" | "unknown" {
+  ): "Atlas" | "local" | "unknown" {
     if (connectionString.includes("mongodb+srv://")) {
-      return "atlas";
+      return "Atlas";
     }
     if (
       connectionString.includes("localhost") ||

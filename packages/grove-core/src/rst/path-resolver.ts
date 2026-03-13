@@ -1,7 +1,7 @@
 /**
  * Grove RST Path Resolver
  *
- * Resolves literalinclude paths across symlinks and relative to snooty.toml.
+ * Resolves directive paths across symlinks and relative to snooty.toml.
  * Handles the various ways paths can be specified in RST documentation.
  */
 
@@ -18,6 +18,11 @@ export interface ResolvedPath {
   symlinkPath?: string;
   /** Reason for resolution failure */
   error?: string;
+}
+
+export interface PathResolutionOptions {
+  /** Whether to attempt symlink resolution (for code-examples) */
+  resolveSymlinks?: boolean;
 }
 
 /**
@@ -48,19 +53,22 @@ export function findSourceDir(startPath: string): string | undefined {
 }
 
 /**
- * Resolve a literalinclude path to an absolute file path.
+ * Resolve a directive path to an absolute file path.
  *
  * Resolution order:
  * 1. Absolute path (starts with /) - relative to source directory
  * 2. Relative to RST file's directory
  * 3. Relative to source directory (where snooty.toml's source/ lives)
- * 4. Through symlinks in the directory tree
+ * 4. Through symlinks in the directory tree (if resolveSymlinks is true)
  */
-export async function resolveLiteralIncludePath(
+export async function resolveDirectivePath(
   rstFilePath: string,
   targetPath: string,
   workspaceRoot?: string,
+  options: PathResolutionOptions = {},
 ): Promise<ResolvedPath> {
+  const { resolveSymlinks = true } = options;
+
   // Handle absolute paths (relative to source root)
   if (targetPath.startsWith("/")) {
     const sourceDir = findSourceDir(rstFilePath);
@@ -92,10 +100,12 @@ export async function resolveLiteralIncludePath(
     };
   }
 
-  // Check if relative path goes through a symlink
-  const symlinkResult = await resolveSymlinkPath(rstDir, targetPath);
-  if (symlinkResult.exists) {
-    return symlinkResult;
+  // Check if relative path goes through a symlink (only if enabled)
+  if (resolveSymlinks) {
+    const symlinkResult = await resolveSymlinkPath(rstDir, targetPath);
+    if (symlinkResult.exists) {
+      return symlinkResult;
+    }
   }
 
   // Try relative to source directory
@@ -116,6 +126,19 @@ export async function resolveLiteralIncludePath(
     exists: false,
     error: `File not found: ${targetPath}`,
   };
+}
+
+/**
+ * @deprecated Use resolveDirectivePath instead
+ */
+export async function resolveLiteralIncludePath(
+  rstFilePath: string,
+  targetPath: string,
+  workspaceRoot?: string,
+): Promise<ResolvedPath> {
+  return resolveDirectivePath(rstFilePath, targetPath, workspaceRoot, {
+    resolveSymlinks: true,
+  });
 }
 
 /**

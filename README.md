@@ -1,6 +1,6 @@
 # Grove Extension Pack
 
-A VS Code extension pack for MongoDB documentation code example testing. Grove helps technical writers create, test, and maintain code examples across all MongoDB driver documentation.
+A VS Code extension pack for MongoDB documentation code example testing. Grove helps technical writers create, test, and maintain code examples across all MongoDB documentation.
 
 ## Overview
 
@@ -15,10 +15,10 @@ Grove automatically detects code example projects (identified by `snip.js` files
 
 ## Extensions
 
-| Extension | Package | Description |
-| --------- | ------- | ----------- |
-| **Grove Core** | `grove-core` | Core functionality: project detection, Bluehawk preview, RST navigation, MongoDB connection |
-| **Grove for Node.js** | `grove-nodejs` | Jest/Vitest test runner for JavaScript/TypeScript projects |
+| Extension             | Package        | Description                                                                                 |
+| --------------------- | -------------- | ------------------------------------------------------------------------------------------- |
+| **Grove Core**        | `grove-core`   | Core functionality: project detection, Bluehawk preview, RST navigation, MongoDB connection |
+| **Grove for Node.js** | `grove-nodejs` | Jest/Vitest test runner for JavaScript/TypeScript projects                                  |
 
 ### Planned Extensions
 
@@ -141,4 +141,3 @@ See individual package READMEs for detailed development information:
 ## License
 
 MongoDB Internal
-

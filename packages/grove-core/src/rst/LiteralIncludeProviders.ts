@@ -1,18 +1,22 @@
 /**
- * Grove RST literalinclude Providers
+ * Grove RST Directive Providers
  *
  * Provides code lenses, go-to-definition, and document links
- * for literalinclude directives in RST files.
+ * for file-referencing directives in RST files:
+ * - literalinclude:: - code examples with syntax highlighting
+ * - include:: - RST content inclusion
+ * - io-code-block (input/output) - input/output examples
  */
 
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import {
-  parseLiteralIncludes,
-  findLiteralIncludeAtPosition,
-} from "./literalinclude-parser";
-import { resolveLiteralIncludePath } from "./path-resolver";
+  parseDirectives,
+  findDirectiveAtPosition,
+  type DirectiveRef,
+} from "./directive-parser";
+import { resolveDirectivePath } from "./path-resolver";
 
 /**
  * Get the workspace root for the current document.
@@ -105,29 +109,47 @@ function resolveTestFilePath(
 }
 
 /**
- * Code lens provider for literalinclude directives.
+ * Get display label for directive type.
+ */
+function getDirectiveLabel(ref: DirectiveRef): string {
+  switch (ref.type) {
+    case "literalinclude":
+      return "📄 view";
+    case "include":
+      return "📄 view";
+    case "input":
+      return "📥 input";
+    case "output":
+      return "📤 output";
+    default:
+      return "📄 view";
+  }
+}
+
+/**
+ * Code lens provider for file-referencing RST directives.
  * Shows "view" and optionally "test" links above each directive.
  */
-export class LiteralIncludeCodeLensProvider implements vscode.CodeLensProvider {
+export class RstDirectiveCodeLensProvider implements vscode.CodeLensProvider {
   private _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
   readonly onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
 
   async provideCodeLenses(
     document: vscode.TextDocument,
   ): Promise<vscode.CodeLens[]> {
-    const refs = parseLiteralIncludes(document);
+    const refs = parseDirectives(document);
     const lenses: vscode.CodeLens[] = [];
     const workspaceRoot = getWorkspaceRoot(document);
 
     for (const ref of refs) {
-      const resolved = await resolveLiteralIncludePath(
+      const resolved = await resolveDirectivePath(
         document.uri.fsPath,
         ref.targetPath,
         workspaceRoot,
+        { resolveSymlinks: ref.needsSymlinkResolution },
       );
 
-      // Position the lens on the literalinclude directive line itself
-      // This makes the lens appear directly above the directive with minimal gap
+      // Position the lens on the directive line itself
       const directiveLine = ref.range.start.line;
       const lensRange = new vscode.Range(
         new vscode.Position(directiveLine, 0),
@@ -138,26 +160,28 @@ export class LiteralIncludeCodeLensProvider implements vscode.CodeLensProvider {
         // "view" lens - opens file in side-by-side editor
         lenses.push(
           new vscode.CodeLens(lensRange, {
-            title: "📄 view",
+            title: getDirectiveLabel(ref),
             command: "grove.literalinclude.view",
             arguments: [resolved.absolutePath, ref.snippetName, ref.startAfter],
           }),
         );
 
         // Check if this is a Grove code example snippet (has .snippet. in filename)
-        // The test file is in code-example-tests/{lang}/driver/examples/...
-        const testFileResult = resolveTestFilePath(
-          resolved.absolutePath,
-          workspaceRoot,
-        );
-        if (testFileResult && fs.existsSync(testFileResult.testFilePath)) {
-          lenses.push(
-            new vscode.CodeLens(lensRange, {
-              title: `🧪 test: ${testFileResult.snippetName}`,
-              command: "grove.literalinclude.view",
-              arguments: [testFileResult.testFilePath, ref.snippetName],
-            }),
+        // Only show test link for literalinclude and io-code-block (not include)
+        if (ref.type !== "include") {
+          const testFileResult = resolveTestFilePath(
+            resolved.absolutePath,
+            workspaceRoot,
           );
+          if (testFileResult && fs.existsSync(testFileResult.testFilePath)) {
+            lenses.push(
+              new vscode.CodeLens(lensRange, {
+                title: `🧪 test: ${testFileResult.snippetName}`,
+                command: "grove.literalinclude.view",
+                arguments: [testFileResult.testFilePath, ref.snippetName],
+              }),
+            );
+          }
         }
       } else {
         // Show error lens for missing files
@@ -179,26 +203,27 @@ export class LiteralIncludeCodeLensProvider implements vscode.CodeLensProvider {
 }
 
 /**
- * Definition provider for literalinclude directives.
+ * Definition provider for file-referencing RST directives.
  * Enables Ctrl+Click to navigate to the referenced file.
  */
-export class LiteralIncludeDefinitionProvider
+export class RstDirectiveDefinitionProvider
   implements vscode.DefinitionProvider
 {
   async provideDefinition(
     document: vscode.TextDocument,
     position: vscode.Position,
   ): Promise<vscode.Location | undefined> {
-    const ref = findLiteralIncludeAtPosition(document, position);
+    const ref = findDirectiveAtPosition(document, position);
     if (!ref) {
       return undefined;
     }
 
     const workspaceRoot = getWorkspaceRoot(document);
-    const resolved = await resolveLiteralIncludePath(
+    const resolved = await resolveDirectivePath(
       document.uri.fsPath,
       ref.targetPath,
       workspaceRoot,
+      { resolveSymlinks: ref.needsSymlinkResolution },
     );
 
     if (!resolved.exists) {
@@ -241,22 +266,23 @@ export class LiteralIncludeDefinitionProvider
 }
 
 /**
- * Document link provider for literalinclude directives.
+ * Document link provider for file-referencing RST directives.
  * Makes file paths clickable in RST files.
  */
-export class LiteralIncludeLinkProvider implements vscode.DocumentLinkProvider {
+export class RstDirectiveLinkProvider implements vscode.DocumentLinkProvider {
   async provideDocumentLinks(
     document: vscode.TextDocument,
   ): Promise<vscode.DocumentLink[]> {
-    const refs = parseLiteralIncludes(document);
+    const refs = parseDirectives(document);
     const links: vscode.DocumentLink[] = [];
     const workspaceRoot = getWorkspaceRoot(document);
 
     for (const ref of refs) {
-      const resolved = await resolveLiteralIncludePath(
+      const resolved = await resolveDirectivePath(
         document.uri.fsPath,
         ref.targetPath,
         workspaceRoot,
+        { resolveSymlinks: ref.needsSymlinkResolution },
       );
 
       if (resolved.exists) {
@@ -338,7 +364,7 @@ function escapeRegex(str: string): string {
 }
 
 /**
- * Register all literalinclude providers and commands.
+ * Register all RST directive providers and commands.
  */
 export function registerLiteralIncludeProviders(
   context: vscode.ExtensionContext,
@@ -350,7 +376,7 @@ export function registerLiteralIncludeProviders(
   };
   const selectors = [rstSelector, txtSelector];
 
-  // Register command for code lens action
+  // Register command for code lens action (used by all directive types)
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "grove.literalinclude.view",
@@ -393,16 +419,23 @@ export function registerLiteralIncludeProviders(
     context.subscriptions.push(
       vscode.languages.registerCodeLensProvider(
         selector,
-        new LiteralIncludeCodeLensProvider(),
+        new RstDirectiveCodeLensProvider(),
       ),
       vscode.languages.registerDefinitionProvider(
         selector,
-        new LiteralIncludeDefinitionProvider(),
+        new RstDirectiveDefinitionProvider(),
       ),
       vscode.languages.registerDocumentLinkProvider(
         selector,
-        new LiteralIncludeLinkProvider(),
+        new RstDirectiveLinkProvider(),
       ),
     );
   }
 }
+
+// Legacy exports for backward compatibility
+export {
+  RstDirectiveCodeLensProvider as LiteralIncludeCodeLensProvider,
+  RstDirectiveDefinitionProvider as LiteralIncludeDefinitionProvider,
+  RstDirectiveLinkProvider as LiteralIncludeLinkProvider,
+};
