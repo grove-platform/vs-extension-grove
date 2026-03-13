@@ -27,11 +27,6 @@
           "type": "string",
           "default": "",
           "description": "Path to bluehawk CLI (uses npx if empty)"
-        },
-        "grove.showStatusBar": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show Grove status in the status bar"
         }
       }
     },
@@ -60,10 +55,6 @@
     },
     "commands": [
       {
-        "command": "grove.refreshPanel",
-        "title": "Grove: Refresh Panel"
-      },
-      {
         "command": "grove.runTests",
         "title": "Grove: Run Tests"
       },
@@ -80,36 +71,8 @@
         "title": "Grove: Disconnect from MongoDB"
       },
       {
-        "command": "grove.showDatabases",
-        "title": "Grove: Show MongoDB Databases"
-      },
-      {
         "command": "grove.openBluehawkPreview",
         "title": "Grove: Open Bluehawk Preview"
-      },
-      {
-        "command": "grove.refreshBluehawkPreview",
-        "title": "Grove: Refresh Bluehawk Preview"
-      },
-      {
-        "command": "grove.literalinclude.view",
-        "title": "Grove: View Literalinclude File"
-      },
-      {
-        "command": "grove.runTestBlock",
-        "title": "Grove: Run Test Block"
-      },
-      {
-        "command": "grove.debugTestBlock",
-        "title": "Grove: Debug Test Block"
-      },
-      {
-        "command": "grove.findSnippetReferences",
-        "title": "Grove: Find Snippet References"
-      },
-      {
-        "command": "grove.peekSnippetReferences",
-        "title": "Grove: Peek Snippet References"
       }
     ],
     "configurationDefaults": {

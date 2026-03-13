@@ -23,7 +23,6 @@ import { containsBluehawkDirectives } from "./preview/bluehawk-runner";
 import { registerTestCodeLens } from "./test-codelens";
 import { registerSnippetCodeLens } from "./snippet-codelens";
 
-let statusBarItem: vscode.StatusBarItem;
 let currentStatus: GroveStatus | null = null;
 let outputChannel: vscode.LogOutputChannel;
 let mongoConnectionManager: MongoConnectionManager;
@@ -66,7 +65,6 @@ function getConfig() {
   return {
     autoDetect: config.get<boolean>("autoDetect", true),
     bluehawkPath: config.get<string>("bluehawkPath", ""),
-    showStatusBar: config.get<boolean>("showStatusBar", true),
   };
 }
 
@@ -148,13 +146,6 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  // Create status bar item
-  statusBarItem = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Left,
-    100,
-  );
-  context.subscriptions.push(statusBarItem);
-
   // Detect Grove projects and update status (with progress indicator if auto-detect enabled)
   const workspaceFolders = vscode.workspace.workspaceFolders;
   let status: GroveStatus;
@@ -174,29 +165,6 @@ export async function activate(context: vscode.ExtensionContext) {
   } else {
     status = await getStatus();
   }
-
-  if (status.hasProject && status.activeProject) {
-    // Update status bar (respecting showStatusBar setting)
-    if (config.showStatusBar) {
-      statusBarItem.text = `$(tree) Grove: ${status.activeProject.relativePath}`;
-      statusBarItem.tooltip = `Grove project detected\n${status.projects.length} project(s) found`;
-      statusBarItem.show();
-    }
-  }
-
-  // Listen for configuration changes
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("grove.showStatusBar")) {
-        const newConfig = getConfig();
-        if (newConfig.showStatusBar && currentStatus?.hasProject) {
-          statusBarItem.show();
-        } else {
-          statusBarItem.hide();
-        }
-      }
-    }),
-  );
 
   // Initialize diagnostics collection
   initDiagnostics(context);

@@ -54,25 +54,20 @@ The extension activates on the `workspaceContains:**/snip.js` event. On activati
 
 ### Commands
 
-| Command                        | Title                                   | Description                                  |
-| ------------------------------ | --------------------------------------- | -------------------------------------------- |
-| `grove.refreshPanel`           | Grove: Refresh Panel                    | Refresh the Grove activity bar panel         |
-| `grove.runTests`               | Grove: Run Tests                        | Run tests using the detected language runner |
-| `grove.createSymlink`          | Grove: Create Symlink for Documentation | Create symlink from docs to code-examples    |
-| `grove.connectMongo`           | Grove: Connect to MongoDB               | Connect with a connection string             |
-| `grove.disconnectMongo`        | Grove: Disconnect from MongoDB          | Disconnect and clear session                 |
-| `grove.showDatabases`          | Grove: Show MongoDB Databases           | List databases on connected cluster          |
-| `grove.openBluehawkPreview`    | Grove: Open Bluehawk Preview            | Show Bluehawk output for current file        |
-| `grove.refreshBluehawkPreview` | Grove: Refresh Bluehawk Preview         | Re-run Bluehawk on current file              |
-| `grove.literalinclude.view`    | Grove: View Literalinclude File         | Open referenced file in side editor          |
+| Command                     | Title                                   | Description                                  |
+| --------------------------- | --------------------------------------- | -------------------------------------------- |
+| `grove.runTests`            | Grove: Run Tests                        | Run tests using the detected language runner |
+| `grove.createSymlink`       | Grove: Create Symlink for Documentation | Create symlink from docs to code-examples    |
+| `grove.connectMongo`        | Grove: Connect to MongoDB               | Connect with a connection string             |
+| `grove.disconnectMongo`     | Grove: Disconnect from MongoDB          | Disconnect and clear session                 |
+| `grove.openBluehawkPreview` | Grove: Open Bluehawk Preview            | Show Bluehawk output for current file        |
 
 ### Configuration
 
-| Setting               | Type    | Default | Description                                     |
-| --------------------- | ------- | ------- | ----------------------------------------------- |
-| `grove.autoDetect`    | boolean | `true`  | Automatically detect Grove projects on open     |
-| `grove.bluehawkPath`  | string  | `""`    | Custom path to bluehawk CLI (uses npx if empty) |
-| `grove.showStatusBar` | boolean | `true`  | Show Grove status in the status bar             |
+| Setting              | Type    | Default | Description                                     |
+| -------------------- | ------- | ------- | ----------------------------------------------- |
+| `grove.autoDetect`   | boolean | `true`  | Automatically detect Grove projects on open     |
+| `grove.bluehawkPath` | string  | `""`    | Custom path to bluehawk CLI (uses npx if empty) |
 
 ### Views
 
