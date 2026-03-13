@@ -6,10 +6,11 @@
  */
 
 import * as vscode from "vscode";
-import { detectGroveProjects, findProjectForFile } from "@grove/shared";
+import { findProjectForFile } from "@grove/shared";
 import type { GroveProject } from "@grove/shared";
 import { findTestRunnerForProject, runTests } from "./test-runner-api";
 import { getTestOutputChannel } from "./logger";
+import { getCachedProjects } from "./project-cache";
 
 export interface TestRunOptions {
   /** Relative path to the specific test file. */
@@ -38,8 +39,7 @@ export async function resolveProject(
     return undefined;
   }
 
-  const workspaceRoot = workspaceFolders[0].uri.fsPath;
-  const projects = await detectGroveProjects(workspaceRoot);
+  const projects = await getCachedProjects();
 
   if (projects.length === 0) {
     vscode.window.showErrorMessage(
@@ -148,4 +148,3 @@ export function displayTestResults(
     });
   }
 }
-

@@ -80,13 +80,13 @@ var require_project_detection = __commonJS({
       };
     })();
     Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.detectGroveProjects = detectGroveProjects3;
+    exports2.detectGroveProjects = detectGroveProjects2;
     exports2.detectLanguage = detectLanguage2;
     exports2.validateSnipConfig = validateSnipConfig;
     exports2.findProjectForFile = findProjectForFile3;
     var path8 = __importStar(require("path"));
     var fs6 = __importStar(require("fs/promises"));
-    async function detectGroveProjects3(workspacePath) {
+    async function detectGroveProjects2(workspacePath) {
       const projects = [];
       const snipFiles = await findSnipFiles(workspacePath);
       for (const snipPath of snipFiles) {
@@ -32476,8 +32476,7 @@ __export(extension_exports, {
   getDetectedProjects: () => getDetectedProjects
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode22 = __toESM(require("vscode"));
-var import_shared5 = __toESM(require_dist());
+var vscode23 = __toESM(require("vscode"));
 
 // src/panel/GrovePanel.ts
 var vscode = __toESM(require("vscode"));
@@ -32733,34 +32732,70 @@ function getApi() {
 }
 
 // src/test-execution.ts
+var vscode4 = __toESM(require("vscode"));
+var import_shared2 = __toESM(require_dist());
+
+// src/project-cache.ts
 var vscode3 = __toESM(require("vscode"));
 var import_shared = __toESM(require_dist());
+var cachedProjects;
+var watcher;
+var workspaceRoot;
+function initProjectCache(context, wsRoot) {
+  workspaceRoot = wsRoot;
+  watcher = vscode3.workspace.createFileSystemWatcher("**/snip.js");
+  watcher.onDidCreate(() => invalidate());
+  watcher.onDidDelete(() => invalidate());
+  context.subscriptions.push(watcher);
+}
+async function getCachedProjects() {
+  if (cachedProjects) {
+    return cachedProjects;
+  }
+  if (!workspaceRoot) {
+    return [];
+  }
+  cachedProjects = await (0, import_shared.detectGroveProjects)(workspaceRoot);
+  if (isLoggerInitialized()) {
+    getLogChannel().info(
+      `Project cache populated: ${cachedProjects.length} project(s)`
+    );
+  }
+  return cachedProjects;
+}
+function invalidate() {
+  cachedProjects = void 0;
+  if (isLoggerInitialized()) {
+    getLogChannel().debug("Project cache invalidated");
+  }
+}
+
+// src/test-execution.ts
 async function resolveProject(activeFilePath) {
-  const workspaceFolders = vscode3.workspace.workspaceFolders;
+  const workspaceFolders = vscode4.workspace.workspaceFolders;
   if (!workspaceFolders) {
-    vscode3.window.showErrorMessage("No workspace folder open");
+    vscode4.window.showErrorMessage("No workspace folder open");
     return void 0;
   }
-  const workspaceRoot = workspaceFolders[0].uri.fsPath;
-  const projects = await (0, import_shared.detectGroveProjects)(workspaceRoot);
+  const projects = await getCachedProjects();
   if (projects.length === 0) {
-    vscode3.window.showErrorMessage(
+    vscode4.window.showErrorMessage(
       "No Grove project detected. Create a snip.js file to define a Grove project."
     );
     return void 0;
   }
-  const filePath = activeFilePath ?? vscode3.window.activeTextEditor?.document.uri.fsPath;
+  const filePath = activeFilePath ?? vscode4.window.activeTextEditor?.document.uri.fsPath;
   if (!filePath) {
     const projectList = projects.map((p) => p.relativePath || "root").join(", ");
-    vscode3.window.showErrorMessage(
+    vscode4.window.showErrorMessage(
       `Cannot determine which Grove project to test. Open a file within a Grove project and try again. Detected projects: ${projectList}`
     );
     return void 0;
   }
-  const project = (0, import_shared.findProjectForFile)(filePath, projects);
+  const project = (0, import_shared2.findProjectForFile)(filePath, projects);
   if (!project) {
     const projectList = projects.map((p) => p.relativePath || "root").join(", ");
-    vscode3.window.showErrorMessage(
+    vscode4.window.showErrorMessage(
       `Cannot determine which Grove project to test. Open a file within a Grove project and try again. Detected projects: ${projectList}`
     );
     return void 0;
@@ -32770,7 +32805,7 @@ async function resolveProject(activeFilePath) {
 async function executeTests(projectPath, opts = {}) {
   const runner = await findTestRunnerForProject(projectPath);
   if (!runner) {
-    vscode3.window.showWarningMessage(
+    vscode4.window.showWarningMessage(
       "No test runner found. Install a Grove language extension (e.g., Grove for Node.js)."
     );
     return void 0;
@@ -32799,10 +32834,10 @@ function displayTestResults(output, result, label, extraLines) {
   ch.appendLine(output);
   if (result.success) {
     const msg = result.total != null ? `Tests passed: ${result.passed ?? 0}/${result.total}` : `\u2713 ${label}`;
-    vscode3.window.showInformationMessage(msg);
+    vscode4.window.showInformationMessage(msg);
   } else {
     const msg = result.total != null && result.total > 0 ? `Tests failed: ${result.failed ?? 0}/${result.total}` : `Test runner failed. Check output for details.`;
-    vscode3.window.showErrorMessage(msg, "Show Output").then((action) => {
+    vscode4.window.showErrorMessage(msg, "Show Output").then((action) => {
       if (action === "Show Output") {
         ch.show();
       }
@@ -32811,12 +32846,12 @@ function displayTestResults(output, result, label, extraLines) {
 }
 
 // src/diagnostics.ts
-var vscode4 = __toESM(require("vscode"));
+var vscode5 = __toESM(require("vscode"));
 var path = __toESM(require("path"));
 var fs = __toESM(require("fs/promises"));
 var diagnosticCollection;
 function initDiagnostics(context) {
-  diagnosticCollection = vscode4.languages.createDiagnosticCollection("grove");
+  diagnosticCollection = vscode5.languages.createDiagnosticCollection("grove");
   context.subscriptions.push(diagnosticCollection);
   return diagnosticCollection;
 }
@@ -32835,10 +32870,10 @@ async function checkSymlinks(project, workspacePath) {
           await fs.access(symlinkPath);
         } catch {
           diagnostics.push(
-            new vscode4.Diagnostic(
-              new vscode4.Range(0, 0, 0, 0),
+            new vscode5.Diagnostic(
+              new vscode5.Range(0, 0, 0, 0),
               `Broken symlink: ${symlinkRelPath} points to a non-existent target`,
-              vscode4.DiagnosticSeverity.Error
+              vscode5.DiagnosticSeverity.Error
             )
           );
         }
@@ -32847,10 +32882,10 @@ async function checkSymlinks(project, workspacePath) {
       const isDocsProject = await looksLikeDocsProject(workspacePath);
       if (isDocsProject) {
         diagnostics.push(
-          new vscode4.Diagnostic(
-            new vscode4.Range(0, 0, 0, 0),
+          new vscode5.Diagnostic(
+            new vscode5.Range(0, 0, 0, 0),
             `Missing symlink: ${symlinkRelPath}. Run "Grove: Create Symlink" to create it.`,
-            vscode4.DiagnosticSeverity.Warning
+            vscode5.DiagnosticSeverity.Warning
           )
         );
       }
@@ -32873,7 +32908,7 @@ async function refreshDiagnostics(project, workspacePath) {
   if (!diagnosticCollection) {
     return;
   }
-  const snipUri = vscode4.Uri.file(path.join(project.rootPath, "snip.js"));
+  const snipUri = vscode5.Uri.file(path.join(project.rootPath, "snip.js"));
   diagnosticCollection.delete(snipUri);
   const symlinkDiagnostics = await checkSymlinks(project, workspacePath);
   if (symlinkDiagnostics.length > 0) {
@@ -32888,11 +32923,11 @@ async function refreshAllDiagnostics(projects, workspacePath) {
 }
 
 // src/language-status.ts
-var vscode5 = __toESM(require("vscode"));
-var import_shared2 = __toESM(require_dist());
+var vscode6 = __toESM(require("vscode"));
+var import_shared3 = __toESM(require_dist());
 var languageStatusItem;
 function initLanguageStatus(context) {
-  languageStatusItem = vscode5.languages.createLanguageStatusItem(
+  languageStatusItem = vscode6.languages.createLanguageStatusItem(
     "grove.status",
     { pattern: "**/*" }
     // Apply to all files
@@ -32900,7 +32935,7 @@ function initLanguageStatus(context) {
   languageStatusItem.name = "Grove Project";
   languageStatusItem.text = "$(tree) Grove";
   languageStatusItem.detail = "No Grove project";
-  languageStatusItem.severity = vscode5.LanguageStatusSeverity.Information;
+  languageStatusItem.severity = vscode6.LanguageStatusSeverity.Information;
   languageStatusItem.command = {
     title: "Open Grove Panel",
     command: "workbench.view.extension.grove"
@@ -32915,20 +32950,20 @@ function updateLanguageStatus(projects, activeFile) {
   if (!activeFile || projects.length === 0) {
     languageStatusItem.text = "$(tree) Grove";
     languageStatusItem.detail = "No Grove project";
-    languageStatusItem.severity = vscode5.LanguageStatusSeverity.Information;
+    languageStatusItem.severity = vscode6.LanguageStatusSeverity.Information;
     return;
   }
-  const project = (0, import_shared2.findProjectForFile)(activeFile, projects);
+  const project = (0, import_shared3.findProjectForFile)(activeFile, projects);
   if (project) {
     const langIcon = getLanguageIcon(project.language);
     const langName = project.language ?? "unknown";
     languageStatusItem.text = `${langIcon} ${project.relativePath || "root"}`;
     languageStatusItem.detail = `Grove project (${langName})`;
-    languageStatusItem.severity = project.hasValidConfig ? vscode5.LanguageStatusSeverity.Information : vscode5.LanguageStatusSeverity.Warning;
+    languageStatusItem.severity = project.hasValidConfig ? vscode6.LanguageStatusSeverity.Information : vscode6.LanguageStatusSeverity.Warning;
   } else {
     languageStatusItem.text = "$(tree) Grove";
     languageStatusItem.detail = "Not in a Grove project";
-    languageStatusItem.severity = vscode5.LanguageStatusSeverity.Information;
+    languageStatusItem.severity = vscode6.LanguageStatusSeverity.Information;
   }
 }
 function getLanguageIcon(language) {
@@ -32957,26 +32992,26 @@ function getLanguageIcon(language) {
 }
 function registerLanguageStatusHandlers(context, getProjects) {
   context.subscriptions.push(
-    vscode5.window.onDidChangeActiveTextEditor((editor) => {
+    vscode6.window.onDidChangeActiveTextEditor((editor) => {
       updateLanguageStatus(getProjects(), editor?.document.uri.fsPath);
     })
   );
-  const activeEditor = vscode5.window.activeTextEditor;
+  const activeEditor = vscode6.window.activeTextEditor;
   if (activeEditor) {
     updateLanguageStatus(getProjects(), activeEditor.document.uri.fsPath);
   }
 }
 
 // src/symlink.ts
-var vscode6 = __toESM(require("vscode"));
+var vscode7 = __toESM(require("vscode"));
 var path2 = __toESM(require("path"));
 var fs2 = __toESM(require("fs/promises"));
-var import_shared3 = __toESM(require_dist());
+var import_shared4 = __toESM(require_dist());
 async function createSymlink(symlinkPath, targetPath, workspacePath) {
-  if (!(0, import_shared3.validateWorkspacePath)(symlinkPath, workspacePath)) {
+  if (!(0, import_shared4.validateWorkspacePath)(symlinkPath, workspacePath)) {
     throw new Error("Symlink path must be within the workspace");
   }
-  if (!(0, import_shared3.validateWorkspacePath)(targetPath, workspacePath)) {
+  if (!(0, import_shared4.validateWorkspacePath)(targetPath, workspacePath)) {
     throw new Error("Target path must be within the workspace");
   }
   try {
@@ -32991,14 +33026,14 @@ async function createSymlink(symlinkPath, targetPath, workspacePath) {
 }
 function registerSymlinkCommand(context) {
   context.subscriptions.push(
-    vscode6.commands.registerCommand("grove.createSymlink", async () => {
-      const workspaceFolders = vscode6.workspace.workspaceFolders;
+    vscode7.commands.registerCommand("grove.createSymlink", async () => {
+      const workspaceFolders = vscode7.workspace.workspaceFolders;
       if (!workspaceFolders) {
-        vscode6.window.showErrorMessage("No workspace folder open");
+        vscode7.window.showErrorMessage("No workspace folder open");
         return;
       }
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      const symlinkRelPath = await vscode6.window.showInputBox({
+      const symlinkRelPath = await vscode7.window.showInputBox({
         title: "Grove: Create Symlink",
         prompt: "Enter the relative path for the symlink",
         value: "source/code-examples/tested",
@@ -33011,7 +33046,7 @@ function registerSymlinkCommand(context) {
       if (!symlinkRelPath) {
         return;
       }
-      const targetRelPath = await vscode6.window.showInputBox({
+      const targetRelPath = await vscode7.window.showInputBox({
         title: "Grove: Create Symlink",
         prompt: "Enter the relative path to the target directory",
         value: "../code-example-tests/content/code-examples/tested",
@@ -33027,12 +33062,12 @@ function registerSymlinkCommand(context) {
       const targetPath = path2.resolve(path2.dirname(symlinkPath), targetRelPath);
       try {
         await createSymlink(symlinkPath, targetPath, workspacePath);
-        vscode6.window.showInformationMessage(
+        vscode7.window.showInformationMessage(
           `Created symlink: ${symlinkRelPath} \u2192 ${targetRelPath}`
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        vscode6.window.showErrorMessage(`Failed to create symlink: ${message}`);
+        vscode7.window.showErrorMessage(`Failed to create symlink: ${message}`);
       }
     })
   );
@@ -33262,11 +33297,11 @@ var MongoConnectionManager = class {
 };
 
 // src/mongo/commands.ts
-var vscode7 = __toESM(require("vscode"));
+var vscode8 = __toESM(require("vscode"));
 function registerMongoCommands(context, connectionManager, onConnectionChange) {
   context.subscriptions.push(
-    vscode7.commands.registerCommand("grove.connectMongo", async () => {
-      const connectionString = await vscode7.window.showInputBox({
+    vscode8.commands.registerCommand("grove.connectMongo", async () => {
+      const connectionString = await vscode8.window.showInputBox({
         prompt: "Enter MongoDB connection string",
         placeHolder: "mongodb+srv://user:password@cluster.mongodb.net/database",
         password: true,
@@ -33285,9 +33320,9 @@ function registerMongoCommands(context, connectionManager, onConnectionChange) {
         return;
       }
       try {
-        await vscode7.window.withProgress(
+        await vscode8.window.withProgress(
           {
-            location: vscode7.ProgressLocation.Notification,
+            location: vscode8.ProgressLocation.Notification,
             title: "Connecting to MongoDB...",
             cancellable: false
           },
@@ -33295,24 +33330,24 @@ function registerMongoCommands(context, connectionManager, onConnectionChange) {
             await connectionManager.connect(connectionString);
           }
         );
-        vscode7.window.showInformationMessage(
+        vscode8.window.showInformationMessage(
           `Connected to MongoDB (${connectionManager.status.clusterType})`
         );
         onConnectionChange();
       } catch (error) {
-        vscode7.window.showErrorMessage(
+        vscode8.window.showErrorMessage(
           `Failed to connect: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     })
   );
   context.subscriptions.push(
-    vscode7.commands.registerCommand("grove.disconnectMongo", async () => {
+    vscode8.commands.registerCommand("grove.disconnectMongo", async () => {
       if (!connectionManager.status.connected) {
-        vscode7.window.showInformationMessage("Not connected to MongoDB");
+        vscode8.window.showInformationMessage("Not connected to MongoDB");
         return;
       }
-      const choice = await vscode7.window.showQuickPick(
+      const choice = await vscode8.window.showQuickPick(
         [
           {
             label: "Disconnect",
@@ -33334,20 +33369,20 @@ function registerMongoCommands(context, connectionManager, onConnectionChange) {
       } else {
         await connectionManager.disconnect();
       }
-      vscode7.window.showInformationMessage("Disconnected from MongoDB");
+      vscode8.window.showInformationMessage("Disconnected from MongoDB");
       onConnectionChange();
     })
   );
   context.subscriptions.push(
-    vscode7.commands.registerCommand("grove.showDatabases", async () => {
+    vscode8.commands.registerCommand("grove.showDatabases", async () => {
       if (!connectionManager.status.connected) {
-        const connect = await vscode7.window.showInformationMessage(
+        const connect = await vscode8.window.showInformationMessage(
           "Not connected to MongoDB. Connect now?",
           "Connect",
           "Cancel"
         );
         if (connect === "Connect") {
-          await vscode7.commands.executeCommand("grove.connectMongo");
+          await vscode8.commands.executeCommand("grove.connectMongo");
         }
         return;
       }
@@ -33361,17 +33396,17 @@ function registerMongoCommands(context, connectionManager, onConnectionChange) {
             description: sampleDb ? `$(database) ${sampleDb.description}` : ""
           };
         });
-        const selected = await vscode7.window.showQuickPick(items, {
+        const selected = await vscode8.window.showQuickPick(items, {
           placeHolder: `${databases.length} database(s) found`,
           title: "MongoDB Databases"
         });
         if (selected) {
-          vscode7.window.showInformationMessage(
+          vscode8.window.showInformationMessage(
             `Selected database: ${selected.label}`
           );
         }
       } catch (error) {
-        vscode7.window.showErrorMessage(
+        vscode8.window.showErrorMessage(
           `Failed to list databases: ${error instanceof Error ? error.message : String(error)}`
         );
       }
@@ -33380,12 +33415,12 @@ function registerMongoCommands(context, connectionManager, onConnectionChange) {
 }
 
 // src/rst/LiteralIncludeProviders.ts
-var vscode9 = __toESM(require("vscode"));
+var vscode10 = __toESM(require("vscode"));
 var path4 = __toESM(require("path"));
 var fs4 = __toESM(require("fs"));
 
 // src/rst/literalinclude-parser.ts
-var vscode8 = __toESM(require("vscode"));
+var vscode9 = __toESM(require("vscode"));
 function parseLiteralIncludes(document) {
   const refs = [];
   const directivePattern = /^(\s*)\.\.\s+literalinclude::\s+(.+?)\s*$/;
@@ -33398,17 +33433,17 @@ function parseLiteralIncludes(document) {
     const indent = match[1];
     const targetPath = match[2].trim();
     const pathStartChar = line.text.indexOf(targetPath);
-    const pathStart = new vscode8.Position(lineNum, pathStartChar);
-    const pathEnd = new vscode8.Position(
+    const pathStart = new vscode9.Position(lineNum, pathStartChar);
+    const pathEnd = new vscode9.Position(
       lineNum,
       pathStartChar + targetPath.length
     );
     const ref = {
-      range: new vscode8.Range(
-        new vscode8.Position(lineNum, 0),
-        new vscode8.Position(lineNum, line.text.length)
+      range: new vscode9.Range(
+        new vscode9.Position(lineNum, 0),
+        new vscode9.Position(lineNum, line.text.length)
       ),
-      pathRange: new vscode8.Range(pathStart, pathEnd),
+      pathRange: new vscode9.Range(pathStart, pathEnd),
       targetPath
     };
     const optionIndent = indent + "   ";
@@ -33471,7 +33506,7 @@ function findLiteralIncludeAtPosition(document, position) {
 // src/rst/path-resolver.ts
 var path3 = __toESM(require("path"));
 var fs3 = __toESM(require("fs"));
-var import_shared4 = __toESM(require_dist());
+var import_shared5 = __toESM(require_dist());
 function findSourceDir(startPath) {
   let current = startPath;
   const root = path3.parse(current).root;
@@ -33488,16 +33523,16 @@ function findSourceDir(startPath) {
   }
   return void 0;
 }
-async function resolveLiteralIncludePath(rstFilePath, targetPath, workspaceRoot) {
+async function resolveLiteralIncludePath(rstFilePath, targetPath, workspaceRoot2) {
   if (targetPath.startsWith("/")) {
     const sourceDir2 = findSourceDir(rstFilePath);
     if (sourceDir2) {
       const absolutePath = path3.join(sourceDir2, targetPath);
-      return checkPathExists(absolutePath, workspaceRoot);
+      return checkPathExists(absolutePath, workspaceRoot2);
     }
-    if (workspaceRoot) {
-      const absolutePath = path3.join(workspaceRoot, targetPath);
-      return checkPathExists(absolutePath, workspaceRoot);
+    if (workspaceRoot2) {
+      const absolutePath = path3.join(workspaceRoot2, targetPath);
+      return checkPathExists(absolutePath, workspaceRoot2);
     }
     return {
       absolutePath: targetPath,
@@ -33533,8 +33568,8 @@ async function resolveLiteralIncludePath(rstFilePath, targetPath, workspaceRoot)
     error: `File not found: ${targetPath}`
   };
 }
-function checkPathExists(absolutePath, workspaceRoot) {
-  if (workspaceRoot && !(0, import_shared4.isPathWithinBoundary)(absolutePath, workspaceRoot)) {
+function checkPathExists(absolutePath, workspaceRoot2) {
+  if (workspaceRoot2 && !(0, import_shared5.isPathWithinBoundary)(absolutePath, workspaceRoot2)) {
     return {
       absolutePath,
       exists: false,
@@ -33581,11 +33616,11 @@ async function resolveSymlinkPath(startDir, targetPath) {
 
 // src/rst/LiteralIncludeProviders.ts
 function getWorkspaceRoot(document) {
-  const workspaceFolder = vscode9.workspace.getWorkspaceFolder(document.uri);
+  const workspaceFolder = vscode10.workspace.getWorkspaceFolder(document.uri);
   return workspaceFolder?.uri.fsPath;
 }
-function resolveTestFilePath(resolvedSnippetPath, workspaceRoot) {
-  if (!workspaceRoot) {
+function resolveTestFilePath(resolvedSnippetPath, workspaceRoot2) {
+  if (!workspaceRoot2) {
     return void 0;
   }
   const filename = path4.basename(resolvedSnippetPath);
@@ -33611,7 +33646,7 @@ function resolveTestFilePath(resolvedSnippetPath, workspaceRoot) {
   const dir = path4.dirname(restOfPath);
   const originalFilename = `${snippetMatch[1]}${snippetMatch[3]}`;
   const testFilePath = path4.join(
-    workspaceRoot,
+    workspaceRoot2,
     "code-example-tests",
     langDriver,
     "examples",
@@ -33621,26 +33656,26 @@ function resolveTestFilePath(resolvedSnippetPath, workspaceRoot) {
   return { testFilePath, snippetName };
 }
 var LiteralIncludeCodeLensProvider = class {
-  _onDidChangeCodeLenses = new vscode9.EventEmitter();
+  _onDidChangeCodeLenses = new vscode10.EventEmitter();
   onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
   async provideCodeLenses(document) {
     const refs = parseLiteralIncludes(document);
     const lenses = [];
-    const workspaceRoot = getWorkspaceRoot(document);
+    const workspaceRoot2 = getWorkspaceRoot(document);
     for (const ref of refs) {
       const resolved = await resolveLiteralIncludePath(
         document.uri.fsPath,
         ref.targetPath,
-        workspaceRoot
+        workspaceRoot2
       );
       const directiveLine = ref.range.start.line;
-      const lensRange = new vscode9.Range(
-        new vscode9.Position(directiveLine, 0),
-        new vscode9.Position(directiveLine, 0)
+      const lensRange = new vscode10.Range(
+        new vscode10.Position(directiveLine, 0),
+        new vscode10.Position(directiveLine, 0)
       );
       if (resolved.exists) {
         lenses.push(
-          new vscode9.CodeLens(lensRange, {
+          new vscode10.CodeLens(lensRange, {
             title: "\u{1F4C4} view",
             command: "grove.literalinclude.view",
             arguments: [resolved.absolutePath, ref.snippetName, ref.startAfter]
@@ -33648,11 +33683,11 @@ var LiteralIncludeCodeLensProvider = class {
         );
         const testFileResult = resolveTestFilePath(
           resolved.absolutePath,
-          workspaceRoot
+          workspaceRoot2
         );
         if (testFileResult && fs4.existsSync(testFileResult.testFilePath)) {
           lenses.push(
-            new vscode9.CodeLens(lensRange, {
+            new vscode10.CodeLens(lensRange, {
               title: `\u{1F9EA} test: ${testFileResult.snippetName}`,
               command: "grove.literalinclude.view",
               arguments: [testFileResult.testFilePath, ref.snippetName]
@@ -33661,7 +33696,7 @@ var LiteralIncludeCodeLensProvider = class {
         }
       } else {
         lenses.push(
-          new vscode9.CodeLens(lensRange, {
+          new vscode10.CodeLens(lensRange, {
             title: `\u26A0\uFE0F ${resolved.error || "File not found"}`,
             command: ""
           })
@@ -33680,25 +33715,25 @@ var LiteralIncludeDefinitionProvider = class {
     if (!ref) {
       return void 0;
     }
-    const workspaceRoot = getWorkspaceRoot(document);
+    const workspaceRoot2 = getWorkspaceRoot(document);
     const resolved = await resolveLiteralIncludePath(
       document.uri.fsPath,
       ref.targetPath,
-      workspaceRoot
+      workspaceRoot2
     );
     if (!resolved.exists) {
       return void 0;
     }
-    const targetUri = vscode9.Uri.file(resolved.absolutePath);
+    const targetUri = vscode10.Uri.file(resolved.absolutePath);
     if (ref.snippetName) {
       const lineNumber = await findSnippetLine(
         resolved.absolutePath,
         ref.snippetName
       );
       if (lineNumber !== void 0) {
-        return new vscode9.Location(
+        return new vscode10.Location(
           targetUri,
-          new vscode9.Position(lineNumber, 0)
+          new vscode10.Position(lineNumber, 0)
         );
       }
     }
@@ -33708,35 +33743,35 @@ var LiteralIncludeDefinitionProvider = class {
         ref.startAfter
       );
       if (lineNumber !== void 0) {
-        return new vscode9.Location(
+        return new vscode10.Location(
           targetUri,
-          new vscode9.Position(lineNumber, 0)
+          new vscode10.Position(lineNumber, 0)
         );
       }
     }
-    return new vscode9.Location(targetUri, new vscode9.Position(0, 0));
+    return new vscode10.Location(targetUri, new vscode10.Position(0, 0));
   }
 };
 var LiteralIncludeLinkProvider = class {
   async provideDocumentLinks(document) {
     const refs = parseLiteralIncludes(document);
     const links = [];
-    const workspaceRoot = getWorkspaceRoot(document);
+    const workspaceRoot2 = getWorkspaceRoot(document);
     for (const ref of refs) {
       const resolved = await resolveLiteralIncludePath(
         document.uri.fsPath,
         ref.targetPath,
-        workspaceRoot
+        workspaceRoot2
       );
       if (resolved.exists) {
-        const link = new vscode9.DocumentLink(
+        const link = new vscode10.DocumentLink(
           ref.pathRange,
-          vscode9.Uri.file(resolved.absolutePath)
+          vscode10.Uri.file(resolved.absolutePath)
         );
         link.tooltip = `Open ${path4.basename(resolved.absolutePath)}`;
         links.push(link);
       } else {
-        const link = new vscode9.DocumentLink(ref.pathRange);
+        const link = new vscode10.DocumentLink(ref.pathRange);
         link.tooltip = resolved.error || "File not found";
         links.push(link);
       }
@@ -33784,33 +33819,33 @@ function registerLiteralIncludeProviders(context) {
   };
   const selectors = [rstSelector, txtSelector];
   context.subscriptions.push(
-    vscode9.commands.registerCommand(
+    vscode10.commands.registerCommand(
       "grove.literalinclude.view",
       async (filePath, snippetName, startAfter) => {
-        const uri = vscode9.Uri.file(filePath);
-        const document = await vscode9.workspace.openTextDocument(uri);
-        const editor = await vscode9.window.showTextDocument(document, {
-          viewColumn: vscode9.ViewColumn.Beside,
+        const uri = vscode10.Uri.file(filePath);
+        const document = await vscode10.workspace.openTextDocument(uri);
+        const editor = await vscode10.window.showTextDocument(document, {
+          viewColumn: vscode10.ViewColumn.Beside,
           preview: true
         });
         if (snippetName) {
           const lineNumber = await findSnippetLine(filePath, snippetName);
           if (lineNumber !== void 0) {
-            const position = new vscode9.Position(lineNumber, 0);
-            editor.selection = new vscode9.Selection(position, position);
+            const position = new vscode10.Position(lineNumber, 0);
+            editor.selection = new vscode10.Selection(position, position);
             editor.revealRange(
-              new vscode9.Range(position, position),
-              vscode9.TextEditorRevealType.InCenter
+              new vscode10.Range(position, position),
+              vscode10.TextEditorRevealType.InCenter
             );
           }
         } else if (startAfter) {
           const lineNumber = await findMarkerLine(filePath, startAfter);
           if (lineNumber !== void 0) {
-            const position = new vscode9.Position(lineNumber, 0);
-            editor.selection = new vscode9.Selection(position, position);
+            const position = new vscode10.Position(lineNumber, 0);
+            editor.selection = new vscode10.Selection(position, position);
             editor.revealRange(
-              new vscode9.Range(position, position),
-              vscode9.TextEditorRevealType.InCenter
+              new vscode10.Range(position, position),
+              vscode10.TextEditorRevealType.InCenter
             );
           }
         }
@@ -33819,15 +33854,15 @@ function registerLiteralIncludeProviders(context) {
   );
   for (const selector of selectors) {
     context.subscriptions.push(
-      vscode9.languages.registerCodeLensProvider(
+      vscode10.languages.registerCodeLensProvider(
         selector,
         new LiteralIncludeCodeLensProvider()
       ),
-      vscode9.languages.registerDefinitionProvider(
+      vscode10.languages.registerDefinitionProvider(
         selector,
         new LiteralIncludeDefinitionProvider()
       ),
-      vscode9.languages.registerDocumentLinkProvider(
+      vscode10.languages.registerDocumentLinkProvider(
         selector,
         new LiteralIncludeLinkProvider()
       )
@@ -33839,7 +33874,7 @@ function registerLiteralIncludeProviders(context) {
 var path6 = __toESM(require("path"));
 
 // src/preview/bluehawk-runner.ts
-var vscode10 = __toESM(require("vscode"));
+var vscode11 = __toESM(require("vscode"));
 var import_child_process = require("child_process");
 var import_util = require("util");
 var path5 = __toESM(require("path"));
@@ -33847,7 +33882,7 @@ var fs5 = __toESM(require("fs"));
 var os = __toESM(require("os"));
 var execAsync = (0, import_util.promisify)(import_child_process.exec);
 function getBluehawkCommand() {
-  const config = vscode10.workspace.getConfiguration("grove");
+  const config = vscode11.workspace.getConfiguration("grove");
   const customPath = config.get("bluehawkPath", "");
   if (customPath && customPath.trim().length > 0) {
     return customPath;
@@ -34193,14 +34228,14 @@ var BluehawkPreviewProvider = class {
 };
 
 // src/test-codelens/index.ts
-var vscode16 = __toESM(require("vscode"));
+var vscode17 = __toESM(require("vscode"));
 var path7 = __toESM(require("path"));
 
 // src/test-codelens/TestCodeLensProvider.ts
-var vscode12 = __toESM(require("vscode"));
+var vscode13 = __toESM(require("vscode"));
 
 // src/test-codelens/test-parser.ts
-var vscode11 = __toESM(require("vscode"));
+var vscode12 = __toESM(require("vscode"));
 function parseTestBlocks(document) {
   const blocks = [];
   const testPattern = /^(\s*)(describe|it|test)(?:\.only|\.skip)?\s*\(\s*(['"`])(.+?)\3/;
@@ -34240,9 +34275,9 @@ function parseTestBlocks(document) {
       name,
       line: lineNum,
       character: indent,
-      range: new vscode11.Range(
-        new vscode11.Position(lineNum, 0),
-        new vscode11.Position(lineNum, line.text.length)
+      range: new vscode12.Range(
+        new vscode12.Position(lineNum, 0),
+        new vscode12.Position(lineNum, line.text.length)
       ),
       parentDescribe
     });
@@ -34275,7 +34310,7 @@ function escapeRegex2(str) {
 
 // src/test-codelens/TestCodeLensProvider.ts
 var TestCodeLensProvider = class {
-  _onDidChangeCodeLenses = new vscode12.EventEmitter();
+  _onDidChangeCodeLenses = new vscode13.EventEmitter();
   onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
   /** Currently running test (if any) */
   runningTest = null;
@@ -34306,15 +34341,15 @@ var TestCodeLensProvider = class {
     const blocks = parseTestBlocks(document);
     const lenses = [];
     for (const block of blocks) {
-      const lensRange = new vscode12.Range(
-        new vscode12.Position(block.line, 0),
-        new vscode12.Position(block.line, 0)
+      const lensRange = new vscode13.Range(
+        new vscode13.Position(block.line, 0),
+        new vscode13.Position(block.line, 0)
       );
       const testNamePattern = buildTestNamePattern(block);
       const isRunning = this.isRunning(document.uri, testNamePattern);
       if (isRunning) {
         lenses.push(
-          new vscode12.CodeLens(lensRange, {
+          new vscode13.CodeLens(lensRange, {
             title: `$(sync~spin) Running...`,
             command: "",
             tooltip: `Running ${block.type}: "${block.name}"`
@@ -34322,7 +34357,7 @@ var TestCodeLensProvider = class {
         );
       } else {
         lenses.push(
-          new vscode12.CodeLens(lensRange, {
+          new vscode13.CodeLens(lensRange, {
             title: `$(play) Run`,
             command: "grove.runTestBlock",
             arguments: [document.uri, testNamePattern, block.name, block.type],
@@ -34331,7 +34366,7 @@ var TestCodeLensProvider = class {
         );
         if (block.type !== "describe") {
           lenses.push(
-            new vscode12.CodeLens(lensRange, {
+            new vscode13.CodeLens(lensRange, {
               title: `$(debug) Debug`,
               command: "grove.debugTestBlock",
               arguments: [
@@ -34346,7 +34381,7 @@ var TestCodeLensProvider = class {
         }
         if (block.type === "describe") {
           lenses.push(
-            new vscode12.CodeLens(lensRange, {
+            new vscode13.CodeLens(lensRange, {
               title: `$(run-all) Run All`,
               command: "grove.runTestBlock",
               arguments: [
@@ -34369,16 +34404,16 @@ var TestCodeLensProvider = class {
 };
 
 // src/test-codelens/TestHoverProvider.ts
-var vscode14 = __toESM(require("vscode"));
+var vscode15 = __toESM(require("vscode"));
 
 // src/test-codelens/TestResultStore.ts
-var vscode13 = __toESM(require("vscode"));
+var vscode14 = __toESM(require("vscode"));
 function makeKey(uri, testNamePattern) {
   return `${uri.toString()}::${testNamePattern}`;
 }
 var TestResultStoreImpl = class {
   results = /* @__PURE__ */ new Map();
-  _onDidChange = new vscode13.EventEmitter();
+  _onDidChange = new vscode14.EventEmitter();
   /** Event fired when results change for a file */
   onDidChange = this._onDidChange.event;
   /**
@@ -34468,7 +34503,7 @@ var TestHoverProvider = class {
     }
     const testNamePattern = buildTestNamePattern(block);
     const result = testResultStore.get(document.uri, testNamePattern);
-    const md = new vscode14.MarkdownString();
+    const md = new vscode15.MarkdownString();
     md.isTrusted = true;
     md.supportHtml = true;
     const typeLabel = block.type === "describe" ? "Test Suite" : "Test";
@@ -34531,20 +34566,20 @@ ${truncate(result.errorMessage, 500)}
         ` | [\u{1F527} Debug](command:grove.debugTestBlock?${runArgs} "Debug this test")`
       );
     }
-    return new vscode14.Hover(md, block.range);
+    return new vscode15.Hover(md, block.range);
   }
 };
 
 // src/test-codelens/TestDecorations.ts
-var vscode15 = __toESM(require("vscode"));
+var vscode16 = __toESM(require("vscode"));
 var passDecorationType;
 var failDecorationType;
 function initTestDecorations(context) {
-  passDecorationType = vscode15.window.createTextEditorDecorationType({
-    backgroundColor: new vscode15.ThemeColor("testing.passBorder"),
+  passDecorationType = vscode16.window.createTextEditorDecorationType({
+    backgroundColor: new vscode16.ThemeColor("testing.passBorder"),
     isWholeLine: true,
-    overviewRulerColor: new vscode15.ThemeColor("testing.iconPassed"),
-    overviewRulerLane: vscode15.OverviewRulerLane.Left,
+    overviewRulerColor: new vscode16.ThemeColor("testing.iconPassed"),
+    overviewRulerLane: vscode16.OverviewRulerLane.Left,
     light: {
       backgroundColor: "rgba(40, 167, 69, 0.12)"
     },
@@ -34552,11 +34587,11 @@ function initTestDecorations(context) {
       backgroundColor: "rgba(40, 167, 69, 0.15)"
     }
   });
-  failDecorationType = vscode15.window.createTextEditorDecorationType({
-    backgroundColor: new vscode15.ThemeColor("testing.failBorder"),
+  failDecorationType = vscode16.window.createTextEditorDecorationType({
+    backgroundColor: new vscode16.ThemeColor("testing.failBorder"),
     isWholeLine: true,
-    overviewRulerColor: new vscode15.ThemeColor("testing.iconFailed"),
-    overviewRulerLane: vscode15.OverviewRulerLane.Left,
+    overviewRulerColor: new vscode16.ThemeColor("testing.iconFailed"),
+    overviewRulerLane: vscode16.OverviewRulerLane.Left,
     light: {
       backgroundColor: "rgba(220, 53, 69, 0.12)"
     },
@@ -34566,7 +34601,7 @@ function initTestDecorations(context) {
   });
   context.subscriptions.push(passDecorationType, failDecorationType);
   context.subscriptions.push(
-    vscode15.window.onDidChangeActiveTextEditor((editor) => {
+    vscode16.window.onDidChangeActiveTextEditor((editor) => {
       if (editor) {
         updateDecorationsForEditor(editor);
       }
@@ -34574,14 +34609,14 @@ function initTestDecorations(context) {
   );
   context.subscriptions.push(
     testResultStore.onDidChange((uri) => {
-      const editor = vscode15.window.activeTextEditor;
+      const editor = vscode16.window.activeTextEditor;
       if (editor && editor.document.uri.toString() === uri.toString()) {
         updateDecorationsForEditor(editor);
       }
     })
   );
-  if (vscode15.window.activeTextEditor) {
-    updateDecorationsForEditor(vscode15.window.activeTextEditor);
+  if (vscode16.window.activeTextEditor) {
+    updateDecorationsForEditor(vscode16.window.activeTextEditor);
   }
 }
 function updateDecorationsForEditor(editor) {
@@ -34600,9 +34635,9 @@ function updateDecorationsForEditor(editor) {
     if (!result) {
       continue;
     }
-    const range = new vscode15.Range(
-      new vscode15.Position(block.line, 0),
-      new vscode15.Position(block.line, document.lineAt(block.line).text.length)
+    const range = new vscode16.Range(
+      new vscode16.Position(block.line, 0),
+      new vscode16.Position(block.line, document.lineAt(block.line).text.length)
     );
     const decoration = {
       range,
@@ -34618,7 +34653,7 @@ function updateDecorationsForEditor(editor) {
   editor.setDecorations(failDecorationType, failRanges);
 }
 function createHoverMessage(result, testName) {
-  const md = new vscode15.MarkdownString();
+  const md = new vscode16.MarkdownString();
   const icon = result.passed ? "\u2705" : "\u274C";
   const status = result.passed ? "Passed" : "Failed";
   md.appendMarkdown(`**${icon} ${status}**
@@ -34651,14 +34686,14 @@ function registerTestCodeLens(context) {
     { language: "typescriptreact", scheme: "file" }
   ];
   context.subscriptions.push(
-    vscode16.languages.registerCodeLensProvider(selectors, codeLensProvider)
+    vscode17.languages.registerCodeLensProvider(selectors, codeLensProvider)
   );
   context.subscriptions.push(
-    vscode16.languages.registerHoverProvider(selectors, new TestHoverProvider())
+    vscode17.languages.registerHoverProvider(selectors, new TestHoverProvider())
   );
   initTestDecorations(context);
   context.subscriptions.push(
-    vscode16.commands.registerCommand(
+    vscode17.commands.registerCommand(
       "grove.runTestBlock",
       async (uri, testNamePattern, testName, blockType) => {
         await runTestBlock(uri, testNamePattern, testName, blockType, false);
@@ -34666,7 +34701,7 @@ function registerTestCodeLens(context) {
     )
   );
   context.subscriptions.push(
-    vscode16.commands.registerCommand(
+    vscode17.commands.registerCommand(
       "grove.debugTestBlock",
       async (uri, testNamePattern, testName, blockType) => {
         await runTestBlock(uri, testNamePattern, testName, blockType, true);
@@ -34674,7 +34709,7 @@ function registerTestCodeLens(context) {
     )
   );
   context.subscriptions.push(
-    vscode16.workspace.onDidSaveTextDocument(() => {
+    vscode17.workspace.onDidSaveTextDocument(() => {
       codeLensProvider.refresh();
     })
   );
@@ -34687,9 +34722,9 @@ async function runTestBlock(uri, testNamePattern, testName, blockType, debug) {
   const action = debug ? "Debugging" : "Running";
   codeLensProvider.setRunning(uri, testNamePattern);
   try {
-    await vscode16.window.withProgress(
+    await vscode17.window.withProgress(
       {
-        location: vscode16.ProgressLocation.Notification,
+        location: vscode17.ProgressLocation.Notification,
         title: `${action} ${displayType}: "${testName}"`,
         cancellable: false
       },
@@ -34700,7 +34735,7 @@ async function runTestBlock(uri, testNamePattern, testName, blockType, debug) {
           testNamePattern
         });
         if (!outcome) return;
-        const document = await vscode16.workspace.openTextDocument(uri);
+        const document = await vscode17.workspace.openTextDocument(uri);
         const blocks = parseTestBlocks(document);
         const block = blocks.find(
           (b) => buildTestNamePattern(b) === testNamePattern
@@ -34711,7 +34746,7 @@ async function runTestBlock(uri, testNamePattern, testName, blockType, debug) {
           line: block?.line ?? 0,
           errorMessage: outcome.result.success ? void 0 : extractErrorMessage(outcome.result.output)
         });
-        const editor = vscode16.window.activeTextEditor;
+        const editor = vscode17.window.activeTextEditor;
         if (editor && editor.document.uri.toString() === uri.toString()) {
           updateDecorationsForEditor(editor);
         }
@@ -34744,13 +34779,13 @@ function extractErrorMessage(output) {
 }
 
 // src/snippet-codelens/index.ts
-var vscode21 = __toESM(require("vscode"));
+var vscode22 = __toESM(require("vscode"));
 
 // src/snippet-codelens/SnippetCodeLensProvider.ts
-var vscode19 = __toESM(require("vscode"));
+var vscode20 = __toESM(require("vscode"));
 
 // src/snippet-codelens/snippet-parser.ts
-var vscode17 = __toESM(require("vscode"));
+var vscode18 = __toESM(require("vscode"));
 var SNIPPET_START_PATTERN = /(?:\/\/|#|\/\*|--|<!--)\s*:snippet-start:\s*(\S+)/;
 function mightContainSnippets(document) {
   const ext = document.uri.fsPath.split(".").pop()?.toLowerCase();
@@ -34774,9 +34809,9 @@ function parseSnippetBlocks(document) {
       blocks.push({
         name: snippetName,
         line: lineNum,
-        range: new vscode17.Range(
-          new vscode17.Position(lineNum, 0),
-          new vscode17.Position(lineNum, line.text.length)
+        range: new vscode18.Range(
+          new vscode18.Position(lineNum, 0),
+          new vscode18.Position(lineNum, line.text.length)
         ),
         filePath: document.uri.fsPath
       });
@@ -34786,7 +34821,7 @@ function parseSnippetBlocks(document) {
 }
 
 // src/snippet-codelens/ripgrep-searcher.ts
-var vscode18 = __toESM(require("vscode"));
+var vscode19 = __toESM(require("vscode"));
 var import_child_process2 = require("child_process");
 var import_ripgrep = require("@vscode/ripgrep");
 var CACHE_TTL_MS = 5 * 60 * 1e3;
@@ -34827,7 +34862,7 @@ async function findSnippetReferencesWithRipgrep(snippetName, sourceFileUri) {
   if (cached) {
     return cached;
   }
-  const workspaceFolders = vscode18.workspace.workspaceFolders;
+  const workspaceFolders = vscode19.workspace.workspaceFolders;
   if (!workspaceFolders || workspaceFolders.length === 0) {
     return [];
   }
@@ -34897,7 +34932,7 @@ async function runRipgrep(pattern, cwd, snippetName, sourceExt) {
               const column = data.submatches?.[0]?.start ?? 0;
               const absolutePath = filePath.startsWith("/") ? filePath : `${cwd}/${filePath}`;
               references.push({
-                uri: vscode18.Uri.file(absolutePath),
+                uri: vscode19.Uri.file(absolutePath),
                 line: lineNumber - 1,
                 // Convert to 0-based
                 column,
@@ -34918,7 +34953,7 @@ async function runRipgrep(pattern, cwd, snippetName, sourceExt) {
 
 // src/snippet-codelens/SnippetCodeLensProvider.ts
 var SnippetCodeLensProvider = class {
-  _onDidChangeCodeLenses = new vscode19.EventEmitter();
+  _onDidChangeCodeLenses = new vscode20.EventEmitter();
   onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
   async provideCodeLenses(document) {
     if (!mightContainSnippets(document)) {
@@ -34938,13 +34973,13 @@ var SnippetCodeLensProvider = class {
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
       const refCount = referenceCounts[i];
-      const lensRange = new vscode19.Range(
-        new vscode19.Position(block.line, 0),
-        new vscode19.Position(block.line, 0)
+      const lensRange = new vscode20.Range(
+        new vscode20.Position(block.line, 0),
+        new vscode20.Position(block.line, 0)
       );
       const refLabel = refCount === 1 ? "1 reference" : `${refCount} references`;
       lenses.push(
-        new vscode19.CodeLens(lensRange, {
+        new vscode20.CodeLens(lensRange, {
           title: `$(references)  ${refLabel}`,
           command: "grove.peekSnippetReferences",
           arguments: [document.uri, block.name, block.line],
@@ -34960,10 +34995,10 @@ var SnippetCodeLensProvider = class {
 };
 
 // src/snippet-codelens/reference-searcher.ts
-var vscode20 = __toESM(require("vscode"));
+var vscode21 = __toESM(require("vscode"));
 async function openSnippetSearch(snippetName) {
   const searchQuery = `${snippetName}`;
-  await vscode20.commands.executeCommand("workbench.action.findInFiles", {
+  await vscode21.commands.executeCommand("workbench.action.findInFiles", {
     query: searchQuery,
     filesToInclude: "**/*.{rst,txt}",
     triggerSearch: true,
@@ -34998,13 +35033,13 @@ function registerSnippetCodeLens(context) {
     { language: "json", scheme: "file" }
   ];
   context.subscriptions.push(
-    vscode21.languages.registerCodeLensProvider(
+    vscode22.languages.registerCodeLensProvider(
       selectors,
       snippetCodeLensProvider
     )
   );
   context.subscriptions.push(
-    vscode21.commands.registerCommand(
+    vscode22.commands.registerCommand(
       "grove.findSnippetReferences",
       async (_uri, snippetName, _line) => {
         await openSnippetSearch(snippetName);
@@ -35012,7 +35047,7 @@ function registerSnippetCodeLens(context) {
     )
   );
   context.subscriptions.push(
-    vscode21.commands.registerCommand(
+    vscode22.commands.registerCommand(
       "grove.peekSnippetReferences",
       async (uri, snippetName, line) => {
         await peekSnippetReferences(uri, snippetName, line);
@@ -35021,9 +35056,9 @@ function registerSnippetCodeLens(context) {
   );
 }
 async function peekSnippetReferences(uri, snippetName, _line) {
-  const references = await vscode21.window.withProgress(
+  const references = await vscode22.window.withProgress(
     {
-      location: vscode21.ProgressLocation.Notification,
+      location: vscode22.ProgressLocation.Notification,
       title: `Finding references to "${snippetName}"...`,
       cancellable: false
     },
@@ -35032,12 +35067,12 @@ async function peekSnippetReferences(uri, snippetName, _line) {
     }
   );
   if (references.length === 0) {
-    vscode21.window.showInformationMessage(
+    vscode22.window.showInformationMessage(
       `No RST files reference snippet "${snippetName}"`
     );
     return;
   }
-  const workspaceFolder = vscode21.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+  const workspaceFolder = vscode22.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
   const items = references.map((ref) => {
     const fullPath = ref.uri.fsPath;
     const relativePath = fullPath.startsWith(workspaceFolder) ? fullPath.slice(workspaceFolder.length + 1) : fullPath;
@@ -35053,20 +35088,20 @@ async function peekSnippetReferences(uri, snippetName, _line) {
       column: ref.column
     };
   });
-  const selected = await vscode21.window.showQuickPick(items, {
+  const selected = await vscode22.window.showQuickPick(items, {
     title: `References to "${snippetName}" (${references.length} found)`,
     placeHolder: "Select a reference to open",
     matchOnDescription: true,
     matchOnDetail: true
   });
   if (selected) {
-    const doc = await vscode21.workspace.openTextDocument(selected.uri);
-    const editor = await vscode21.window.showTextDocument(doc);
-    const position = new vscode21.Position(selected.line, selected.column);
-    editor.selection = new vscode21.Selection(position, position);
+    const doc = await vscode22.workspace.openTextDocument(selected.uri);
+    const editor = await vscode22.window.showTextDocument(doc);
+    const position = new vscode22.Position(selected.line, selected.column);
+    editor.selection = new vscode22.Selection(position, position);
     editor.revealRange(
-      new vscode21.Range(position, position),
-      vscode21.TextEditorRevealType.InCenter
+      new vscode22.Range(position, position),
+      vscode22.TextEditorRevealType.InCenter
     );
   }
 }
@@ -35090,14 +35125,14 @@ function getApi2() {
   };
 }
 function getConfig() {
-  const config = vscode22.workspace.getConfiguration("grove");
+  const config = vscode23.workspace.getConfiguration("grove");
   return {
     autoDetect: config.get("autoDetect", true),
     bluehawkPath: config.get("bluehawkPath", "")
   };
 }
 async function getStatus() {
-  const workspaceFolders = vscode22.workspace.workspaceFolders;
+  const workspaceFolders = vscode23.workspace.workspaceFolders;
   const mongoStatus = mongoConnectionManager?.status ?? {
     connected: false,
     clusterType: "unknown"
@@ -35114,7 +35149,7 @@ async function getStatus() {
       mongoConnection
     };
   }
-  const projects = await (0, import_shared5.detectGroveProjects)(workspaceFolders[0].uri.fsPath);
+  const projects = await getCachedProjects();
   currentStatus = {
     hasProject: projects.length > 0,
     activeProject: projects[0] ?? null,
@@ -35123,15 +35158,15 @@ async function getStatus() {
   };
   return currentStatus;
 }
-async function detectProjectsWithProgress(workspacePath) {
-  return vscode22.window.withProgress(
+async function detectProjectsWithProgress(_workspacePath) {
+  return vscode23.window.withProgress(
     {
-      location: vscode22.ProgressLocation.Window,
+      location: vscode23.ProgressLocation.Window,
       title: "Grove: Detecting projects..."
     },
     async (progress) => {
       progress.report({ increment: 0 });
-      const projects = await (0, import_shared5.detectGroveProjects)(workspacePath);
+      const projects = await getCachedProjects();
       progress.report({ increment: 100 });
       return projects;
     }
@@ -35141,20 +35176,25 @@ async function activate(context) {
   initLogger(context);
   const outputChannel = getLogChannel();
   outputChannel.info("Grove extension activating...");
+  const workspaceFolders = vscode23.workspace.workspaceFolders;
+  const workspaceRoot2 = workspaceFolders?.[0]?.uri.fsPath;
+  if (workspaceRoot2) {
+    initProjectCache(context, workspaceRoot2);
+  }
   const config = getConfig();
   const panelProvider = new GrovePanelProvider(context.extensionUri, getStatus);
   context.subscriptions.push(
-    vscode22.window.registerWebviewViewProvider(
+    vscode23.window.registerWebviewViewProvider(
       GrovePanelProvider.viewType,
       panelProvider
     )
   );
   context.subscriptions.push(
-    vscode22.commands.registerCommand("grove.refreshPanel", () => {
+    vscode23.commands.registerCommand("grove.refreshPanel", () => {
+      invalidate();
       panelProvider.refresh();
     })
   );
-  const workspaceFolders = vscode22.workspace.workspaceFolders;
   let status;
   if (config.autoDetect && workspaceFolders) {
     const projects = await detectProjectsWithProgress(
@@ -35173,19 +35213,27 @@ async function activate(context) {
   }
   initDiagnostics(context);
   if (workspaceFolders && status.projects.length > 0) {
-    await refreshAllDiagnostics(
+    refreshAllDiagnostics(
       status.projects,
       workspaceFolders[0].uri.fsPath
-    );
+    ).catch((err) => {
+      outputChannel.error("Failed to refresh diagnostics on startup", err);
+    });
   }
   initLanguageStatus(context);
   registerLanguageStatusHandlers(context, getDetectedProjects);
-  const activeEditor = vscode22.window.activeTextEditor;
+  const activeEditor = vscode23.window.activeTextEditor;
   if (activeEditor) {
     updateLanguageStatus(status.projects, activeEditor.document.uri.fsPath);
   }
   registerSymlinkCommand(context);
   mongoConnectionManager = new MongoConnectionManager(context.secrets);
+  context.subscriptions.push({
+    dispose: () => {
+      mongoConnectionManager.disconnect().catch(() => {
+      });
+    }
+  });
   registerMongoCommands(context, mongoConnectionManager, () => {
     panelProvider.refresh();
   });
@@ -35205,25 +35253,25 @@ async function activate(context) {
     context.extensionUri
   );
   context.subscriptions.push(
-    vscode22.window.registerWebviewViewProvider(
+    vscode23.window.registerWebviewViewProvider(
       BluehawkPreviewProvider.viewType,
       bluehawkPreviewProvider
     )
   );
   context.subscriptions.push(
-    vscode22.commands.registerCommand("grove.openBluehawkPreview", async () => {
-      const editor = vscode22.window.activeTextEditor;
+    vscode23.commands.registerCommand("grove.openBluehawkPreview", async () => {
+      const editor = vscode23.window.activeTextEditor;
       if (!editor) {
-        vscode22.window.showWarningMessage("No active editor");
+        vscode23.window.showWarningMessage("No active editor");
         return;
       }
       await bluehawkPreviewProvider.updatePreview(editor.document);
-      await vscode22.commands.executeCommand("grove.bluehawkPreview.focus");
+      await vscode23.commands.executeCommand("grove.bluehawkPreview.focus");
     }),
-    vscode22.commands.registerCommand(
+    vscode23.commands.registerCommand(
       "grove.refreshBluehawkPreview",
       async () => {
-        const editor = vscode22.window.activeTextEditor;
+        const editor = vscode23.window.activeTextEditor;
         if (editor) {
           await bluehawkPreviewProvider.updatePreview(editor.document);
         }
@@ -35231,14 +35279,14 @@ async function activate(context) {
     )
   );
   context.subscriptions.push(
-    vscode22.workspace.onDidSaveTextDocument(async (document) => {
+    vscode23.workspace.onDidSaveTextDocument(async (document) => {
       if (containsBluehawkDirectives(document.getText())) {
         await bluehawkPreviewProvider.updatePreview(document);
       }
     })
   );
   context.subscriptions.push(
-    vscode22.window.onDidChangeActiveTextEditor(async (editor) => {
+    vscode23.window.onDidChangeActiveTextEditor(async (editor) => {
       if (editor && containsBluehawkDirectives(editor.document.getText())) {
         bluehawkPreviewProvider.debouncedUpdate(editor.document);
       }
@@ -35246,7 +35294,7 @@ async function activate(context) {
   );
   outputChannel.info("Registered Bluehawk preview provider");
   context.subscriptions.push(
-    vscode22.commands.registerCommand("grove.runTests", async () => {
+    vscode23.commands.registerCommand("grove.runTests", async () => {
       const resolved = await resolveProject();
       if (!resolved) return;
       const projectPath = resolved.project.rootPath;
@@ -35260,9 +35308,9 @@ async function activate(context) {
         }
       }
       const progressTitle = usingUiConnection ? "Running tests (using Grove MongoDB connection)..." : "Running tests...";
-      vscode22.window.withProgress(
+      vscode23.window.withProgress(
         {
-          location: vscode22.ProgressLocation.Notification,
+          location: vscode23.ProgressLocation.Notification,
           title: progressTitle,
           cancellable: false
         },

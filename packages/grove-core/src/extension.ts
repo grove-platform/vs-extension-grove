@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import { detectGroveProjects } from "@grove/shared";
 import type { GroveStatus, GroveProject } from "@grove/shared";
 import { GrovePanelProvider } from "./panel/GrovePanel";
 import { getApi as getTestRunnerApi } from "./test-runner-api";
@@ -24,6 +23,11 @@ import { containsBluehawkDirectives } from "./preview/bluehawk-runner";
 import { registerTestCodeLens } from "./test-codelens";
 import { registerSnippetCodeLens } from "./snippet-codelens";
 import { initLogger, getLogChannel } from "./logger";
+import {
+  initProjectCache,
+  getCachedProjects,
+  invalidate as invalidateProjectCache,
+} from "./project-cache";
 
 let currentStatus: GroveStatus | null = null;
 let mongoConnectionManager: MongoConnectionManager;
@@ -91,7 +95,7 @@ async function getStatus(): Promise<GroveStatus> {
     };
   }
 
-  const projects = await detectGroveProjects(workspaceFolders[0].uri.fsPath);
+  const projects = await getCachedProjects();
 
   currentStatus = {
     hasProject: projects.length > 0,
@@ -107,7 +111,7 @@ async function getStatus(): Promise<GroveStatus> {
  * Detect Grove projects with progress indicator.
  */
 async function detectProjectsWithProgress(
-  workspacePath: string,
+  _workspacePath: string,
 ): Promise<GroveProject[]> {
   return vscode.window.withProgress(
     {
@@ -116,7 +120,7 @@ async function detectProjectsWithProgress(
     },
     async (progress) => {
       progress.report({ increment: 0 });
-      const projects = await detectGroveProjects(workspacePath);
+      const projects = await getCachedProjects();
       progress.report({ increment: 100 });
       return projects;
     },
@@ -129,6 +133,13 @@ export async function activate(context: vscode.ExtensionContext) {
   const outputChannel = getLogChannel();
   outputChannel.info("Grove extension activating...");
 
+  // Initialize project cache with file-system watcher
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  const workspaceRoot = workspaceFolders?.[0]?.uri.fsPath;
+  if (workspaceRoot) {
+    initProjectCache(context, workspaceRoot);
+  }
+
   const config = getConfig();
 
   // Register Grove Panel
@@ -140,15 +151,15 @@ export async function activate(context: vscode.ExtensionContext) {
     ),
   );
 
-  // Register refresh command
+  // Register refresh command (invalidates cache for fresh detection)
   context.subscriptions.push(
     vscode.commands.registerCommand("grove.refreshPanel", () => {
+      invalidateProjectCache();
       panelProvider.refresh();
     }),
   );
 
   // Detect Grove projects and update status (with progress indicator if auto-detect enabled)
-  const workspaceFolders = vscode.workspace.workspaceFolders;
   let status: GroveStatus;
 
   if (config.autoDetect && workspaceFolders) {
@@ -170,12 +181,14 @@ export async function activate(context: vscode.ExtensionContext) {
   // Initialize diagnostics collection
   initDiagnostics(context);
 
-  // Refresh diagnostics for all detected projects
+  // Refresh diagnostics asynchronously — don't block activation
   if (workspaceFolders && status.projects.length > 0) {
-    await refreshAllDiagnostics(
+    refreshAllDiagnostics(
       status.projects,
       workspaceFolders[0].uri.fsPath,
-    );
+    ).catch((err) => {
+      outputChannel.error("Failed to refresh diagnostics on startup", err);
+    });
   }
 
   // Initialize language status item
@@ -195,6 +208,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Initialize MongoDB connection manager
   mongoConnectionManager = new MongoConnectionManager(context.secrets);
+
+  // Register cleanup for MongoDB connection on deactivation
+  context.subscriptions.push({
+    dispose: () => {
+      mongoConnectionManager.disconnect().catch(() => {
+        // Ignore disconnect errors during cleanup
+      });
+    },
+  });
 
   // Register MongoDB commands with callback to refresh panel on connection changes
   registerMongoCommands(context, mongoConnectionManager, () => {
