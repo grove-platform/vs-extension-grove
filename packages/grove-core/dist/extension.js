@@ -264,14 +264,16 @@ var require_profiler = __commonJS({
   "../shared/dist/profiler.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.onStatsUpdate = onStatsUpdate2;
+    exports2.getUpdateCount = getUpdateCount2;
     exports2.initProfiler = initProfiler2;
-    exports2.isProfilingEnabled = isProfilingEnabled2;
+    exports2.isProfilingEnabled = isProfilingEnabled3;
     exports2.profile = profile8;
     exports2.profileSync = profileSync3;
     exports2.mark = mark2;
     exports2.measure = measure2;
     exports2.getStats = getStats;
-    exports2.getAllStats = getAllStats;
+    exports2.getAllStats = getAllStats2;
     exports2.formatReport = formatReport2;
     exports2.logReport = logReport;
     exports2.clearStats = clearStats2;
@@ -286,6 +288,25 @@ var require_profiler = __commonJS({
     var _stats = /* @__PURE__ */ new Map();
     var _marks = /* @__PURE__ */ new Map();
     var _logger;
+    var _listeners = /* @__PURE__ */ new Set();
+    var _updateCount = 0;
+    function onStatsUpdate2(listener) {
+      _listeners.add(listener);
+      return () => {
+        _listeners.delete(listener);
+      };
+    }
+    function getUpdateCount2() {
+      return _updateCount;
+    }
+    function notifyListeners(name, stats) {
+      for (const listener of _listeners) {
+        try {
+          listener(name, stats);
+        } catch {
+        }
+      }
+    }
     var EXTENSION_MODE_DEVELOPMENT = 2;
     function initProfiler2(context, logger) {
       _isEnabled = context.extensionMode === EXTENSION_MODE_DEVELOPMENT;
@@ -297,7 +318,7 @@ var require_profiler = __commonJS({
         _logger.info("Performance profiler enabled (development mode)");
       }
     }
-    function isProfilingEnabled2() {
+    function isProfilingEnabled3() {
       return _isEnabled;
     }
     async function profile8(name, fn) {
@@ -372,11 +393,14 @@ var require_profiler = __commonJS({
           lastMs: elapsedMs
         });
       }
+      _updateCount++;
+      const stats = _stats.get(name);
+      notifyListeners(name, stats);
     }
     function getStats(name) {
       return _stats.get(name);
     }
-    function getAllStats() {
+    function getAllStats2() {
       return new Map(_stats);
     }
     function formatReport2() {
@@ -32783,7 +32807,7 @@ __export(extension_exports, {
   getDetectedProjects: () => getDetectedProjects
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode23 = __toESM(require("vscode"));
+var vscode24 = __toESM(require("vscode"));
 
 // src/panel/GrovePanel.ts
 var vscode = __toESM(require("vscode"));
@@ -32951,14 +32975,380 @@ var GrovePanelProvider = class {
   }
 };
 
-// src/logger.ts
+// src/panel/ProfilerPanel.ts
 var vscode2 = __toESM(require("vscode"));
+var import_shared = __toESM(require_dist());
+var ProfilerPanel = class _ProfilerPanel {
+  static viewType = "grove.profilerPanel";
+  static currentPanel;
+  _panel;
+  _extensionUri;
+  _disposables = [];
+  _pollInterval;
+  _lastUpdateCount = 0;
+  _unsubscribe;
+  _sessionStartTime = Date.now();
+  constructor(panel, extensionUri) {
+    this._panel = panel;
+    this._extensionUri = extensionUri;
+    this._panel.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [extensionUri]
+    };
+    this._panel.webview.html = this._getHtml();
+    this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+    this._panel.webview.onDidReceiveMessage(
+      (message) => this._handleMessage(message),
+      null,
+      this._disposables
+    );
+    this._startPolling();
+    this._unsubscribe = (0, import_shared.onStatsUpdate)(() => {
+    });
+  }
+  static createOrShow(extensionUri) {
+    if (!(0, import_shared.isProfilingEnabled)()) {
+      vscode2.window.showInformationMessage(
+        "Performance profiling is only available in development mode."
+      );
+      return;
+    }
+    const column = vscode2.window.activeTextEditor ? vscode2.window.activeTextEditor.viewColumn : void 0;
+    if (_ProfilerPanel.currentPanel) {
+      _ProfilerPanel.currentPanel._panel.reveal(column);
+      return;
+    }
+    const panel = vscode2.window.createWebviewPanel(
+      _ProfilerPanel.viewType,
+      "Grove Performance Monitor",
+      column || vscode2.ViewColumn.One,
+      { enableScripts: true, retainContextWhenHidden: true }
+    );
+    _ProfilerPanel.currentPanel = new _ProfilerPanel(panel, extensionUri);
+  }
+  dispose() {
+    _ProfilerPanel.currentPanel = void 0;
+    if (this._pollInterval) {
+      clearInterval(this._pollInterval);
+    }
+    if (this._unsubscribe) {
+      this._unsubscribe();
+    }
+    this._panel.dispose();
+    while (this._disposables.length) {
+      const disposable = this._disposables.pop();
+      if (disposable) {
+        disposable.dispose();
+      }
+    }
+  }
+  _startPolling() {
+    this._pollInterval = setInterval(() => {
+      const currentCount = (0, import_shared.getUpdateCount)();
+      if (currentCount !== this._lastUpdateCount) {
+        this._lastUpdateCount = currentCount;
+        this._sendUpdate();
+      }
+    }, 500);
+    this._sendUpdate();
+  }
+  _sendUpdate() {
+    const statsMap = (0, import_shared.getAllStats)();
+    const stats = {};
+    for (const [key, value] of statsMap) {
+      stats[key] = value;
+    }
+    const sessionDuration = Date.now() - this._sessionStartTime;
+    this._panel.webview.postMessage({
+      command: "updateStats",
+      data: {
+        stats,
+        sessionDurationMs: sessionDuration,
+        updateCount: (0, import_shared.getUpdateCount)()
+      }
+    });
+  }
+  _handleMessage(message) {
+    switch (message.command) {
+      case "refresh":
+        this._sendUpdate();
+        break;
+      case "clearStats":
+        vscode2.commands.executeCommand("grove.clearPerformanceStats");
+        setTimeout(() => this._sendUpdate(), 100);
+        break;
+      case "saveReport":
+        vscode2.commands.executeCommand("grove.savePerformanceReport");
+        break;
+    }
+  }
+  _getHtml() {
+    return getProfilerPanelHtml();
+  }
+};
+function getProfilerPanelHtml() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+  <title>Grove Performance Monitor</title>
+  <style>${getStyles()}</style>
+</head>
+<body>
+  <div class="header">
+    <h1>\u26A1 Grove Performance Monitor</h1>
+    <div class="session-info" id="sessionInfo">Session: 0s | Updates: 0</div>
+  </div>
+  <div class="toolbar">
+    <button onclick="refresh()">\u{1F504} Refresh</button>
+    <button onclick="saveReport()">\u{1F4BE} Save Report</button>
+    <button onclick="clearStats()">\u{1F5D1}\uFE0F Clear</button>
+  </div>
+  <div class="summary" id="summary"></div>
+  <div class="chart-container" id="chartContainer"></div>
+  <table class="stats-table">
+    <thead>
+      <tr>
+        <th>Operation</th>
+        <th>Count</th>
+        <th>Avg (ms)</th>
+        <th>Min</th>
+        <th>Max</th>
+        <th>Last</th>
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody id="statsBody"></tbody>
+  </table>
+  <script>${getScript()}</script>
+</body>
+</html>`;
+}
+function getStyles() {
+  return `
+    body {
+      font-family: var(--vscode-font-family);
+      font-size: var(--vscode-font-size);
+      color: var(--vscode-foreground);
+      background: var(--vscode-editor-background);
+      padding: 16px;
+      margin: 0;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      padding-bottom: 12px;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 1.4em;
+      font-weight: 600;
+    }
+    .session-info {
+      color: var(--vscode-descriptionForeground);
+      font-size: 0.9em;
+    }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    button {
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      border: none;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: var(--vscode-font-size);
+      border-radius: 2px;
+    }
+    button:hover { background: var(--vscode-button-hoverBackground); }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .summary-card {
+      background: var(--vscode-editor-inactiveSelectionBackground);
+      padding: 12px;
+      border-radius: 4px;
+      text-align: center;
+    }
+    .summary-card .value {
+      font-size: 1.6em;
+      font-weight: bold;
+      color: var(--vscode-textLink-foreground);
+    }
+    .summary-card .label {
+      font-size: 0.85em;
+      color: var(--vscode-descriptionForeground);
+      margin-top: 4px;
+    }
+    .chart-container {
+      margin-bottom: 16px;
+      background: var(--vscode-editor-inactiveSelectionBackground);
+      border-radius: 4px;
+      padding: 12px;
+    }
+    .chart-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .bar-chart { display: flex; flex-direction: column; gap: 6px; }
+    .bar-row { display: flex; align-items: center; gap: 8px; }
+    .bar-label {
+      width: 180px;
+      font-size: 0.85em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .bar-wrapper { flex: 1; height: 20px; background: var(--vscode-input-background); border-radius: 2px; }
+    .bar {
+      height: 100%;
+      background: var(--vscode-progressBar-background);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+    .bar-value { width: 60px; text-align: right; font-size: 0.85em; }
+    .stats-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9em;
+    }
+    .stats-table th, .stats-table td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--vscode-panel-border);
+    }
+    .stats-table th {
+      background: var(--vscode-editor-inactiveSelectionBackground);
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+    }
+    .stats-table td:not(:first-child) { text-align: right; font-family: monospace; }
+    .stats-table tr:hover { background: var(--vscode-list-hoverBackground); }
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: var(--vscode-descriptionForeground);
+    }
+  `;
+}
+function getScript() {
+  return `
+    const vscode = acquireVsCodeApi();
+    let currentData = null;
+
+    window.addEventListener('message', event => {
+      const message = event.data;
+      if (message.command === 'updateStats') {
+        currentData = message.data;
+        render();
+      }
+    });
+
+    function formatDuration(ms) {
+      const seconds = Math.floor(ms / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      if (hours > 0) return hours + 'h ' + (minutes % 60) + 'm';
+      if (minutes > 0) return minutes + 'm ' + (seconds % 60) + 's';
+      return seconds + 's';
+    }
+
+    function formatMs(ms) {
+      if (ms < 1) return ms.toFixed(2);
+      if (ms < 10) return ms.toFixed(1);
+      return Math.round(ms).toString();
+    }
+
+    function render() {
+      if (!currentData) return;
+
+      const { stats, sessionDurationMs, updateCount } = currentData;
+      const entries = Object.entries(stats);
+
+      // Update session info
+      document.getElementById('sessionInfo').textContent =
+        'Session: ' + formatDuration(sessionDurationMs) + ' | Updates: ' + updateCount;
+
+      // Calculate summary
+      let totalOps = 0, totalTime = 0;
+      entries.forEach(([_, s]) => {
+        totalOps += s.count;
+        totalTime += s.totalMs;
+      });
+
+      // Render summary cards
+      const summaryHtml = [
+        { value: entries.length, label: 'Operations' },
+        { value: totalOps, label: 'Total Calls' },
+        { value: formatMs(totalTime), label: 'Total Time (ms)' },
+        { value: totalOps > 0 ? formatMs(totalTime / totalOps) : '0', label: 'Avg (ms)' }
+      ].map(c => '<div class="summary-card"><div class="value">' + c.value + '</div><div class="label">' + c.label + '</div></div>').join('');
+      document.getElementById('summary').innerHTML = summaryHtml;
+
+      // Render bar chart (top 8 by total time)
+      const chartContainer = document.getElementById('chartContainer');
+      if (entries.length === 0) {
+        chartContainer.innerHTML = '<div class="empty-state">No profiling data yet. Perform some operations to see stats.</div>';
+      } else {
+        const sorted = [...entries].sort((a, b) => b[1].totalMs - a[1].totalMs).slice(0, 8);
+        const maxTime = sorted[0][1].totalMs;
+        let chartHtml = '<div class="chart-title">Top Operations by Total Time</div><div class="bar-chart">';
+        sorted.forEach(([name, s]) => {
+          const pct = maxTime > 0 ? (s.totalMs / maxTime * 100) : 0;
+          chartHtml += '<div class="bar-row">' +
+            '<div class="bar-label" title="' + name + '">' + name + '</div>' +
+            '<div class="bar-wrapper"><div class="bar" style="width:' + pct + '%"></div></div>' +
+            '<div class="bar-value">' + formatMs(s.totalMs) + '</div></div>';
+        });
+        chartHtml += '</div>';
+        chartContainer.innerHTML = chartHtml;
+      }
+
+      // Render table
+      const tbody = document.getElementById('statsBody');
+      if (entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No data</td></tr>';
+      } else {
+        const sortedByAvg = [...entries].sort((a, b) => (b[1].totalMs / b[1].count) - (a[1].totalMs / a[1].count));
+        tbody.innerHTML = sortedByAvg.map(([name, s]) => {
+          const avg = s.totalMs / s.count;
+          return '<tr>' +
+            '<td>' + name + '</td>' +
+            '<td>' + s.count + '</td>' +
+            '<td>' + formatMs(avg) + '</td>' +
+            '<td>' + formatMs(s.minMs) + '</td>' +
+            '<td>' + formatMs(s.maxMs) + '</td>' +
+            '<td>' + formatMs(s.lastMs) + '</td>' +
+            '<td>' + formatMs(s.totalMs) + '</td></tr>';
+        }).join('');
+      }
+    }
+
+    function refresh() { vscode.postMessage({ command: 'refresh' }); }
+    function clearStats() { vscode.postMessage({ command: 'clearStats' }); }
+    function saveReport() { vscode.postMessage({ command: 'saveReport' }); }
+  `;
+}
+
+// src/logger.ts
+var vscode3 = __toESM(require("vscode"));
 var _logChannel;
 var _testChannel;
 function initLogger(context) {
-  _logChannel = vscode2.window.createOutputChannel("Grove", { log: true });
+  _logChannel = vscode3.window.createOutputChannel("Grove", { log: true });
   context.subscriptions.push(_logChannel);
-  _testChannel = vscode2.window.createOutputChannel("Grove Tests");
+  _testChannel = vscode3.window.createOutputChannel("Grove Tests");
   context.subscriptions.push(_testChannel);
 }
 function getLogChannel() {
@@ -33039,18 +33429,18 @@ function getApi() {
 }
 
 // src/test-execution.ts
-var vscode4 = __toESM(require("vscode"));
-var import_shared2 = __toESM(require_dist());
+var vscode5 = __toESM(require("vscode"));
+var import_shared3 = __toESM(require_dist());
 
 // src/project-cache.ts
-var vscode3 = __toESM(require("vscode"));
-var import_shared = __toESM(require_dist());
+var vscode4 = __toESM(require("vscode"));
+var import_shared2 = __toESM(require_dist());
 var cachedProjects;
 var watcher;
 var workspaceRoot;
 function initProjectCache(context, wsRoot) {
   workspaceRoot = wsRoot;
-  watcher = vscode3.workspace.createFileSystemWatcher("**/snip.js");
+  watcher = vscode4.workspace.createFileSystemWatcher("**/snip.js");
   watcher.onDidCreate(() => invalidate());
   watcher.onDidDelete(() => invalidate());
   context.subscriptions.push(watcher);
@@ -33062,9 +33452,9 @@ async function getCachedProjects() {
   if (!workspaceRoot) {
     return [];
   }
-  cachedProjects = await (0, import_shared.profile)(
+  cachedProjects = await (0, import_shared2.profile)(
     "ProjectCache.detectProjects",
-    () => (0, import_shared.detectGroveProjects)(workspaceRoot)
+    () => (0, import_shared2.detectGroveProjects)(workspaceRoot)
   );
   if (isLoggerInitialized()) {
     getLogChannel().info(
@@ -33082,30 +33472,30 @@ function invalidate() {
 
 // src/test-execution.ts
 async function resolveProject(activeFilePath) {
-  const workspaceFolders = vscode4.workspace.workspaceFolders;
+  const workspaceFolders = vscode5.workspace.workspaceFolders;
   if (!workspaceFolders) {
-    vscode4.window.showErrorMessage("No workspace folder open");
+    vscode5.window.showErrorMessage("No workspace folder open");
     return void 0;
   }
   const projects = await getCachedProjects();
   if (projects.length === 0) {
-    vscode4.window.showErrorMessage(
+    vscode5.window.showErrorMessage(
       "No Grove project detected. Create a snip.js file to define a Grove project."
     );
     return void 0;
   }
-  const filePath = activeFilePath ?? vscode4.window.activeTextEditor?.document.uri.fsPath;
+  const filePath = activeFilePath ?? vscode5.window.activeTextEditor?.document.uri.fsPath;
   if (!filePath) {
     const projectList = projects.map((p) => p.relativePath || "root").join(", ");
-    vscode4.window.showErrorMessage(
+    vscode5.window.showErrorMessage(
       `Cannot determine which Grove project to test. Open a file within a Grove project and try again. Detected projects: ${projectList}`
     );
     return void 0;
   }
-  const project = (0, import_shared2.findProjectForFile)(filePath, projects);
+  const project = (0, import_shared3.findProjectForFile)(filePath, projects);
   if (!project) {
     const projectList = projects.map((p) => p.relativePath || "root").join(", ");
-    vscode4.window.showErrorMessage(
+    vscode5.window.showErrorMessage(
       `Cannot determine which Grove project to test. Open a file within a Grove project and try again. Detected projects: ${projectList}`
     );
     return void 0;
@@ -33115,7 +33505,7 @@ async function resolveProject(activeFilePath) {
 async function executeTests(projectPath, opts = {}) {
   const runner = await findTestRunnerForProject(projectPath);
   if (!runner) {
-    vscode4.window.showWarningMessage(
+    vscode5.window.showWarningMessage(
       "No test runner found. Install a Grove language extension (e.g., Grove for Node.js)."
     );
     return void 0;
@@ -33144,10 +33534,10 @@ function displayTestResults(output, result, label, extraLines) {
   ch.appendLine(output);
   if (result.success) {
     const msg = result.total != null ? `Tests passed: ${result.passed ?? 0}/${result.total}` : `\u2713 ${label}`;
-    vscode4.window.showInformationMessage(msg);
+    vscode5.window.showInformationMessage(msg);
   } else {
     const msg = result.total != null && result.total > 0 ? `Tests failed: ${result.failed ?? 0}/${result.total}` : `Test runner failed. Check output for details.`;
-    vscode4.window.showErrorMessage(msg, "Show Output").then((action) => {
+    vscode5.window.showErrorMessage(msg, "Show Output").then((action) => {
       if (action === "Show Output") {
         ch.show();
       }
@@ -33156,13 +33546,13 @@ function displayTestResults(output, result, label, extraLines) {
 }
 
 // src/diagnostics.ts
-var vscode5 = __toESM(require("vscode"));
+var vscode6 = __toESM(require("vscode"));
 var path = __toESM(require("path"));
 var fs = __toESM(require("fs/promises"));
-var import_shared3 = __toESM(require_dist());
+var import_shared4 = __toESM(require_dist());
 var diagnosticCollection;
 function initDiagnostics(context) {
-  diagnosticCollection = vscode5.languages.createDiagnosticCollection("grove");
+  diagnosticCollection = vscode6.languages.createDiagnosticCollection("grove");
   context.subscriptions.push(diagnosticCollection);
   return diagnosticCollection;
 }
@@ -33181,10 +33571,10 @@ async function checkSymlinks(project, workspacePath) {
           await fs.access(symlinkPath);
         } catch {
           diagnostics.push(
-            new vscode5.Diagnostic(
-              new vscode5.Range(0, 0, 0, 0),
+            new vscode6.Diagnostic(
+              new vscode6.Range(0, 0, 0, 0),
               `Broken symlink: ${symlinkRelPath} points to a non-existent target`,
-              vscode5.DiagnosticSeverity.Error
+              vscode6.DiagnosticSeverity.Error
             )
           );
         }
@@ -33193,10 +33583,10 @@ async function checkSymlinks(project, workspacePath) {
       const isDocsProject = await looksLikeDocsProject(workspacePath);
       if (isDocsProject) {
         diagnostics.push(
-          new vscode5.Diagnostic(
-            new vscode5.Range(0, 0, 0, 0),
+          new vscode6.Diagnostic(
+            new vscode6.Range(0, 0, 0, 0),
             `Missing symlink: ${symlinkRelPath}. Run "Grove: Create Symlink" to create it.`,
-            vscode5.DiagnosticSeverity.Warning
+            vscode6.DiagnosticSeverity.Warning
           )
         );
       }
@@ -33219,9 +33609,9 @@ async function refreshDiagnostics(project, workspacePath) {
   if (!diagnosticCollection) {
     return;
   }
-  const snipUri = vscode5.Uri.file(path.join(project.rootPath, "snip.js"));
+  const snipUri = vscode6.Uri.file(path.join(project.rootPath, "snip.js"));
   diagnosticCollection.delete(snipUri);
-  const symlinkDiagnostics = await (0, import_shared3.profile)(
+  const symlinkDiagnostics = await (0, import_shared4.profile)(
     "Diagnostics.checkSymlinks",
     () => checkSymlinks(project, workspacePath)
   );
@@ -33231,7 +33621,7 @@ async function refreshDiagnostics(project, workspacePath) {
 }
 async function refreshAllDiagnostics(projects, workspacePath) {
   diagnosticCollection?.clear();
-  await (0, import_shared3.profile)("Diagnostics.refreshAll", async () => {
+  await (0, import_shared4.profile)("Diagnostics.refreshAll", async () => {
     for (const project of projects) {
       await refreshDiagnostics(project, workspacePath);
     }
@@ -33239,11 +33629,11 @@ async function refreshAllDiagnostics(projects, workspacePath) {
 }
 
 // src/language-status.ts
-var vscode6 = __toESM(require("vscode"));
-var import_shared4 = __toESM(require_dist());
+var vscode7 = __toESM(require("vscode"));
+var import_shared5 = __toESM(require_dist());
 var languageStatusItem;
 function initLanguageStatus(context) {
-  languageStatusItem = vscode6.languages.createLanguageStatusItem(
+  languageStatusItem = vscode7.languages.createLanguageStatusItem(
     "grove.status",
     { pattern: "**/*" }
     // Apply to all files
@@ -33251,7 +33641,7 @@ function initLanguageStatus(context) {
   languageStatusItem.name = "Grove Project";
   languageStatusItem.text = "$(tree) Grove";
   languageStatusItem.detail = "No Grove project";
-  languageStatusItem.severity = vscode6.LanguageStatusSeverity.Information;
+  languageStatusItem.severity = vscode7.LanguageStatusSeverity.Information;
   languageStatusItem.command = {
     title: "Open Grove Panel",
     command: "workbench.view.extension.grove"
@@ -33266,20 +33656,20 @@ function updateLanguageStatus(projects, activeFile) {
   if (!activeFile || projects.length === 0) {
     languageStatusItem.text = "$(tree) Grove";
     languageStatusItem.detail = "No Grove project";
-    languageStatusItem.severity = vscode6.LanguageStatusSeverity.Information;
+    languageStatusItem.severity = vscode7.LanguageStatusSeverity.Information;
     return;
   }
-  const project = (0, import_shared4.findProjectForFile)(activeFile, projects);
+  const project = (0, import_shared5.findProjectForFile)(activeFile, projects);
   if (project) {
     const langIcon = getLanguageIcon(project.language);
     const langName = project.language ?? "unknown";
     languageStatusItem.text = `${langIcon} ${project.relativePath || "root"}`;
     languageStatusItem.detail = `Grove project (${langName})`;
-    languageStatusItem.severity = project.hasValidConfig ? vscode6.LanguageStatusSeverity.Information : vscode6.LanguageStatusSeverity.Warning;
+    languageStatusItem.severity = project.hasValidConfig ? vscode7.LanguageStatusSeverity.Information : vscode7.LanguageStatusSeverity.Warning;
   } else {
     languageStatusItem.text = "$(tree) Grove";
     languageStatusItem.detail = "Not in a Grove project";
-    languageStatusItem.severity = vscode6.LanguageStatusSeverity.Information;
+    languageStatusItem.severity = vscode7.LanguageStatusSeverity.Information;
   }
 }
 function getLanguageIcon(language) {
@@ -33308,26 +33698,26 @@ function getLanguageIcon(language) {
 }
 function registerLanguageStatusHandlers(context, getProjects) {
   context.subscriptions.push(
-    vscode6.window.onDidChangeActiveTextEditor((editor) => {
+    vscode7.window.onDidChangeActiveTextEditor((editor) => {
       updateLanguageStatus(getProjects(), editor?.document.uri.fsPath);
     })
   );
-  const activeEditor = vscode6.window.activeTextEditor;
+  const activeEditor = vscode7.window.activeTextEditor;
   if (activeEditor) {
     updateLanguageStatus(getProjects(), activeEditor.document.uri.fsPath);
   }
 }
 
 // src/symlink.ts
-var vscode7 = __toESM(require("vscode"));
+var vscode8 = __toESM(require("vscode"));
 var path2 = __toESM(require("path"));
 var fs2 = __toESM(require("fs/promises"));
-var import_shared5 = __toESM(require_dist());
+var import_shared6 = __toESM(require_dist());
 async function createSymlink(symlinkPath, targetPath, workspacePath) {
-  if (!(0, import_shared5.validateWorkspacePath)(symlinkPath, workspacePath)) {
+  if (!(0, import_shared6.validateWorkspacePath)(symlinkPath, workspacePath)) {
     throw new Error("Symlink path must be within the workspace");
   }
-  if (!(0, import_shared5.validateWorkspacePath)(targetPath, workspacePath)) {
+  if (!(0, import_shared6.validateWorkspacePath)(targetPath, workspacePath)) {
     throw new Error("Target path must be within the workspace");
   }
   try {
@@ -33342,14 +33732,14 @@ async function createSymlink(symlinkPath, targetPath, workspacePath) {
 }
 function registerSymlinkCommand(context) {
   context.subscriptions.push(
-    vscode7.commands.registerCommand("grove.createSymlink", async () => {
-      const workspaceFolders = vscode7.workspace.workspaceFolders;
+    vscode8.commands.registerCommand("grove.createSymlink", async () => {
+      const workspaceFolders = vscode8.workspace.workspaceFolders;
       if (!workspaceFolders) {
-        vscode7.window.showErrorMessage("No workspace folder open");
+        vscode8.window.showErrorMessage("No workspace folder open");
         return;
       }
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      const symlinkRelPath = await vscode7.window.showInputBox({
+      const symlinkRelPath = await vscode8.window.showInputBox({
         title: "Grove: Create Symlink",
         prompt: "Enter the relative path for the symlink",
         value: "source/code-examples/tested",
@@ -33362,7 +33752,7 @@ function registerSymlinkCommand(context) {
       if (!symlinkRelPath) {
         return;
       }
-      const targetRelPath = await vscode7.window.showInputBox({
+      const targetRelPath = await vscode8.window.showInputBox({
         title: "Grove: Create Symlink",
         prompt: "Enter the relative path to the target directory",
         value: "../code-example-tests/content/code-examples/tested",
@@ -33378,12 +33768,12 @@ function registerSymlinkCommand(context) {
       const targetPath = path2.resolve(path2.dirname(symlinkPath), targetRelPath);
       try {
         await createSymlink(symlinkPath, targetPath, workspacePath);
-        vscode7.window.showInformationMessage(
+        vscode8.window.showInformationMessage(
           `Created symlink: ${symlinkRelPath} \u2192 ${targetRelPath}`
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        vscode7.window.showErrorMessage(`Failed to create symlink: ${message}`);
+        vscode8.window.showErrorMessage(`Failed to create symlink: ${message}`);
       }
     })
   );
@@ -33613,11 +34003,11 @@ var MongoConnectionManager = class {
 };
 
 // src/mongo/commands.ts
-var vscode8 = __toESM(require("vscode"));
+var vscode9 = __toESM(require("vscode"));
 function registerMongoCommands(context, connectionManager, onConnectionChange) {
   context.subscriptions.push(
-    vscode8.commands.registerCommand("grove.connectMongo", async () => {
-      const connectionString = await vscode8.window.showInputBox({
+    vscode9.commands.registerCommand("grove.connectMongo", async () => {
+      const connectionString = await vscode9.window.showInputBox({
         prompt: "Enter MongoDB connection string",
         placeHolder: "mongodb+srv://user:password@cluster.mongodb.net/database",
         password: true,
@@ -33636,9 +34026,9 @@ function registerMongoCommands(context, connectionManager, onConnectionChange) {
         return;
       }
       try {
-        await vscode8.window.withProgress(
+        await vscode9.window.withProgress(
           {
-            location: vscode8.ProgressLocation.Notification,
+            location: vscode9.ProgressLocation.Notification,
             title: "Connecting to MongoDB...",
             cancellable: false
           },
@@ -33646,24 +34036,24 @@ function registerMongoCommands(context, connectionManager, onConnectionChange) {
             await connectionManager.connect(connectionString);
           }
         );
-        vscode8.window.showInformationMessage(
+        vscode9.window.showInformationMessage(
           `Connected to MongoDB (${connectionManager.status.clusterType})`
         );
         onConnectionChange();
       } catch (error) {
-        vscode8.window.showErrorMessage(
+        vscode9.window.showErrorMessage(
           `Failed to connect: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     })
   );
   context.subscriptions.push(
-    vscode8.commands.registerCommand("grove.disconnectMongo", async () => {
+    vscode9.commands.registerCommand("grove.disconnectMongo", async () => {
       if (!connectionManager.status.connected) {
-        vscode8.window.showInformationMessage("Not connected to MongoDB");
+        vscode9.window.showInformationMessage("Not connected to MongoDB");
         return;
       }
-      const choice = await vscode8.window.showQuickPick(
+      const choice = await vscode9.window.showQuickPick(
         [
           {
             label: "Disconnect",
@@ -33685,20 +34075,20 @@ function registerMongoCommands(context, connectionManager, onConnectionChange) {
       } else {
         await connectionManager.disconnect();
       }
-      vscode8.window.showInformationMessage("Disconnected from MongoDB");
+      vscode9.window.showInformationMessage("Disconnected from MongoDB");
       onConnectionChange();
     })
   );
   context.subscriptions.push(
-    vscode8.commands.registerCommand("grove.showDatabases", async () => {
+    vscode9.commands.registerCommand("grove.showDatabases", async () => {
       if (!connectionManager.status.connected) {
-        const connect = await vscode8.window.showInformationMessage(
+        const connect = await vscode9.window.showInformationMessage(
           "Not connected to MongoDB. Connect now?",
           "Connect",
           "Cancel"
         );
         if (connect === "Connect") {
-          await vscode8.commands.executeCommand("grove.connectMongo");
+          await vscode9.commands.executeCommand("grove.connectMongo");
         }
         return;
       }
@@ -33712,17 +34102,17 @@ function registerMongoCommands(context, connectionManager, onConnectionChange) {
             description: sampleDb ? `$(database) ${sampleDb.description}` : ""
           };
         });
-        const selected = await vscode8.window.showQuickPick(items, {
+        const selected = await vscode9.window.showQuickPick(items, {
           placeHolder: `${databases.length} database(s) found`,
           title: "MongoDB Databases"
         });
         if (selected) {
-          vscode8.window.showInformationMessage(
+          vscode9.window.showInformationMessage(
             `Selected database: ${selected.label}`
           );
         }
       } catch (error) {
-        vscode8.window.showErrorMessage(
+        vscode9.window.showErrorMessage(
           `Failed to list databases: ${error instanceof Error ? error.message : String(error)}`
         );
       }
@@ -33731,12 +34121,12 @@ function registerMongoCommands(context, connectionManager, onConnectionChange) {
 }
 
 // src/rst/LiteralIncludeProviders.ts
-var vscode10 = __toESM(require("vscode"));
+var vscode11 = __toESM(require("vscode"));
 var path4 = __toESM(require("path"));
 var fs4 = __toESM(require("fs"));
 
 // src/rst/directive-parser.ts
-var vscode9 = __toESM(require("vscode"));
+var vscode10 = __toESM(require("vscode"));
 function parseDirectives(document) {
   const refs = [];
   const simpleDirectivePattern = /^(\s*)\.\.\s+(literalinclude|include)::\s+(.+?)\s*$/;
@@ -33773,18 +34163,18 @@ function parseSimpleDirective(document, lineNum, indent, type, targetPath) {
   const line = document.lineAt(lineNum);
   targetPath = targetPath.trim();
   const pathStartChar = line.text.indexOf(targetPath);
-  const pathStart = new vscode9.Position(lineNum, pathStartChar);
-  const pathEnd = new vscode9.Position(
+  const pathStart = new vscode10.Position(lineNum, pathStartChar);
+  const pathEnd = new vscode10.Position(
     lineNum,
     pathStartChar + targetPath.length
   );
   const ref = {
     type,
-    range: new vscode9.Range(
-      new vscode9.Position(lineNum, 0),
-      new vscode9.Position(lineNum, line.text.length)
+    range: new vscode10.Range(
+      new vscode10.Position(lineNum, 0),
+      new vscode10.Position(lineNum, line.text.length)
     ),
-    pathRange: new vscode9.Range(pathStart, pathEnd),
+    pathRange: new vscode10.Range(pathStart, pathEnd),
     targetPath,
     // include:: never needs symlink resolution, literalinclude:: does
     needsSymlinkResolution: type === "literalinclude"
@@ -33829,18 +34219,18 @@ function parseIoDirective(document, lineNum, type, targetPath) {
   const line = document.lineAt(lineNum);
   targetPath = targetPath.trim();
   const pathStartChar = line.text.indexOf(targetPath);
-  const pathStart = new vscode9.Position(lineNum, pathStartChar);
-  const pathEnd = new vscode9.Position(
+  const pathStart = new vscode10.Position(lineNum, pathStartChar);
+  const pathEnd = new vscode10.Position(
     lineNum,
     pathStartChar + targetPath.length
   );
   const ref = {
     type,
-    range: new vscode9.Range(
-      new vscode9.Position(lineNum, 0),
-      new vscode9.Position(lineNum, line.text.length)
+    range: new vscode10.Range(
+      new vscode10.Position(lineNum, 0),
+      new vscode10.Position(lineNum, line.text.length)
     ),
-    pathRange: new vscode9.Range(pathStart, pathEnd),
+    pathRange: new vscode10.Range(pathStart, pathEnd),
     targetPath,
     // io-code-block input/output may reference code-examples
     needsSymlinkResolution: true
@@ -33876,7 +34266,7 @@ function findDirectiveAtPosition(document, position) {
 // src/rst/path-resolver.ts
 var path3 = __toESM(require("path"));
 var fs3 = __toESM(require("fs"));
-var import_shared6 = __toESM(require_dist());
+var import_shared7 = __toESM(require_dist());
 function findSourceDir(startPath) {
   let current = startPath;
   const root = path3.parse(current).root;
@@ -33942,7 +34332,7 @@ async function resolveDirectivePath(rstFilePath, targetPath, workspaceRoot2, opt
   };
 }
 function checkPathExists(absolutePath, workspaceRoot2) {
-  if (workspaceRoot2 && !(0, import_shared6.isPathWithinBoundary)(absolutePath, workspaceRoot2)) {
+  if (workspaceRoot2 && !(0, import_shared7.isPathWithinBoundary)(absolutePath, workspaceRoot2)) {
     return {
       absolutePath,
       exists: false,
@@ -33988,9 +34378,9 @@ async function resolveSymlinkPath(startDir, targetPath) {
 }
 
 // src/rst/LiteralIncludeProviders.ts
-var import_shared7 = __toESM(require_dist());
+var import_shared8 = __toESM(require_dist());
 function getWorkspaceRoot(document) {
-  const workspaceFolder = vscode10.workspace.getWorkspaceFolder(document.uri);
+  const workspaceFolder = vscode11.workspace.getWorkspaceFolder(document.uri);
   return workspaceFolder?.uri.fsPath;
 }
 function resolveTestFilePath(resolvedSnippetPath, workspaceRoot2) {
@@ -34044,17 +34434,17 @@ function getDirectiveLabel(ref) {
   }
 }
 var RstDirectiveCodeLensProvider = class {
-  _onDidChangeCodeLenses = new vscode10.EventEmitter();
+  _onDidChangeCodeLenses = new vscode11.EventEmitter();
   onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
   async provideCodeLenses(document) {
-    const refs = (0, import_shared7.profileSync)(
+    const refs = (0, import_shared8.profileSync)(
       "RstCodeLens.parseDirectives",
       () => parseDirectives(document)
     );
     const lenses = [];
     const workspaceRoot2 = getWorkspaceRoot(document);
     for (const ref of refs) {
-      const resolved = await (0, import_shared7.profile)(
+      const resolved = await (0, import_shared8.profile)(
         "RstCodeLens.resolvePath",
         () => resolveDirectivePath(
           document.uri.fsPath,
@@ -34066,13 +34456,13 @@ var RstDirectiveCodeLensProvider = class {
         )
       );
       const directiveLine = ref.range.start.line;
-      const lensRange = new vscode10.Range(
-        new vscode10.Position(directiveLine, 0),
-        new vscode10.Position(directiveLine, 0)
+      const lensRange = new vscode11.Range(
+        new vscode11.Position(directiveLine, 0),
+        new vscode11.Position(directiveLine, 0)
       );
       if (resolved.exists) {
         lenses.push(
-          new vscode10.CodeLens(lensRange, {
+          new vscode11.CodeLens(lensRange, {
             title: getDirectiveLabel(ref),
             command: "grove.literalinclude.view",
             arguments: [resolved.absolutePath, ref.snippetName, ref.startAfter]
@@ -34085,7 +34475,7 @@ var RstDirectiveCodeLensProvider = class {
           );
           if (testFileResult && fs4.existsSync(testFileResult.testFilePath)) {
             lenses.push(
-              new vscode10.CodeLens(lensRange, {
+              new vscode11.CodeLens(lensRange, {
                 title: `\u{1F9EA} test: ${testFileResult.snippetName}`,
                 command: "grove.literalinclude.view",
                 arguments: [testFileResult.testFilePath, ref.snippetName]
@@ -34095,7 +34485,7 @@ var RstDirectiveCodeLensProvider = class {
         }
       } else {
         lenses.push(
-          new vscode10.CodeLens(lensRange, {
+          new vscode11.CodeLens(lensRange, {
             title: `\u26A0\uFE0F ${resolved.error || "File not found"}`,
             command: ""
           })
@@ -34115,7 +34505,7 @@ var RstDirectiveDefinitionProvider = class {
       return void 0;
     }
     const workspaceRoot2 = getWorkspaceRoot(document);
-    const resolved = await (0, import_shared7.profile)(
+    const resolved = await (0, import_shared8.profile)(
       "RstDefinition.resolvePath",
       () => resolveDirectivePath(document.uri.fsPath, ref.targetPath, workspaceRoot2, {
         resolveSymlinks: ref.needsSymlinkResolution
@@ -34124,16 +34514,16 @@ var RstDirectiveDefinitionProvider = class {
     if (!resolved.exists) {
       return void 0;
     }
-    const targetUri = vscode10.Uri.file(resolved.absolutePath);
+    const targetUri = vscode11.Uri.file(resolved.absolutePath);
     if (ref.snippetName) {
       const lineNumber = await findSnippetLine(
         resolved.absolutePath,
         ref.snippetName
       );
       if (lineNumber !== void 0) {
-        return new vscode10.Location(
+        return new vscode11.Location(
           targetUri,
-          new vscode10.Position(lineNumber, 0)
+          new vscode11.Position(lineNumber, 0)
         );
       }
     }
@@ -34143,25 +34533,25 @@ var RstDirectiveDefinitionProvider = class {
         ref.startAfter
       );
       if (lineNumber !== void 0) {
-        return new vscode10.Location(
+        return new vscode11.Location(
           targetUri,
-          new vscode10.Position(lineNumber, 0)
+          new vscode11.Position(lineNumber, 0)
         );
       }
     }
-    return new vscode10.Location(targetUri, new vscode10.Position(0, 0));
+    return new vscode11.Location(targetUri, new vscode11.Position(0, 0));
   }
 };
 var RstDirectiveLinkProvider = class {
   async provideDocumentLinks(document) {
-    const refs = (0, import_shared7.profileSync)(
+    const refs = (0, import_shared8.profileSync)(
       "RstLinks.parseDirectives",
       () => parseDirectives(document)
     );
     const links = [];
     const workspaceRoot2 = getWorkspaceRoot(document);
     for (const ref of refs) {
-      const resolved = await (0, import_shared7.profile)(
+      const resolved = await (0, import_shared8.profile)(
         "RstLinks.resolvePath",
         () => resolveDirectivePath(
           document.uri.fsPath,
@@ -34173,14 +34563,14 @@ var RstDirectiveLinkProvider = class {
         )
       );
       if (resolved.exists) {
-        const link = new vscode10.DocumentLink(
+        const link = new vscode11.DocumentLink(
           ref.pathRange,
-          vscode10.Uri.file(resolved.absolutePath)
+          vscode11.Uri.file(resolved.absolutePath)
         );
         link.tooltip = `Open ${path4.basename(resolved.absolutePath)}`;
         links.push(link);
       } else {
-        const link = new vscode10.DocumentLink(ref.pathRange);
+        const link = new vscode11.DocumentLink(ref.pathRange);
         link.tooltip = resolved.error || "File not found";
         links.push(link);
       }
@@ -34228,33 +34618,33 @@ function registerLiteralIncludeProviders(context) {
   };
   const selectors = [rstSelector, txtSelector];
   context.subscriptions.push(
-    vscode10.commands.registerCommand(
+    vscode11.commands.registerCommand(
       "grove.literalinclude.view",
       async (filePath, snippetName, startAfter) => {
-        const uri = vscode10.Uri.file(filePath);
-        const document = await vscode10.workspace.openTextDocument(uri);
-        const editor = await vscode10.window.showTextDocument(document, {
-          viewColumn: vscode10.ViewColumn.Beside,
+        const uri = vscode11.Uri.file(filePath);
+        const document = await vscode11.workspace.openTextDocument(uri);
+        const editor = await vscode11.window.showTextDocument(document, {
+          viewColumn: vscode11.ViewColumn.Beside,
           preview: true
         });
         if (snippetName) {
           const lineNumber = await findSnippetLine(filePath, snippetName);
           if (lineNumber !== void 0) {
-            const position = new vscode10.Position(lineNumber, 0);
-            editor.selection = new vscode10.Selection(position, position);
+            const position = new vscode11.Position(lineNumber, 0);
+            editor.selection = new vscode11.Selection(position, position);
             editor.revealRange(
-              new vscode10.Range(position, position),
-              vscode10.TextEditorRevealType.InCenter
+              new vscode11.Range(position, position),
+              vscode11.TextEditorRevealType.InCenter
             );
           }
         } else if (startAfter) {
           const lineNumber = await findMarkerLine(filePath, startAfter);
           if (lineNumber !== void 0) {
-            const position = new vscode10.Position(lineNumber, 0);
-            editor.selection = new vscode10.Selection(position, position);
+            const position = new vscode11.Position(lineNumber, 0);
+            editor.selection = new vscode11.Selection(position, position);
             editor.revealRange(
-              new vscode10.Range(position, position),
-              vscode10.TextEditorRevealType.InCenter
+              new vscode11.Range(position, position),
+              vscode11.TextEditorRevealType.InCenter
             );
           }
         }
@@ -34263,15 +34653,15 @@ function registerLiteralIncludeProviders(context) {
   );
   for (const selector of selectors) {
     context.subscriptions.push(
-      vscode10.languages.registerCodeLensProvider(
+      vscode11.languages.registerCodeLensProvider(
         selector,
         new RstDirectiveCodeLensProvider()
       ),
-      vscode10.languages.registerDefinitionProvider(
+      vscode11.languages.registerDefinitionProvider(
         selector,
         new RstDirectiveDefinitionProvider()
       ),
-      vscode10.languages.registerDocumentLinkProvider(
+      vscode11.languages.registerDocumentLinkProvider(
         selector,
         new RstDirectiveLinkProvider()
       )
@@ -34283,7 +34673,7 @@ function registerLiteralIncludeProviders(context) {
 var path6 = __toESM(require("path"));
 
 // src/preview/bluehawk-runner.ts
-var vscode11 = __toESM(require("vscode"));
+var vscode12 = __toESM(require("vscode"));
 var import_child_process = require("child_process");
 var import_util = require("util");
 var path5 = __toESM(require("path"));
@@ -34291,7 +34681,7 @@ var fs5 = __toESM(require("fs"));
 var os = __toESM(require("os"));
 var execAsync = (0, import_util.promisify)(import_child_process.exec);
 function getBluehawkCommand() {
-  const config = vscode11.workspace.getConfiguration("grove");
+  const config = vscode12.workspace.getConfiguration("grove");
   const customPath = config.get("bluehawkPath", "");
   if (customPath && customPath.trim().length > 0) {
     return customPath;
@@ -34419,7 +34809,7 @@ function detectLanguage(filePath) {
 }
 
 // src/preview/BluehawkPreview.ts
-var import_shared8 = __toESM(require_dist());
+var import_shared9 = __toESM(require_dist());
 var BluehawkPreviewProvider = class {
   constructor(_extensionUri) {
     this._extensionUri = _extensionUri;
@@ -34467,7 +34857,7 @@ var BluehawkPreviewProvider = class {
       command: "loading",
       fileName: path6.basename(document.uri.fsPath)
     });
-    const result = await (0, import_shared8.profile)(
+    const result = await (0, import_shared9.profile)(
       "Bluehawk.dryRun",
       () => runBluehawkDryRun(document.uri.fsPath)
     );
@@ -34641,14 +35031,14 @@ var BluehawkPreviewProvider = class {
 };
 
 // src/test-codelens/index.ts
-var vscode17 = __toESM(require("vscode"));
+var vscode18 = __toESM(require("vscode"));
 var path7 = __toESM(require("path"));
 
 // src/test-codelens/TestCodeLensProvider.ts
-var vscode13 = __toESM(require("vscode"));
+var vscode14 = __toESM(require("vscode"));
 
 // src/test-codelens/test-parser.ts
-var vscode12 = __toESM(require("vscode"));
+var vscode13 = __toESM(require("vscode"));
 function parseTestBlocks(document) {
   const blocks = [];
   const testPattern = /^(\s*)(describe|it|test)(?:\.only|\.skip)?\s*\(\s*(['"`])(.+?)\3/;
@@ -34688,9 +35078,9 @@ function parseTestBlocks(document) {
       name,
       line: lineNum,
       character: indent,
-      range: new vscode12.Range(
-        new vscode12.Position(lineNum, 0),
-        new vscode12.Position(lineNum, line.text.length)
+      range: new vscode13.Range(
+        new vscode13.Position(lineNum, 0),
+        new vscode13.Position(lineNum, line.text.length)
       ),
       parentDescribe
     });
@@ -34723,7 +35113,7 @@ function escapeRegex2(str) {
 
 // src/test-codelens/TestCodeLensProvider.ts
 var TestCodeLensProvider = class {
-  _onDidChangeCodeLenses = new vscode13.EventEmitter();
+  _onDidChangeCodeLenses = new vscode14.EventEmitter();
   onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
   /** Currently running test (if any) */
   runningTest = null;
@@ -34754,15 +35144,15 @@ var TestCodeLensProvider = class {
     const blocks = parseTestBlocks(document);
     const lenses = [];
     for (const block of blocks) {
-      const lensRange = new vscode13.Range(
-        new vscode13.Position(block.line, 0),
-        new vscode13.Position(block.line, 0)
+      const lensRange = new vscode14.Range(
+        new vscode14.Position(block.line, 0),
+        new vscode14.Position(block.line, 0)
       );
       const testNamePattern = buildTestNamePattern(block);
       const isRunning = this.isRunning(document.uri, testNamePattern);
       if (isRunning) {
         lenses.push(
-          new vscode13.CodeLens(lensRange, {
+          new vscode14.CodeLens(lensRange, {
             title: `$(sync~spin) Running...`,
             command: "",
             tooltip: `Running ${block.type}: "${block.name}"`
@@ -34770,7 +35160,7 @@ var TestCodeLensProvider = class {
         );
       } else {
         lenses.push(
-          new vscode13.CodeLens(lensRange, {
+          new vscode14.CodeLens(lensRange, {
             title: `$(play) Run`,
             command: "grove.runTestBlock",
             arguments: [document.uri, testNamePattern, block.name, block.type],
@@ -34779,7 +35169,7 @@ var TestCodeLensProvider = class {
         );
         if (block.type !== "describe") {
           lenses.push(
-            new vscode13.CodeLens(lensRange, {
+            new vscode14.CodeLens(lensRange, {
               title: `$(debug) Debug`,
               command: "grove.debugTestBlock",
               arguments: [
@@ -34794,7 +35184,7 @@ var TestCodeLensProvider = class {
         }
         if (block.type === "describe") {
           lenses.push(
-            new vscode13.CodeLens(lensRange, {
+            new vscode14.CodeLens(lensRange, {
               title: `$(run-all) Run All`,
               command: "grove.runTestBlock",
               arguments: [
@@ -34817,16 +35207,16 @@ var TestCodeLensProvider = class {
 };
 
 // src/test-codelens/TestHoverProvider.ts
-var vscode15 = __toESM(require("vscode"));
+var vscode16 = __toESM(require("vscode"));
 
 // src/test-codelens/TestResultStore.ts
-var vscode14 = __toESM(require("vscode"));
+var vscode15 = __toESM(require("vscode"));
 function makeKey(uri, testNamePattern) {
   return `${uri.toString()}::${testNamePattern}`;
 }
 var TestResultStoreImpl = class {
   results = /* @__PURE__ */ new Map();
-  _onDidChange = new vscode14.EventEmitter();
+  _onDidChange = new vscode15.EventEmitter();
   /** Event fired when results change for a file */
   onDidChange = this._onDidChange.event;
   /**
@@ -34916,7 +35306,7 @@ var TestHoverProvider = class {
     }
     const testNamePattern = buildTestNamePattern(block);
     const result = testResultStore.get(document.uri, testNamePattern);
-    const md = new vscode15.MarkdownString();
+    const md = new vscode16.MarkdownString();
     md.isTrusted = true;
     md.supportHtml = true;
     const typeLabel = block.type === "describe" ? "Test Suite" : "Test";
@@ -34979,20 +35369,20 @@ ${truncate(result.errorMessage, 500)}
         ` | [\u{1F527} Debug](command:grove.debugTestBlock?${runArgs} "Debug this test")`
       );
     }
-    return new vscode15.Hover(md, block.range);
+    return new vscode16.Hover(md, block.range);
   }
 };
 
 // src/test-codelens/TestDecorations.ts
-var vscode16 = __toESM(require("vscode"));
+var vscode17 = __toESM(require("vscode"));
 var passDecorationType;
 var failDecorationType;
 function initTestDecorations(context) {
-  passDecorationType = vscode16.window.createTextEditorDecorationType({
-    backgroundColor: new vscode16.ThemeColor("testing.passBorder"),
+  passDecorationType = vscode17.window.createTextEditorDecorationType({
+    backgroundColor: new vscode17.ThemeColor("testing.passBorder"),
     isWholeLine: true,
-    overviewRulerColor: new vscode16.ThemeColor("testing.iconPassed"),
-    overviewRulerLane: vscode16.OverviewRulerLane.Left,
+    overviewRulerColor: new vscode17.ThemeColor("testing.iconPassed"),
+    overviewRulerLane: vscode17.OverviewRulerLane.Left,
     light: {
       backgroundColor: "rgba(40, 167, 69, 0.12)"
     },
@@ -35000,11 +35390,11 @@ function initTestDecorations(context) {
       backgroundColor: "rgba(40, 167, 69, 0.15)"
     }
   });
-  failDecorationType = vscode16.window.createTextEditorDecorationType({
-    backgroundColor: new vscode16.ThemeColor("testing.failBorder"),
+  failDecorationType = vscode17.window.createTextEditorDecorationType({
+    backgroundColor: new vscode17.ThemeColor("testing.failBorder"),
     isWholeLine: true,
-    overviewRulerColor: new vscode16.ThemeColor("testing.iconFailed"),
-    overviewRulerLane: vscode16.OverviewRulerLane.Left,
+    overviewRulerColor: new vscode17.ThemeColor("testing.iconFailed"),
+    overviewRulerLane: vscode17.OverviewRulerLane.Left,
     light: {
       backgroundColor: "rgba(220, 53, 69, 0.12)"
     },
@@ -35014,7 +35404,7 @@ function initTestDecorations(context) {
   });
   context.subscriptions.push(passDecorationType, failDecorationType);
   context.subscriptions.push(
-    vscode16.window.onDidChangeActiveTextEditor((editor) => {
+    vscode17.window.onDidChangeActiveTextEditor((editor) => {
       if (editor) {
         updateDecorationsForEditor(editor);
       }
@@ -35022,14 +35412,14 @@ function initTestDecorations(context) {
   );
   context.subscriptions.push(
     testResultStore.onDidChange((uri) => {
-      const editor = vscode16.window.activeTextEditor;
+      const editor = vscode17.window.activeTextEditor;
       if (editor && editor.document.uri.toString() === uri.toString()) {
         updateDecorationsForEditor(editor);
       }
     })
   );
-  if (vscode16.window.activeTextEditor) {
-    updateDecorationsForEditor(vscode16.window.activeTextEditor);
+  if (vscode17.window.activeTextEditor) {
+    updateDecorationsForEditor(vscode17.window.activeTextEditor);
   }
 }
 function updateDecorationsForEditor(editor) {
@@ -35048,9 +35438,9 @@ function updateDecorationsForEditor(editor) {
     if (!result) {
       continue;
     }
-    const range = new vscode16.Range(
-      new vscode16.Position(block.line, 0),
-      new vscode16.Position(block.line, document.lineAt(block.line).text.length)
+    const range = new vscode17.Range(
+      new vscode17.Position(block.line, 0),
+      new vscode17.Position(block.line, document.lineAt(block.line).text.length)
     );
     const decoration = {
       range,
@@ -35066,7 +35456,7 @@ function updateDecorationsForEditor(editor) {
   editor.setDecorations(failDecorationType, failRanges);
 }
 function createHoverMessage(result, testName) {
-  const md = new vscode16.MarkdownString();
+  const md = new vscode17.MarkdownString();
   const icon = result.passed ? "\u2705" : "\u274C";
   const status = result.passed ? "Passed" : "Failed";
   md.appendMarkdown(`**${icon} ${status}**
@@ -35099,14 +35489,14 @@ function registerTestCodeLens(context) {
     { language: "typescriptreact", scheme: "file" }
   ];
   context.subscriptions.push(
-    vscode17.languages.registerCodeLensProvider(selectors, codeLensProvider)
+    vscode18.languages.registerCodeLensProvider(selectors, codeLensProvider)
   );
   context.subscriptions.push(
-    vscode17.languages.registerHoverProvider(selectors, new TestHoverProvider())
+    vscode18.languages.registerHoverProvider(selectors, new TestHoverProvider())
   );
   initTestDecorations(context);
   context.subscriptions.push(
-    vscode17.commands.registerCommand(
+    vscode18.commands.registerCommand(
       "grove.runTestBlock",
       async (uri, testNamePattern, testName, blockType) => {
         await runTestBlock(uri, testNamePattern, testName, blockType, false);
@@ -35114,7 +35504,7 @@ function registerTestCodeLens(context) {
     )
   );
   context.subscriptions.push(
-    vscode17.commands.registerCommand(
+    vscode18.commands.registerCommand(
       "grove.debugTestBlock",
       async (uri, testNamePattern, testName, blockType) => {
         await runTestBlock(uri, testNamePattern, testName, blockType, true);
@@ -35122,7 +35512,7 @@ function registerTestCodeLens(context) {
     )
   );
   context.subscriptions.push(
-    vscode17.workspace.onDidSaveTextDocument(() => {
+    vscode18.workspace.onDidSaveTextDocument(() => {
       codeLensProvider.refresh();
     })
   );
@@ -35135,9 +35525,9 @@ async function runTestBlock(uri, testNamePattern, testName, blockType, debug) {
   const action = debug ? "Debugging" : "Running";
   codeLensProvider.setRunning(uri, testNamePattern);
   try {
-    await vscode17.window.withProgress(
+    await vscode18.window.withProgress(
       {
-        location: vscode17.ProgressLocation.Notification,
+        location: vscode18.ProgressLocation.Notification,
         title: `${action} ${displayType}: "${testName}"`,
         cancellable: false
       },
@@ -35148,7 +35538,7 @@ async function runTestBlock(uri, testNamePattern, testName, blockType, debug) {
           testNamePattern
         });
         if (!outcome) return;
-        const document = await vscode17.workspace.openTextDocument(uri);
+        const document = await vscode18.workspace.openTextDocument(uri);
         const blocks = parseTestBlocks(document);
         const block = blocks.find(
           (b) => buildTestNamePattern(b) === testNamePattern
@@ -35159,7 +35549,7 @@ async function runTestBlock(uri, testNamePattern, testName, blockType, debug) {
           line: block?.line ?? 0,
           errorMessage: outcome.result.success ? void 0 : extractErrorMessage(outcome.result.output)
         });
-        const editor = vscode17.window.activeTextEditor;
+        const editor = vscode18.window.activeTextEditor;
         if (editor && editor.document.uri.toString() === uri.toString()) {
           updateDecorationsForEditor(editor);
         }
@@ -35192,13 +35582,13 @@ function extractErrorMessage(output) {
 }
 
 // src/snippet-codelens/index.ts
-var vscode22 = __toESM(require("vscode"));
+var vscode23 = __toESM(require("vscode"));
 
 // src/snippet-codelens/SnippetCodeLensProvider.ts
-var vscode20 = __toESM(require("vscode"));
+var vscode21 = __toESM(require("vscode"));
 
 // src/snippet-codelens/snippet-parser.ts
-var vscode18 = __toESM(require("vscode"));
+var vscode19 = __toESM(require("vscode"));
 var SNIPPET_START_PATTERN = /(?:\/\/|#|\/\*|--|<!--)\s*:snippet-start:\s*(\S+)/;
 function mightContainSnippets(document) {
   const ext = document.uri.fsPath.split(".").pop()?.toLowerCase();
@@ -35222,9 +35612,9 @@ function parseSnippetBlocks(document) {
       blocks.push({
         name: snippetName,
         line: lineNum,
-        range: new vscode18.Range(
-          new vscode18.Position(lineNum, 0),
-          new vscode18.Position(lineNum, line.text.length)
+        range: new vscode19.Range(
+          new vscode19.Position(lineNum, 0),
+          new vscode19.Position(lineNum, line.text.length)
         ),
         filePath: document.uri.fsPath
       });
@@ -35234,10 +35624,10 @@ function parseSnippetBlocks(document) {
 }
 
 // src/snippet-codelens/ripgrep-searcher.ts
-var vscode19 = __toESM(require("vscode"));
+var vscode20 = __toESM(require("vscode"));
 var import_child_process2 = require("child_process");
 var import_ripgrep = require("@vscode/ripgrep");
-var import_shared9 = __toESM(require_dist());
+var import_shared10 = __toESM(require_dist());
 var CACHE_TTL_MS = 5 * 60 * 1e3;
 var CACHE_MAX_ENTRIES = 50;
 var referenceCache = /* @__PURE__ */ new Map();
@@ -35276,14 +35666,14 @@ async function findSnippetReferencesWithRipgrep(snippetName, sourceFileUri) {
   if (cached) {
     return cached;
   }
-  const workspaceFolders = vscode19.workspace.workspaceFolders;
+  const workspaceFolders = vscode20.workspace.workspaceFolders;
   if (!workspaceFolders || workspaceFolders.length === 0) {
     return [];
   }
   const references = [];
   const seen = /* @__PURE__ */ new Set();
   for (const folder of workspaceFolders) {
-    const results = await (0, import_shared9.profile)(
+    const results = await (0, import_shared10.profile)(
       "Ripgrep.search",
       () => runRipgrep(snippetName, folder.uri.fsPath, snippetName, sourceExt)
     );
@@ -35344,7 +35734,7 @@ async function runRipgrep(pattern, cwd, snippetName, sourceExt) {
               const column = data.submatches?.[0]?.start ?? 0;
               const absolutePath = filePath.startsWith("/") ? filePath : `${cwd}/${filePath}`;
               references.push({
-                uri: vscode19.Uri.file(absolutePath),
+                uri: vscode20.Uri.file(absolutePath),
                 line: lineNumber - 1,
                 // Convert to 0-based
                 column,
@@ -35364,20 +35754,20 @@ async function runRipgrep(pattern, cwd, snippetName, sourceExt) {
 }
 
 // src/snippet-codelens/SnippetCodeLensProvider.ts
-var import_shared10 = __toESM(require_dist());
+var import_shared11 = __toESM(require_dist());
 var SnippetCodeLensProvider = class {
-  _onDidChangeCodeLenses = new vscode20.EventEmitter();
+  _onDidChangeCodeLenses = new vscode21.EventEmitter();
   onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
   async provideCodeLenses(document) {
     if (!mightContainSnippets(document)) {
       return [];
     }
-    const blocks = (0, import_shared10.profileSync)(
+    const blocks = (0, import_shared11.profileSync)(
       "SnippetCodeLens.parseBlocks",
       () => parseSnippetBlocks(document)
     );
     const lenses = [];
-    const referenceCounts = await (0, import_shared10.profile)(
+    const referenceCounts = await (0, import_shared11.profile)(
       "SnippetCodeLens.fetchAllReferences",
       () => Promise.all(
         blocks.map(async (block) => {
@@ -35392,13 +35782,13 @@ var SnippetCodeLensProvider = class {
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
       const refCount = referenceCounts[i];
-      const lensRange = new vscode20.Range(
-        new vscode20.Position(block.line, 0),
-        new vscode20.Position(block.line, 0)
+      const lensRange = new vscode21.Range(
+        new vscode21.Position(block.line, 0),
+        new vscode21.Position(block.line, 0)
       );
       const refLabel = refCount === 1 ? "1 reference" : `${refCount} references`;
       lenses.push(
-        new vscode20.CodeLens(lensRange, {
+        new vscode21.CodeLens(lensRange, {
           title: `$(references)  ${refLabel}`,
           command: "grove.peekSnippetReferences",
           arguments: [document.uri, block.name, block.line],
@@ -35414,10 +35804,10 @@ var SnippetCodeLensProvider = class {
 };
 
 // src/snippet-codelens/reference-searcher.ts
-var vscode21 = __toESM(require("vscode"));
+var vscode22 = __toESM(require("vscode"));
 async function openSnippetSearch(snippetName) {
   const searchQuery = `${snippetName}`;
-  await vscode21.commands.executeCommand("workbench.action.findInFiles", {
+  await vscode22.commands.executeCommand("workbench.action.findInFiles", {
     query: searchQuery,
     filesToInclude: "**/*.{rst,txt}",
     triggerSearch: true,
@@ -35452,13 +35842,13 @@ function registerSnippetCodeLens(context) {
     { language: "json", scheme: "file" }
   ];
   context.subscriptions.push(
-    vscode22.languages.registerCodeLensProvider(
+    vscode23.languages.registerCodeLensProvider(
       selectors,
       snippetCodeLensProvider
     )
   );
   context.subscriptions.push(
-    vscode22.commands.registerCommand(
+    vscode23.commands.registerCommand(
       "grove.findSnippetReferences",
       async (_uri, snippetName, _line) => {
         await openSnippetSearch(snippetName);
@@ -35466,7 +35856,7 @@ function registerSnippetCodeLens(context) {
     )
   );
   context.subscriptions.push(
-    vscode22.commands.registerCommand(
+    vscode23.commands.registerCommand(
       "grove.peekSnippetReferences",
       async (uri, snippetName, line) => {
         await peekSnippetReferences(uri, snippetName, line);
@@ -35475,9 +35865,9 @@ function registerSnippetCodeLens(context) {
   );
 }
 async function peekSnippetReferences(uri, snippetName, _line) {
-  const references = await vscode22.window.withProgress(
+  const references = await vscode23.window.withProgress(
     {
-      location: vscode22.ProgressLocation.Notification,
+      location: vscode23.ProgressLocation.Notification,
       title: `Finding references to "${snippetName}"...`,
       cancellable: false
     },
@@ -35486,12 +35876,12 @@ async function peekSnippetReferences(uri, snippetName, _line) {
     }
   );
   if (references.length === 0) {
-    vscode22.window.showInformationMessage(
+    vscode23.window.showInformationMessage(
       `No RST files reference snippet "${snippetName}"`
     );
     return;
   }
-  const workspaceFolder = vscode22.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+  const workspaceFolder = vscode23.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
   const items = references.map((ref) => {
     const fullPath = ref.uri.fsPath;
     const relativePath = fullPath.startsWith(workspaceFolder) ? fullPath.slice(workspaceFolder.length + 1) : fullPath;
@@ -35507,26 +35897,26 @@ async function peekSnippetReferences(uri, snippetName, _line) {
       column: ref.column
     };
   });
-  const selected = await vscode22.window.showQuickPick(items, {
+  const selected = await vscode23.window.showQuickPick(items, {
     title: `References to "${snippetName}" (${references.length} found)`,
     placeHolder: "Select a reference to open",
     matchOnDescription: true,
     matchOnDetail: true
   });
   if (selected) {
-    const doc = await vscode22.workspace.openTextDocument(selected.uri);
-    const editor = await vscode22.window.showTextDocument(doc);
-    const position = new vscode22.Position(selected.line, selected.column);
-    editor.selection = new vscode22.Selection(position, position);
+    const doc = await vscode23.workspace.openTextDocument(selected.uri);
+    const editor = await vscode23.window.showTextDocument(doc);
+    const position = new vscode23.Position(selected.line, selected.column);
+    editor.selection = new vscode23.Selection(position, position);
     editor.revealRange(
-      new vscode22.Range(position, position),
-      vscode22.TextEditorRevealType.InCenter
+      new vscode23.Range(position, position),
+      vscode23.TextEditorRevealType.InCenter
     );
   }
 }
 
 // src/extension.ts
-var import_shared11 = __toESM(require_dist());
+var import_shared12 = __toESM(require_dist());
 var currentStatus = null;
 var mongoConnectionManager;
 function getDetectedProjects() {
@@ -35545,7 +35935,7 @@ function getApi2() {
   };
 }
 function getConfig() {
-  const config = vscode23.workspace.getConfiguration("grove");
+  const config = vscode24.workspace.getConfiguration("grove");
   return {
     autoDetect: config.get("autoDetect", true),
     bluehawkPath: config.get("bluehawkPath", "")
@@ -35553,17 +35943,17 @@ function getConfig() {
 }
 var PROFILER_REPORTS_DIR = ".grove/profiler-reports";
 function getReportsDir() {
-  const workspaceFolders = vscode23.workspace.workspaceFolders;
+  const workspaceFolders = vscode24.workspace.workspaceFolders;
   if (!workspaceFolders || workspaceFolders.length === 0) {
     return null;
   }
-  return vscode23.Uri.joinPath(workspaceFolders[0].uri, PROFILER_REPORTS_DIR);
+  return vscode24.Uri.joinPath(workspaceFolders[0].uri, PROFILER_REPORTS_DIR);
 }
 async function getGitInfo() {
   try {
-    const workspaceFolders = vscode23.workspace.workspaceFolders;
+    const workspaceFolders = vscode24.workspace.workspaceFolders;
     if (!workspaceFolders) return {};
-    const gitExt = vscode23.extensions.getExtension("vscode.git");
+    const gitExt = vscode24.extensions.getExtension("vscode.git");
     if (!gitExt) return {};
     const git = gitExt.exports.getAPI(1);
     const repo = git.repositories[0];
@@ -35579,72 +35969,72 @@ async function getGitInfo() {
 async function savePerformanceReport(context, outputChannel) {
   const reportsDir = getReportsDir();
   if (!reportsDir) {
-    vscode23.window.showErrorMessage("No workspace folder open.");
+    vscode24.window.showErrorMessage("No workspace folder open.");
     return;
   }
-  const label = await vscode23.window.showInputBox({
+  const label = await vscode24.window.showInputBox({
     prompt: "Enter a label for this report (optional)",
     placeHolder: "e.g., before-optimization, baseline"
   });
   const gitInfo = await getGitInfo();
-  const report = (0, import_shared11.exportReport)({
+  const report = (0, import_shared12.exportReport)({
     label: label || void 0,
     gitCommit: gitInfo.commit,
     gitBranch: gitInfo.branch,
     extensionVersion: context.extension.packageJSON.version,
-    workspaceFolderCount: vscode23.workspace.workspaceFolders?.length ?? 0
+    workspaceFolderCount: vscode24.workspace.workspaceFolders?.length ?? 0
   });
   const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
   const labelPart = label ? `_${label.replace(/[^a-zA-Z0-9-]/g, "-")}` : "";
   const filename = `${timestamp}${labelPart}.json`;
   try {
-    await vscode23.workspace.fs.createDirectory(reportsDir);
-    const fileUri = vscode23.Uri.joinPath(reportsDir, filename);
+    await vscode24.workspace.fs.createDirectory(reportsDir);
+    const fileUri = vscode24.Uri.joinPath(reportsDir, filename);
     const content = JSON.stringify(report, null, 2);
-    await vscode23.workspace.fs.writeFile(fileUri, Buffer.from(content, "utf-8"));
+    await vscode24.workspace.fs.writeFile(fileUri, Buffer.from(content, "utf-8"));
     outputChannel.info(`Performance report saved: ${filename}`);
-    vscode23.window.showInformationMessage(
+    vscode24.window.showInformationMessage(
       `Performance report saved: ${filename}`,
       "Open File"
     ).then((action) => {
       if (action === "Open File") {
-        vscode23.window.showTextDocument(fileUri);
+        vscode24.window.showTextDocument(fileUri);
       }
     });
   } catch (err) {
-    vscode23.window.showErrorMessage(`Failed to save report: ${err}`);
+    vscode24.window.showErrorMessage(`Failed to save report: ${err}`);
   }
 }
 async function comparePerformanceReports(outputChannel) {
   const reportsDir = getReportsDir();
   if (!reportsDir) {
-    vscode23.window.showErrorMessage("No workspace folder open.");
+    vscode24.window.showErrorMessage("No workspace folder open.");
     return;
   }
   let files;
   try {
-    files = await vscode23.workspace.fs.readDirectory(reportsDir);
+    files = await vscode24.workspace.fs.readDirectory(reportsDir);
   } catch {
-    vscode23.window.showInformationMessage(
+    vscode24.window.showInformationMessage(
       "No saved reports found. Save a report first with 'Grove: Save Performance Report'."
     );
     return;
   }
   const jsonFiles = files.filter(
-    ([name, type]) => type === vscode23.FileType.File && name.endsWith(".json")
+    ([name, type]) => type === vscode24.FileType.File && name.endsWith(".json")
   ).map(([name]) => name).sort().reverse();
   if (jsonFiles.length < 2) {
-    vscode23.window.showInformationMessage(
+    vscode24.window.showInformationMessage(
       "Need at least 2 saved reports to compare. Save more reports first."
     );
     return;
   }
-  const baselineFile = await vscode23.window.showQuickPick(jsonFiles, {
+  const baselineFile = await vscode24.window.showQuickPick(jsonFiles, {
     placeHolder: "Select BASELINE report (older)"
   });
   if (!baselineFile) return;
   const currentOptions = jsonFiles.filter((f) => f !== baselineFile);
-  const currentFile = await vscode23.window.showQuickPick(
+  const currentFile = await vscode24.window.showQuickPick(
     ["[Current Session]", ...currentOptions],
     { placeHolder: "Select CURRENT report (newer) or use current session" }
   );
@@ -35652,48 +36042,48 @@ async function comparePerformanceReports(outputChannel) {
   let baseline;
   let current;
   try {
-    const baselineUri = vscode23.Uri.joinPath(reportsDir, baselineFile);
-    const baselineData = await vscode23.workspace.fs.readFile(baselineUri);
-    const parsed = (0, import_shared11.importReport)(new TextDecoder().decode(baselineData));
+    const baselineUri = vscode24.Uri.joinPath(reportsDir, baselineFile);
+    const baselineData = await vscode24.workspace.fs.readFile(baselineUri);
+    const parsed = (0, import_shared12.importReport)(new TextDecoder().decode(baselineData));
     if (!parsed) throw new Error("Invalid baseline report format");
     baseline = parsed;
   } catch (err) {
-    vscode23.window.showErrorMessage(`Failed to load baseline report: ${err}`);
+    vscode24.window.showErrorMessage(`Failed to load baseline report: ${err}`);
     return;
   }
   if (currentFile === "[Current Session]") {
-    current = (0, import_shared11.exportReport)();
+    current = (0, import_shared12.exportReport)();
   } else {
     try {
-      const currentUri = vscode23.Uri.joinPath(reportsDir, currentFile);
-      const currentData = await vscode23.workspace.fs.readFile(currentUri);
-      const parsed = (0, import_shared11.importReport)(new TextDecoder().decode(currentData));
+      const currentUri = vscode24.Uri.joinPath(reportsDir, currentFile);
+      const currentData = await vscode24.workspace.fs.readFile(currentUri);
+      const parsed = (0, import_shared12.importReport)(new TextDecoder().decode(currentData));
       if (!parsed) throw new Error("Invalid current report format");
       current = parsed;
     } catch (err) {
-      vscode23.window.showErrorMessage(`Failed to load current report: ${err}`);
+      vscode24.window.showErrorMessage(`Failed to load current report: ${err}`);
       return;
     }
   }
-  const comparison = (0, import_shared11.compareReports)(baseline, current);
-  const formattedReport = (0, import_shared11.formatComparison)(comparison);
+  const comparison = (0, import_shared12.compareReports)(baseline, current);
+  const formattedReport = (0, import_shared12.formatComparison)(comparison);
   outputChannel.info("\n" + formattedReport);
   outputChannel.show();
   const { summary } = comparison;
   if (summary.regressed > 0) {
-    vscode23.window.showWarningMessage(
+    vscode24.window.showWarningMessage(
       `\u26A0\uFE0F ${summary.regressed} operation(s) regressed, ${summary.improved} improved`
     );
   } else if (summary.improved > 0) {
-    vscode23.window.showInformationMessage(
+    vscode24.window.showInformationMessage(
       `\u2705 ${summary.improved} operation(s) improved, no regressions`
     );
   } else {
-    vscode23.window.showInformationMessage("No significant changes detected.");
+    vscode24.window.showInformationMessage("No significant changes detected.");
   }
 }
 async function getStatus() {
-  const workspaceFolders = vscode23.workspace.workspaceFolders;
+  const workspaceFolders = vscode24.workspace.workspaceFolders;
   const mongoStatus = mongoConnectionManager?.status ?? {
     connected: false,
     clusterType: "unknown"
@@ -35720,9 +36110,9 @@ async function getStatus() {
   return currentStatus;
 }
 async function detectProjectsWithProgress(_workspacePath) {
-  return vscode23.window.withProgress(
+  return vscode24.window.withProgress(
     {
-      location: vscode23.ProgressLocation.Window,
+      location: vscode24.ProgressLocation.Window,
       title: "Grove: Detecting projects..."
     },
     async (progress) => {
@@ -35734,13 +36124,13 @@ async function detectProjectsWithProgress(_workspacePath) {
   );
 }
 async function activate(context) {
-  (0, import_shared11.mark)("activation.start");
+  (0, import_shared12.mark)("activation.start");
   initLogger(context);
   const outputChannel = getLogChannel();
   outputChannel.info("Grove extension activating...");
-  (0, import_shared11.initProfiler)(context, outputChannel);
-  (0, import_shared11.mark)("activation.profilerReady");
-  const workspaceFolders = vscode23.workspace.workspaceFolders;
+  (0, import_shared12.initProfiler)(context, outputChannel);
+  (0, import_shared12.mark)("activation.profilerReady");
+  const workspaceFolders = vscode24.workspace.workspaceFolders;
   const workspaceRoot2 = workspaceFolders?.[0]?.uri.fsPath;
   if (workspaceRoot2) {
     initProjectCache(context, workspaceRoot2);
@@ -35748,20 +36138,20 @@ async function activate(context) {
   const config = getConfig();
   const panelProvider = new GrovePanelProvider(context.extensionUri, getStatus);
   context.subscriptions.push(
-    vscode23.window.registerWebviewViewProvider(
+    vscode24.window.registerWebviewViewProvider(
       GrovePanelProvider.viewType,
       panelProvider
     )
   );
   context.subscriptions.push(
-    vscode23.commands.registerCommand("grove.refreshPanel", () => {
+    vscode24.commands.registerCommand("grove.refreshPanel", () => {
       invalidate();
       panelProvider.refresh();
     })
   );
   let status;
   if (config.autoDetect && workspaceFolders) {
-    const projects = await (0, import_shared11.profile)(
+    const projects = await (0, import_shared12.profile)(
       "activation.detectProjects",
       () => detectProjectsWithProgress(workspaceFolders[0].uri.fsPath)
     );
@@ -35776,10 +36166,10 @@ async function activate(context) {
   } else {
     status = await getStatus();
   }
-  (0, import_shared11.mark)("activation.projectsDetected");
+  (0, import_shared12.mark)("activation.projectsDetected");
   initDiagnostics(context);
   if (workspaceFolders && status.projects.length > 0) {
-    (0, import_shared11.profile)(
+    (0, import_shared12.profile)(
       "activation.refreshDiagnostics",
       () => refreshAllDiagnostics(status.projects, workspaceFolders[0].uri.fsPath)
     ).catch((err) => {
@@ -35788,7 +36178,7 @@ async function activate(context) {
   }
   initLanguageStatus(context);
   registerLanguageStatusHandlers(context, getDetectedProjects);
-  const activeEditor = vscode23.window.activeTextEditor;
+  const activeEditor = vscode24.window.activeTextEditor;
   if (activeEditor) {
     updateLanguageStatus(status.projects, activeEditor.document.uri.fsPath);
   }
@@ -35803,7 +36193,7 @@ async function activate(context) {
   registerMongoCommands(context, mongoConnectionManager, () => {
     panelProvider.refresh();
   });
-  (0, import_shared11.profile)(
+  (0, import_shared12.profile)(
     "activation.mongoReconnect",
     () => mongoConnectionManager.reconnect()
   ).then((connected) => {
@@ -35818,30 +36208,30 @@ async function activate(context) {
   outputChannel.info("Registered test CodeLens providers");
   registerSnippetCodeLens(context);
   outputChannel.info("Registered snippet CodeLens providers");
-  (0, import_shared11.mark)("activation.providersRegistered");
+  (0, import_shared12.mark)("activation.providersRegistered");
   const bluehawkPreviewProvider = new BluehawkPreviewProvider(
     context.extensionUri
   );
   context.subscriptions.push(
-    vscode23.window.registerWebviewViewProvider(
+    vscode24.window.registerWebviewViewProvider(
       BluehawkPreviewProvider.viewType,
       bluehawkPreviewProvider
     )
   );
   context.subscriptions.push(
-    vscode23.commands.registerCommand("grove.openBluehawkPreview", async () => {
-      const editor = vscode23.window.activeTextEditor;
+    vscode24.commands.registerCommand("grove.openBluehawkPreview", async () => {
+      const editor = vscode24.window.activeTextEditor;
       if (!editor) {
-        vscode23.window.showWarningMessage("No active editor");
+        vscode24.window.showWarningMessage("No active editor");
         return;
       }
       await bluehawkPreviewProvider.updatePreview(editor.document);
-      await vscode23.commands.executeCommand("grove.bluehawkPreview.focus");
+      await vscode24.commands.executeCommand("grove.bluehawkPreview.focus");
     }),
-    vscode23.commands.registerCommand(
+    vscode24.commands.registerCommand(
       "grove.refreshBluehawkPreview",
       async () => {
-        const editor = vscode23.window.activeTextEditor;
+        const editor = vscode24.window.activeTextEditor;
         if (editor) {
           await bluehawkPreviewProvider.updatePreview(editor.document);
         }
@@ -35849,14 +36239,14 @@ async function activate(context) {
     )
   );
   context.subscriptions.push(
-    vscode23.workspace.onDidSaveTextDocument(async (document) => {
+    vscode24.workspace.onDidSaveTextDocument(async (document) => {
       if (containsBluehawkDirectives(document.getText())) {
         await bluehawkPreviewProvider.updatePreview(document);
       }
     })
   );
   context.subscriptions.push(
-    vscode23.window.onDidChangeActiveTextEditor(async (editor) => {
+    vscode24.window.onDidChangeActiveTextEditor(async (editor) => {
       if (editor && containsBluehawkDirectives(editor.document.getText())) {
         bluehawkPreviewProvider.debouncedUpdate(editor.document);
       }
@@ -35864,7 +36254,7 @@ async function activate(context) {
   );
   outputChannel.info("Registered Bluehawk preview provider");
   context.subscriptions.push(
-    vscode23.commands.registerCommand("grove.runTests", async () => {
+    vscode24.commands.registerCommand("grove.runTests", async () => {
       const resolved = await resolveProject();
       if (!resolved) return;
       const projectPath = resolved.project.rootPath;
@@ -35878,9 +36268,9 @@ async function activate(context) {
         }
       }
       const progressTitle = usingUiConnection ? "Running tests (using Grove MongoDB connection)..." : "Running tests...";
-      vscode23.window.withProgress(
+      vscode24.window.withProgress(
         {
-          location: vscode23.ProgressLocation.Notification,
+          location: vscode24.ProgressLocation.Notification,
           title: progressTitle,
           cancellable: false
         },
@@ -35910,65 +36300,68 @@ async function activate(context) {
     })
   );
   context.subscriptions.push(
-    vscode23.commands.registerCommand("grove.showPerformanceReport", () => {
-      if (!(0, import_shared11.isProfilingEnabled)()) {
-        vscode23.window.showInformationMessage(
+    vscode24.commands.registerCommand("grove.showPerformanceReport", () => {
+      if (!(0, import_shared12.isProfilingEnabled)()) {
+        vscode24.window.showInformationMessage(
           "Performance profiling is only available in development mode."
         );
         return;
       }
-      const report = (0, import_shared11.formatReport)();
+      const report = (0, import_shared12.formatReport)();
       outputChannel.info("\n" + report);
       outputChannel.show();
-      vscode23.window.showInformationMessage(
+      vscode24.window.showInformationMessage(
         "Performance report logged to Grove output channel."
       );
     }),
-    vscode23.commands.registerCommand("grove.clearPerformanceStats", () => {
-      if (!(0, import_shared11.isProfilingEnabled)()) {
-        vscode23.window.showInformationMessage(
+    vscode24.commands.registerCommand("grove.clearPerformanceStats", () => {
+      if (!(0, import_shared12.isProfilingEnabled)()) {
+        vscode24.window.showInformationMessage(
           "Performance profiling is only available in development mode."
         );
         return;
       }
-      (0, import_shared11.clearStats)();
-      vscode23.window.showInformationMessage("Performance statistics cleared.");
+      (0, import_shared12.clearStats)();
+      vscode24.window.showInformationMessage("Performance statistics cleared.");
     }),
-    vscode23.commands.registerCommand("grove.savePerformanceReport", async () => {
-      if (!(0, import_shared11.isProfilingEnabled)()) {
-        vscode23.window.showInformationMessage(
+    vscode24.commands.registerCommand("grove.savePerformanceReport", async () => {
+      if (!(0, import_shared12.isProfilingEnabled)()) {
+        vscode24.window.showInformationMessage(
           "Performance profiling is only available in development mode."
         );
         return;
       }
       await savePerformanceReport(context, outputChannel);
     }),
-    vscode23.commands.registerCommand(
+    vscode24.commands.registerCommand(
       "grove.comparePerformanceReports",
       async () => {
-        if (!(0, import_shared11.isProfilingEnabled)()) {
-          vscode23.window.showInformationMessage(
+        if (!(0, import_shared12.isProfilingEnabled)()) {
+          vscode24.window.showInformationMessage(
             "Performance profiling is only available in development mode."
           );
           return;
         }
         await comparePerformanceReports(outputChannel);
       }
-    )
+    ),
+    vscode24.commands.registerCommand("grove.openProfilerPanel", () => {
+      ProfilerPanel.createOrShow(context.extensionUri);
+    })
   );
-  (0, import_shared11.mark)("activation.complete");
-  (0, import_shared11.measure)("activation.total", "activation.start", "activation.complete");
-  (0, import_shared11.measure)(
+  (0, import_shared12.mark)("activation.complete");
+  (0, import_shared12.measure)("activation.total", "activation.start", "activation.complete");
+  (0, import_shared12.measure)(
     "activation.initialization",
     "activation.start",
     "activation.profilerReady"
   );
-  (0, import_shared11.measure)(
+  (0, import_shared12.measure)(
     "activation.projectDetection",
     "activation.profilerReady",
     "activation.projectsDetected"
   );
-  (0, import_shared11.measure)(
+  (0, import_shared12.measure)(
     "activation.providerRegistration",
     "activation.projectsDetected",
     "activation.providersRegistered"

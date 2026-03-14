@@ -9,6 +9,8 @@
  * are no-ops with zero overhead.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.onStatsUpdate = onStatsUpdate;
+exports.getUpdateCount = getUpdateCount;
 exports.initProfiler = initProfiler;
 exports.isProfilingEnabled = isProfilingEnabled;
 exports.profile = profile;
@@ -34,6 +36,40 @@ let _isEnabled = false;
 let _stats = new Map();
 let _marks = new Map();
 let _logger;
+let _listeners = new Set();
+let _updateCount = 0;
+/**
+ * Subscribe to profiler stat updates.
+ * The callback is invoked whenever a timing is recorded.
+ *
+ * @param listener - Callback function receiving operation name and stats
+ * @returns Unsubscribe function
+ */
+function onStatsUpdate(listener) {
+    _listeners.add(listener);
+    return () => {
+        _listeners.delete(listener);
+    };
+}
+/**
+ * Get the total number of stat updates since initialization.
+ */
+function getUpdateCount() {
+    return _updateCount;
+}
+/**
+ * Notify all listeners of a stat update.
+ */
+function notifyListeners(name, stats) {
+    for (const listener of _listeners) {
+        try {
+            listener(name, stats);
+        }
+        catch {
+            // Ignore listener errors
+        }
+    }
+}
 // ============================================================================
 // Initialization
 // ============================================================================
@@ -178,6 +214,10 @@ function recordTiming(name, elapsedMs) {
             lastMs: elapsedMs,
         });
     }
+    // Notify listeners and increment update count
+    _updateCount++;
+    const stats = _stats.get(name);
+    notifyListeners(name, stats);
 }
 // ============================================================================
 // Reporting API

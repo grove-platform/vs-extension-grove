@@ -264,6 +264,8 @@ var require_profiler = __commonJS({
   "../shared/dist/profiler.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.onStatsUpdate = onStatsUpdate;
+    exports2.getUpdateCount = getUpdateCount;
     exports2.initProfiler = initProfiler;
     exports2.isProfilingEnabled = isProfilingEnabled;
     exports2.profile = profile2;
@@ -286,6 +288,25 @@ var require_profiler = __commonJS({
     var _stats = /* @__PURE__ */ new Map();
     var _marks = /* @__PURE__ */ new Map();
     var _logger;
+    var _listeners = /* @__PURE__ */ new Set();
+    var _updateCount = 0;
+    function onStatsUpdate(listener) {
+      _listeners.add(listener);
+      return () => {
+        _listeners.delete(listener);
+      };
+    }
+    function getUpdateCount() {
+      return _updateCount;
+    }
+    function notifyListeners(name, stats) {
+      for (const listener of _listeners) {
+        try {
+          listener(name, stats);
+        } catch {
+        }
+      }
+    }
     var EXTENSION_MODE_DEVELOPMENT = 2;
     function initProfiler(context, logger) {
       _isEnabled = context.extensionMode === EXTENSION_MODE_DEVELOPMENT;
@@ -372,6 +393,9 @@ var require_profiler = __commonJS({
           lastMs: elapsedMs
         });
       }
+      _updateCount++;
+      const stats = _stats.get(name);
+      notifyListeners(name, stats);
     }
     function getStats(name) {
       return _stats.get(name);

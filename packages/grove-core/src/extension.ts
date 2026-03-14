@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { GroveStatus, GroveProject } from "@grove/shared";
 import { GrovePanelProvider } from "./panel/GrovePanel";
+import { ProfilerPanel } from "./panel/ProfilerPanel";
 import { getApi as getTestRunnerApi } from "./test-runner-api";
 import {
   resolveProject,
@@ -91,17 +92,14 @@ function getConfig() {
 // Profiler Report Helpers
 // ============================================================================
 
-const PROFILER_REPORTS_DIR = ".grove/profiler-reports";
+const PROFILER_REPORTS_DIR = "profiler-reports";
 
 /**
- * Get the profiler reports directory for the workspace.
+ * Get the profiler reports directory in the extension's storage.
+ * Reports are saved in the extension directory, not the user's workspace.
  */
-function getReportsDir(): vscode.Uri | null {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders || workspaceFolders.length === 0) {
-    return null;
-  }
-  return vscode.Uri.joinPath(workspaceFolders[0].uri, PROFILER_REPORTS_DIR);
+function getReportsDir(context: vscode.ExtensionContext): vscode.Uri {
+  return vscode.Uri.joinPath(context.extensionUri, PROFILER_REPORTS_DIR);
 }
 
 /**
@@ -138,11 +136,7 @@ async function savePerformanceReport(
   context: vscode.ExtensionContext,
   outputChannel: vscode.LogOutputChannel,
 ): Promise<void> {
-  const reportsDir = getReportsDir();
-  if (!reportsDir) {
-    vscode.window.showErrorMessage("No workspace folder open.");
-    return;
-  }
+  const reportsDir = getReportsDir(context);
 
   // Ask for an optional label
   const label = await vscode.window.showInputBox({
@@ -194,13 +188,10 @@ async function savePerformanceReport(
  * Compare two saved profiling reports.
  */
 async function comparePerformanceReports(
+  context: vscode.ExtensionContext,
   outputChannel: vscode.LogOutputChannel,
 ): Promise<void> {
-  const reportsDir = getReportsDir();
-  if (!reportsDir) {
-    vscode.window.showErrorMessage("No workspace folder open.");
-    return;
-  }
+  const reportsDir = getReportsDir(context);
 
   // List available reports
   let files: [string, vscode.FileType][];
@@ -633,9 +624,12 @@ export async function activate(context: vscode.ExtensionContext) {
           );
           return;
         }
-        await comparePerformanceReports(outputChannel);
+        await comparePerformanceReports(context, outputChannel);
       },
     ),
+    vscode.commands.registerCommand("grove.openProfilerPanel", () => {
+      ProfilerPanel.createOrShow(context.extensionUri);
+    }),
   );
 
   // Record activation timing

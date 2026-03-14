@@ -15,6 +15,8 @@ import {
   importReport,
   compareReports,
   formatComparison,
+  onStatsUpdate,
+  getUpdateCount,
   type ProfilerLogger,
   type ProfileReport,
 } from "../profiler";
@@ -595,6 +597,85 @@ describe("profiler", () => {
       expect(formatted).toContain("baseline");
       expect(formatted).toContain("op");
       expect(formatted).toContain("improved");
+    });
+  });
+
+  describe("event system", () => {
+    beforeEach(() => {
+      initProfiler({ extensionMode: ExtensionMode.Development });
+    });
+
+    it("should notify listeners on stat updates", () => {
+      const listener = vi.fn();
+      const unsubscribe = onStatsUpdate(listener);
+
+      profileSync("event-test", () => 42);
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener).toHaveBeenCalledWith(
+        "event-test",
+        expect.objectContaining({ count: 1 }),
+      );
+
+      unsubscribe();
+    });
+
+    it("should increment update count", () => {
+      const initialCount = getUpdateCount();
+
+      profileSync("count-test", () => 1);
+      expect(getUpdateCount()).toBe(initialCount + 1);
+
+      profileSync("count-test", () => 2);
+      expect(getUpdateCount()).toBe(initialCount + 2);
+    });
+
+    it("should allow unsubscribe", () => {
+      const listener = vi.fn();
+      const unsubscribe = onStatsUpdate(listener);
+
+      profileSync("unsub-test-1", () => 1);
+      expect(listener).toHaveBeenCalledTimes(1);
+
+      unsubscribe();
+
+      profileSync("unsub-test-2", () => 2);
+      expect(listener).toHaveBeenCalledTimes(1); // Still 1, not called again
+    });
+
+    it("should support multiple listeners", () => {
+      const listener1 = vi.fn();
+      const listener2 = vi.fn();
+
+      const unsub1 = onStatsUpdate(listener1);
+      const unsub2 = onStatsUpdate(listener2);
+
+      profileSync("multi-listener", () => 1);
+
+      expect(listener1).toHaveBeenCalledTimes(1);
+      expect(listener2).toHaveBeenCalledTimes(1);
+
+      unsub1();
+      unsub2();
+    });
+
+    it("should handle listener errors gracefully", () => {
+      const errorListener = vi.fn(() => {
+        throw new Error("listener error");
+      });
+      const goodListener = vi.fn();
+
+      const unsub1 = onStatsUpdate(errorListener);
+      const unsub2 = onStatsUpdate(goodListener);
+
+      // Should not throw
+      expect(() => profileSync("error-test", () => 1)).not.toThrow();
+
+      // Good listener should still be called
+      expect(goodListener).toHaveBeenCalled();
+
+      unsub1();
+      unsub2();
     });
   });
 });

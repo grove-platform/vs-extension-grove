@@ -110,6 +110,48 @@ let _marks: Map<string, MarkEntry> = new Map();
 let _logger: ProfilerLogger | undefined;
 
 // ============================================================================
+// Event System
+// ============================================================================
+
+type StatsUpdateListener = (name: string, stats: ProfileStats) => void;
+let _listeners: Set<StatsUpdateListener> = new Set();
+let _updateCount = 0;
+
+/**
+ * Subscribe to profiler stat updates.
+ * The callback is invoked whenever a timing is recorded.
+ *
+ * @param listener - Callback function receiving operation name and stats
+ * @returns Unsubscribe function
+ */
+export function onStatsUpdate(listener: StatsUpdateListener): () => void {
+  _listeners.add(listener);
+  return () => {
+    _listeners.delete(listener);
+  };
+}
+
+/**
+ * Get the total number of stat updates since initialization.
+ */
+export function getUpdateCount(): number {
+  return _updateCount;
+}
+
+/**
+ * Notify all listeners of a stat update.
+ */
+function notifyListeners(name: string, stats: ProfileStats): void {
+  for (const listener of _listeners) {
+    try {
+      listener(name, stats);
+    } catch {
+      // Ignore listener errors
+    }
+  }
+}
+
+// ============================================================================
 // Initialization
 // ============================================================================
 
@@ -277,6 +319,11 @@ function recordTiming(name: string, elapsedMs: number): void {
       lastMs: elapsedMs,
     });
   }
+
+  // Notify listeners and increment update count
+  _updateCount++;
+  const stats = _stats.get(name)!;
+  notifyListeners(name, stats);
 }
 
 // ============================================================================

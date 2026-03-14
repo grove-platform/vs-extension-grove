@@ -89,6 +89,10 @@
       {
         "command": "grove.comparePerformanceReports",
         "title": "Grove: Compare Performance Reports (Debug)"
+      },
+      {
+        "command": "grove.openProfilerPanel",
+        "title": "Grove: Open Performance Monitor (Debug)"
       }
     ],
     "configurationDefaults": {

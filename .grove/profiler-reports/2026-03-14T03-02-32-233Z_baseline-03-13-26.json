@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-03-14T03:02:32.233Z",
+    "label": "baseline-03-13-26",
+    "sessionDurationMs": 139875,
+    "gitCommit": "358b4231",
+    "gitBranch": "mongocli/v2.0.1",
+    "extensionVersion": "0.0.1",
+    "workspaceFolderCount": 1,
+    "totalOperations": 86
+  },
+  "stats": {
+    "ProjectCache.detectProjects": {
+      "count": 1,
+      "totalMs": 1730.5877499999997,
+      "minMs": 1730.5877499999997,
+      "maxMs": 1730.5877499999997,
+      "lastMs": 1730.5877499999997
+    },
+    "activation.detectProjects": {
+      "count": 1,
+      "totalMs": 1731.0477920000003,
+      "minMs": 1731.0477920000003,
+      "maxMs": 1731.0477920000003,
+      "lastMs": 1731.0477920000003
+    },
+    "activation.projectDetection": {
+      "count": 1,
+      "totalMs": 1731.4497080000006,
+      "minMs": 1731.4497080000006,
+      "maxMs": 1731.4497080000006,
+      "lastMs": 1731.4497080000006
+    },
+    "activation.providerRegistration": {
+      "count": 1,
+      "totalMs": 1.1436249999997017,
+      "minMs": 1.1436249999997017,
+      "maxMs": 1.1436249999997017,
+      "lastMs": 1.1436249999997017
+    },
+    "Diagnostics.checkSymlinks": {
+      "count": 6,
+      "totalMs": 107.55858199999966,
+      "minMs": 0.3977080000004207,
+      "maxMs": 58.17124999999942,
+      "lastMs": 0.5924999999997453
+    },
+    "Diagnostics.refreshAll": {
+      "count": 1,
+      "totalMs": 108.03620799999953,
+      "minMs": 108.03620799999953,
+      "maxMs": 108.03620799999953,
+      "lastMs": 108.03620799999953
+    },
+    "activation.refreshDiagnostics": {
+      "count": 1,
+      "totalMs": 108.17704099999992,
+      "minMs": 108.17704099999992,
+      "maxMs": 108.17704099999992,
+      "lastMs": 108.17704099999992
+    },
+    "SnippetCodeLens.parseBlocks": {
+      "count": 8,
+      "totalMs": 0.5946650000050795,
+      "minMs": 0.029041999994660728,
+      "maxMs": 0.15866600000026665,
+      "lastMs": 0.07374999999592546
+    },
+    "activation.mongoReconnect": {
+      "count": 1,
+      "totalMs": 13021.59575,
+      "minMs": 13021.59575,
+      "maxMs": 13021.59575,
+      "lastMs": 13021.59575
+    },
+    "Ripgrep.search": {
+      "count": 24,
+      "totalMs": 643683.3489609999,
+      "minMs": 4791.734249999994,
+      "maxMs": 30812.149792000004,
+      "lastMs": 4996.0114170000015
+    },
+    "SnippetCodeLens.fetchAllReferences": {
+      "count": 8,
+      "totalMs": 95899.282833,
+      "minMs": 0.20995800000673626,
+      "maxMs": 30816.497750000002,
+      "lastMs": 0.2515409999905387
+    },
+    "Bluehawk.dryRun": {
+      "count": 3,
+      "totalMs": 4106.499458999999,
+      "minMs": 678.3435420000023,
+      "maxMs": 2586.0906669999968,
+      "lastMs": 678.3435420000023
+    },
+    "RstLinks.parseDirectives": {
+      "count": 2,
+      "totalMs": 0.4763749999983702,
+      "minMs": 0.07541700000001583,
+      "maxMs": 0.40095799999835435,
+      "lastMs": 0.07541700000001583
+    },
+    "RstLinks.resolvePath": {
+      "count": 18,
+      "totalMs": 1.6675409999734256,
+      "minMs": 0.05266599998867605,
+      "maxMs": 0.3222079999977723,
+      "lastMs": 0.06775000000197906
+    },
+    "RstCodeLens.parseDirectives": {
+      "count": 1,
+      "totalMs": 0.1013329999987036,
+      "minMs": 0.1013329999987036,
+      "maxMs": 0.1013329999987036,
+      "lastMs": 0.1013329999987036
+    },
+    "RstCodeLens.resolvePath": {
+      "count": 9,
+      "totalMs": 0.7587099999946076,
+      "minMs": 0.051915999996708706,
+      "maxMs": 0.2730419999861624,
+      "lastMs": 0.05854199999885168
+    }
+  }
+}

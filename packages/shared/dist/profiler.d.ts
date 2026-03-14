@@ -83,6 +83,19 @@ export interface ReportComparison {
         removed: number;
     };
 }
+type StatsUpdateListener = (name: string, stats: ProfileStats) => void;
+/**
+ * Subscribe to profiler stat updates.
+ * The callback is invoked whenever a timing is recorded.
+ *
+ * @param listener - Callback function receiving operation name and stats
+ * @returns Unsubscribe function
+ */
+export declare function onStatsUpdate(listener: StatsUpdateListener): () => void;
+/**
+ * Get the total number of stat updates since initialization.
+ */
+export declare function getUpdateCount(): number;
 /**
  * Initialize the profiler. Call once during extension activation.
  * Profiling is only enabled in Development mode.
@@ -197,4 +210,5 @@ export declare function compareReports(baseline: ProfileReport, current: Profile
  * Format a comparison as a human-readable report.
  */
 export declare function formatComparison(comparison: ReportComparison): string;
+export {};
 //# sourceMappingURL=profiler.d.ts.map
