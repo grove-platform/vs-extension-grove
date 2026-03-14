@@ -36,6 +36,11 @@ import {
   profile,
   mark,
   measure,
+  exportReport,
+  importReport,
+  compareReports,
+  formatComparison,
+  type ProfileReport,
 } from "@grove/shared";
 
 let currentStatus: GroveStatus | null = null;
@@ -80,6 +85,213 @@ function getConfig() {
     autoDetect: config.get<boolean>("autoDetect", true),
     bluehawkPath: config.get<string>("bluehawkPath", ""),
   };
+}
+
+// ============================================================================
+// Profiler Report Helpers
+// ============================================================================
+
+const PROFILER_REPORTS_DIR = ".grove/profiler-reports";
+
+/**
+ * Get the profiler reports directory for the workspace.
+ */
+function getReportsDir(): vscode.Uri | null {
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders || workspaceFolders.length === 0) {
+    return null;
+  }
+  return vscode.Uri.joinPath(workspaceFolders[0].uri, PROFILER_REPORTS_DIR);
+}
+
+/**
+ * Get git information for the current workspace.
+ */
+async function getGitInfo(): Promise<{
+  commit?: string;
+  branch?: string;
+}> {
+  try {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) return {};
+
+    const gitExt = vscode.extensions.getExtension("vscode.git");
+    if (!gitExt) return {};
+
+    const git = gitExt.exports.getAPI(1);
+    const repo = git.repositories[0];
+    if (!repo) return {};
+
+    return {
+      commit: repo.state.HEAD?.commit?.slice(0, 8),
+      branch: repo.state.HEAD?.name,
+    };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Save the current profiling data to a report file.
+ */
+async function savePerformanceReport(
+  context: vscode.ExtensionContext,
+  outputChannel: vscode.LogOutputChannel,
+): Promise<void> {
+  const reportsDir = getReportsDir();
+  if (!reportsDir) {
+    vscode.window.showErrorMessage("No workspace folder open.");
+    return;
+  }
+
+  // Ask for an optional label
+  const label = await vscode.window.showInputBox({
+    prompt: "Enter a label for this report (optional)",
+    placeHolder: "e.g., before-optimization, baseline",
+  });
+
+  // Get git info
+  const gitInfo = await getGitInfo();
+
+  // Export the report
+  const report = exportReport({
+    label: label || undefined,
+    gitCommit: gitInfo.commit,
+    gitBranch: gitInfo.branch,
+    extensionVersion: context.extension.packageJSON.version,
+    workspaceFolderCount: vscode.workspace.workspaceFolders?.length ?? 0,
+  });
+
+  // Create filename with timestamp
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const labelPart = label ? `_${label.replace(/[^a-zA-Z0-9-]/g, "-")}` : "";
+  const filename = `${timestamp}${labelPart}.json`;
+
+  // Ensure directory exists and write file
+  try {
+    await vscode.workspace.fs.createDirectory(reportsDir);
+    const fileUri = vscode.Uri.joinPath(reportsDir, filename);
+    const content = JSON.stringify(report, null, 2);
+    await vscode.workspace.fs.writeFile(fileUri, Buffer.from(content, "utf-8"));
+
+    outputChannel.info(`Performance report saved: ${filename}`);
+    vscode.window
+      .showInformationMessage(
+        `Performance report saved: ${filename}`,
+        "Open File",
+      )
+      .then((action) => {
+        if (action === "Open File") {
+          vscode.window.showTextDocument(fileUri);
+        }
+      });
+  } catch (err) {
+    vscode.window.showErrorMessage(`Failed to save report: ${err}`);
+  }
+}
+
+/**
+ * Compare two saved profiling reports.
+ */
+async function comparePerformanceReports(
+  outputChannel: vscode.LogOutputChannel,
+): Promise<void> {
+  const reportsDir = getReportsDir();
+  if (!reportsDir) {
+    vscode.window.showErrorMessage("No workspace folder open.");
+    return;
+  }
+
+  // List available reports
+  let files: [string, vscode.FileType][];
+  try {
+    files = await vscode.workspace.fs.readDirectory(reportsDir);
+  } catch {
+    vscode.window.showInformationMessage(
+      "No saved reports found. Save a report first with 'Grove: Save Performance Report'.",
+    );
+    return;
+  }
+
+  const jsonFiles = files
+    .filter(
+      ([name, type]) => type === vscode.FileType.File && name.endsWith(".json"),
+    )
+    .map(([name]) => name)
+    .sort()
+    .reverse(); // Most recent first
+
+  if (jsonFiles.length < 2) {
+    vscode.window.showInformationMessage(
+      "Need at least 2 saved reports to compare. Save more reports first.",
+    );
+    return;
+  }
+
+  // Select baseline report
+  const baselineFile = await vscode.window.showQuickPick(jsonFiles, {
+    placeHolder: "Select BASELINE report (older)",
+  });
+  if (!baselineFile) return;
+
+  // Select current report (exclude baseline)
+  const currentOptions = jsonFiles.filter((f) => f !== baselineFile);
+  const currentFile = await vscode.window.showQuickPick(
+    ["[Current Session]", ...currentOptions],
+    { placeHolder: "Select CURRENT report (newer) or use current session" },
+  );
+  if (!currentFile) return;
+
+  // Load reports
+  let baseline: ProfileReport;
+  let current: ProfileReport;
+
+  try {
+    const baselineUri = vscode.Uri.joinPath(reportsDir, baselineFile);
+    const baselineData = await vscode.workspace.fs.readFile(baselineUri);
+    const parsed = importReport(new TextDecoder().decode(baselineData));
+    if (!parsed) throw new Error("Invalid baseline report format");
+    baseline = parsed;
+  } catch (err) {
+    vscode.window.showErrorMessage(`Failed to load baseline report: ${err}`);
+    return;
+  }
+
+  if (currentFile === "[Current Session]") {
+    current = exportReport();
+  } else {
+    try {
+      const currentUri = vscode.Uri.joinPath(reportsDir, currentFile);
+      const currentData = await vscode.workspace.fs.readFile(currentUri);
+      const parsed = importReport(new TextDecoder().decode(currentData));
+      if (!parsed) throw new Error("Invalid current report format");
+      current = parsed;
+    } catch (err) {
+      vscode.window.showErrorMessage(`Failed to load current report: ${err}`);
+      return;
+    }
+  }
+
+  // Compare and display results
+  const comparison = compareReports(baseline, current);
+  const formattedReport = formatComparison(comparison);
+
+  outputChannel.info("\n" + formattedReport);
+  outputChannel.show();
+
+  // Show summary notification
+  const { summary } = comparison;
+  if (summary.regressed > 0) {
+    vscode.window.showWarningMessage(
+      `⚠️ ${summary.regressed} operation(s) regressed, ${summary.improved} improved`,
+    );
+  } else if (summary.improved > 0) {
+    vscode.window.showInformationMessage(
+      `✅ ${summary.improved} operation(s) improved, no regressions`,
+    );
+  } else {
+    vscode.window.showInformationMessage("No significant changes detected.");
+  }
 }
 
 async function getStatus(): Promise<GroveStatus> {
@@ -403,6 +615,27 @@ export async function activate(context: vscode.ExtensionContext) {
       clearStats();
       vscode.window.showInformationMessage("Performance statistics cleared.");
     }),
+    vscode.commands.registerCommand("grove.savePerformanceReport", async () => {
+      if (!isProfilingEnabled()) {
+        vscode.window.showInformationMessage(
+          "Performance profiling is only available in development mode.",
+        );
+        return;
+      }
+      await savePerformanceReport(context, outputChannel);
+    }),
+    vscode.commands.registerCommand(
+      "grove.comparePerformanceReports",
+      async () => {
+        if (!isProfilingEnabled()) {
+          vscode.window.showInformationMessage(
+            "Performance profiling is only available in development mode.",
+          );
+          return;
+        }
+        await comparePerformanceReports(outputChannel);
+      },
+    ),
   );
 
   // Record activation timing

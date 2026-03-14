@@ -81,6 +81,14 @@
       {
         "command": "grove.clearPerformanceStats",
         "title": "Grove: Clear Performance Statistics (Debug)"
+      },
+      {
+        "command": "grove.savePerformanceReport",
+        "title": "Grove: Save Performance Report (Debug)"
+      },
+      {
+        "command": "grove.comparePerformanceReports",
+        "title": "Grove: Compare Performance Reports (Debug)"
       }
     ],
     "configurationDefaults": {

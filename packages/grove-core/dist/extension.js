@@ -276,6 +276,12 @@ var require_profiler = __commonJS({
     exports2.logReport = logReport;
     exports2.clearStats = clearStats2;
     exports2.clearMarks = clearMarks;
+    exports2.resetSessionStart = resetSessionStart;
+    exports2.getSessionDurationMs = getSessionDurationMs;
+    exports2.exportReport = exportReport2;
+    exports2.importReport = importReport2;
+    exports2.compareReports = compareReports2;
+    exports2.formatComparison = formatComparison2;
     var _isEnabled = false;
     var _stats = /* @__PURE__ */ new Map();
     var _marks = /* @__PURE__ */ new Map();
@@ -286,6 +292,7 @@ var require_profiler = __commonJS({
       _stats.clear();
       _marks.clear();
       _logger = logger;
+      _sessionStartTime = Date.now();
       if (_isEnabled && _logger) {
         _logger.info("Performance profiler enabled (development mode)");
       }
@@ -415,6 +422,145 @@ var require_profiler = __commonJS({
       for (const name of names) {
         _marks.delete(name);
       }
+    }
+    var _sessionStartTime = Date.now();
+    function resetSessionStart() {
+      _sessionStartTime = Date.now();
+    }
+    function getSessionDurationMs() {
+      return Date.now() - _sessionStartTime;
+    }
+    function exportReport2(options) {
+      const statsObj = {};
+      let totalOperations = 0;
+      for (const [name, stats] of _stats) {
+        statsObj[name] = { ...stats };
+        totalOperations += stats.count;
+      }
+      return {
+        version: 1,
+        metadata: {
+          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+          label: options?.label,
+          sessionDurationMs: getSessionDurationMs(),
+          gitCommit: options?.gitCommit,
+          gitBranch: options?.gitBranch,
+          extensionVersion: options?.extensionVersion,
+          workspaceFolderCount: options?.workspaceFolderCount,
+          totalOperations
+        },
+        stats: statsObj
+      };
+    }
+    function importReport2(json) {
+      try {
+        const data = typeof json === "string" ? JSON.parse(json) : json;
+        if (typeof data !== "object" || data === null || data.version !== 1 || !data.metadata || !data.stats) {
+          return null;
+        }
+        return data;
+      } catch {
+        return null;
+      }
+    }
+    function compareReports2(baseline, current, thresholdPercent = 5) {
+      const operations = [];
+      const summary = {
+        improved: 0,
+        regressed: 0,
+        unchanged: 0,
+        new: 0,
+        removed: 0
+      };
+      const allNames = /* @__PURE__ */ new Set([
+        ...Object.keys(baseline.stats),
+        ...Object.keys(current.stats)
+      ]);
+      for (const name of allNames) {
+        const baselineStats = baseline.stats[name] || null;
+        const currentStats = current.stats[name] || null;
+        let avgChangePercent = null;
+        let avgChangeMs = null;
+        let status;
+        if (!baselineStats) {
+          status = "new";
+          summary.new++;
+        } else if (!currentStats) {
+          status = "removed";
+          summary.removed++;
+        } else {
+          const baselineAvg = baselineStats.totalMs / baselineStats.count;
+          const currentAvg = currentStats.totalMs / currentStats.count;
+          avgChangeMs = currentAvg - baselineAvg;
+          avgChangePercent = baselineAvg > 0 ? avgChangeMs / baselineAvg * 100 : 0;
+          if (Math.abs(avgChangePercent) < thresholdPercent) {
+            status = "unchanged";
+            summary.unchanged++;
+          } else if (avgChangePercent > 0) {
+            status = "regressed";
+            summary.regressed++;
+          } else {
+            status = "improved";
+            summary.improved++;
+          }
+        }
+        operations.push({
+          name,
+          baseline: baselineStats,
+          current: currentStats,
+          avgChangePercent,
+          avgChangeMs,
+          status
+        });
+      }
+      operations.sort((a, b) => {
+        const statusOrder = {
+          regressed: 0,
+          new: 1,
+          unchanged: 2,
+          improved: 3,
+          removed: 4
+        };
+        if (statusOrder[a.status] !== statusOrder[b.status]) {
+          return statusOrder[a.status] - statusOrder[b.status];
+        }
+        return Math.abs(b.avgChangePercent || 0) - Math.abs(a.avgChangePercent || 0);
+      });
+      return {
+        baseline: baseline.metadata,
+        current: current.metadata,
+        operations,
+        summary
+      };
+    }
+    function formatComparison2(comparison) {
+      const lines = [
+        "\u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
+        "\u2502                     Grove Performance Comparison                           \u2502",
+        "\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524",
+        `\u2502 Baseline: ${(comparison.baseline.label || comparison.baseline.timestamp).slice(0, 30).padEnd(30)} \u2502 Current: ${(comparison.current.label || comparison.current.timestamp).slice(0, 20).padEnd(20)} \u2502`,
+        "\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524",
+        `\u2502 Summary: \u2705 ${comparison.summary.improved} improved, \u274C ${comparison.summary.regressed} regressed, \u2796 ${comparison.summary.unchanged} unchanged`.padEnd(78) + "\u2502",
+        "\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524",
+        "\u2502 Operation                     \u2502 Status   \u2502 Baseline \u2502 Current  \u2502  Change  \u2502",
+        "\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524"
+      ];
+      for (const op of comparison.operations) {
+        const displayName = op.name.length > 29 ? op.name.slice(0, 26) + "..." : op.name;
+        const statusIcon = {
+          improved: "\u2705 better",
+          regressed: "\u274C slower",
+          unchanged: "\u2796 same  ",
+          new: "\u{1F195} new   ",
+          removed: "\u{1F5D1}\uFE0F gone  "
+        }[op.status];
+        const baselineAvg = op.baseline ? formatMs(op.baseline.totalMs / op.baseline.count) : "   -   ";
+        const currentAvg = op.current ? formatMs(op.current.totalMs / op.current.count) : "   -   ";
+        const change = op.avgChangePercent !== null ? `${op.avgChangePercent > 0 ? "+" : ""}${op.avgChangePercent.toFixed(1)}%`.padStart(8) : "   -   ";
+        lines.push(`\u2502 ${displayName.padEnd(29)} \u2502 ${statusIcon} \u2502 ${baselineAvg} \u2502 ${currentAvg} \u2502 ${change} \u2502`);
+      }
+      lines.push("\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518");
+      return lines.join("\n");
     }
   }
 });
@@ -35405,6 +35551,147 @@ function getConfig() {
     bluehawkPath: config.get("bluehawkPath", "")
   };
 }
+var PROFILER_REPORTS_DIR = ".grove/profiler-reports";
+function getReportsDir() {
+  const workspaceFolders = vscode23.workspace.workspaceFolders;
+  if (!workspaceFolders || workspaceFolders.length === 0) {
+    return null;
+  }
+  return vscode23.Uri.joinPath(workspaceFolders[0].uri, PROFILER_REPORTS_DIR);
+}
+async function getGitInfo() {
+  try {
+    const workspaceFolders = vscode23.workspace.workspaceFolders;
+    if (!workspaceFolders) return {};
+    const gitExt = vscode23.extensions.getExtension("vscode.git");
+    if (!gitExt) return {};
+    const git = gitExt.exports.getAPI(1);
+    const repo = git.repositories[0];
+    if (!repo) return {};
+    return {
+      commit: repo.state.HEAD?.commit?.slice(0, 8),
+      branch: repo.state.HEAD?.name
+    };
+  } catch {
+    return {};
+  }
+}
+async function savePerformanceReport(context, outputChannel) {
+  const reportsDir = getReportsDir();
+  if (!reportsDir) {
+    vscode23.window.showErrorMessage("No workspace folder open.");
+    return;
+  }
+  const label = await vscode23.window.showInputBox({
+    prompt: "Enter a label for this report (optional)",
+    placeHolder: "e.g., before-optimization, baseline"
+  });
+  const gitInfo = await getGitInfo();
+  const report = (0, import_shared11.exportReport)({
+    label: label || void 0,
+    gitCommit: gitInfo.commit,
+    gitBranch: gitInfo.branch,
+    extensionVersion: context.extension.packageJSON.version,
+    workspaceFolderCount: vscode23.workspace.workspaceFolders?.length ?? 0
+  });
+  const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+  const labelPart = label ? `_${label.replace(/[^a-zA-Z0-9-]/g, "-")}` : "";
+  const filename = `${timestamp}${labelPart}.json`;
+  try {
+    await vscode23.workspace.fs.createDirectory(reportsDir);
+    const fileUri = vscode23.Uri.joinPath(reportsDir, filename);
+    const content = JSON.stringify(report, null, 2);
+    await vscode23.workspace.fs.writeFile(fileUri, Buffer.from(content, "utf-8"));
+    outputChannel.info(`Performance report saved: ${filename}`);
+    vscode23.window.showInformationMessage(
+      `Performance report saved: ${filename}`,
+      "Open File"
+    ).then((action) => {
+      if (action === "Open File") {
+        vscode23.window.showTextDocument(fileUri);
+      }
+    });
+  } catch (err) {
+    vscode23.window.showErrorMessage(`Failed to save report: ${err}`);
+  }
+}
+async function comparePerformanceReports(outputChannel) {
+  const reportsDir = getReportsDir();
+  if (!reportsDir) {
+    vscode23.window.showErrorMessage("No workspace folder open.");
+    return;
+  }
+  let files;
+  try {
+    files = await vscode23.workspace.fs.readDirectory(reportsDir);
+  } catch {
+    vscode23.window.showInformationMessage(
+      "No saved reports found. Save a report first with 'Grove: Save Performance Report'."
+    );
+    return;
+  }
+  const jsonFiles = files.filter(
+    ([name, type]) => type === vscode23.FileType.File && name.endsWith(".json")
+  ).map(([name]) => name).sort().reverse();
+  if (jsonFiles.length < 2) {
+    vscode23.window.showInformationMessage(
+      "Need at least 2 saved reports to compare. Save more reports first."
+    );
+    return;
+  }
+  const baselineFile = await vscode23.window.showQuickPick(jsonFiles, {
+    placeHolder: "Select BASELINE report (older)"
+  });
+  if (!baselineFile) return;
+  const currentOptions = jsonFiles.filter((f) => f !== baselineFile);
+  const currentFile = await vscode23.window.showQuickPick(
+    ["[Current Session]", ...currentOptions],
+    { placeHolder: "Select CURRENT report (newer) or use current session" }
+  );
+  if (!currentFile) return;
+  let baseline;
+  let current;
+  try {
+    const baselineUri = vscode23.Uri.joinPath(reportsDir, baselineFile);
+    const baselineData = await vscode23.workspace.fs.readFile(baselineUri);
+    const parsed = (0, import_shared11.importReport)(new TextDecoder().decode(baselineData));
+    if (!parsed) throw new Error("Invalid baseline report format");
+    baseline = parsed;
+  } catch (err) {
+    vscode23.window.showErrorMessage(`Failed to load baseline report: ${err}`);
+    return;
+  }
+  if (currentFile === "[Current Session]") {
+    current = (0, import_shared11.exportReport)();
+  } else {
+    try {
+      const currentUri = vscode23.Uri.joinPath(reportsDir, currentFile);
+      const currentData = await vscode23.workspace.fs.readFile(currentUri);
+      const parsed = (0, import_shared11.importReport)(new TextDecoder().decode(currentData));
+      if (!parsed) throw new Error("Invalid current report format");
+      current = parsed;
+    } catch (err) {
+      vscode23.window.showErrorMessage(`Failed to load current report: ${err}`);
+      return;
+    }
+  }
+  const comparison = (0, import_shared11.compareReports)(baseline, current);
+  const formattedReport = (0, import_shared11.formatComparison)(comparison);
+  outputChannel.info("\n" + formattedReport);
+  outputChannel.show();
+  const { summary } = comparison;
+  if (summary.regressed > 0) {
+    vscode23.window.showWarningMessage(
+      `\u26A0\uFE0F ${summary.regressed} operation(s) regressed, ${summary.improved} improved`
+    );
+  } else if (summary.improved > 0) {
+    vscode23.window.showInformationMessage(
+      `\u2705 ${summary.improved} operation(s) improved, no regressions`
+    );
+  } else {
+    vscode23.window.showInformationMessage("No significant changes detected.");
+  }
+}
 async function getStatus() {
   const workspaceFolders = vscode23.workspace.workspaceFolders;
   const mongoStatus = mongoConnectionManager?.status ?? {
@@ -35646,7 +35933,28 @@ async function activate(context) {
       }
       (0, import_shared11.clearStats)();
       vscode23.window.showInformationMessage("Performance statistics cleared.");
-    })
+    }),
+    vscode23.commands.registerCommand("grove.savePerformanceReport", async () => {
+      if (!(0, import_shared11.isProfilingEnabled)()) {
+        vscode23.window.showInformationMessage(
+          "Performance profiling is only available in development mode."
+        );
+        return;
+      }
+      await savePerformanceReport(context, outputChannel);
+    }),
+    vscode23.commands.registerCommand(
+      "grove.comparePerformanceReports",
+      async () => {
+        if (!(0, import_shared11.isProfilingEnabled)()) {
+          vscode23.window.showInformationMessage(
+            "Performance profiling is only available in development mode."
+          );
+          return;
+        }
+        await comparePerformanceReports(outputChannel);
+      }
+    )
   );
   (0, import_shared11.mark)("activation.complete");
   (0, import_shared11.measure)("activation.total", "activation.start", "activation.complete");

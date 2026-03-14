@@ -23,6 +23,67 @@ export interface ProfilerLogger {
     info(message: string): void;
 }
 /**
+ * Metadata about a profiling session.
+ */
+export interface ProfileReportMetadata {
+    /** ISO timestamp when the report was created */
+    timestamp: string;
+    /** Optional label for the report (e.g., "before-optimization") */
+    label?: string;
+    /** Session duration in milliseconds */
+    sessionDurationMs: number;
+    /** Git commit hash if available */
+    gitCommit?: string;
+    /** Git branch name if available */
+    gitBranch?: string;
+    /** Extension version */
+    extensionVersion?: string;
+    /** Number of workspace folders */
+    workspaceFolderCount?: number;
+    /** Total operations recorded */
+    totalOperations: number;
+}
+/**
+ * A saved profiling report that can be persisted and compared.
+ */
+export interface ProfileReport {
+    /** Report format version for compatibility */
+    version: 1;
+    /** Report metadata */
+    metadata: ProfileReportMetadata;
+    /** Recorded statistics by operation name */
+    stats: Record<string, ProfileStats>;
+}
+/**
+ * Comparison result for a single operation.
+ */
+export interface OperationComparison {
+    name: string;
+    baseline: ProfileStats | null;
+    current: ProfileStats | null;
+    /** Percentage change in average time (positive = regression, negative = improvement) */
+    avgChangePercent: number | null;
+    /** Absolute change in average time (ms) */
+    avgChangeMs: number | null;
+    /** Status: 'improved', 'regressed', 'unchanged', 'new', 'removed' */
+    status: "improved" | "regressed" | "unchanged" | "new" | "removed";
+}
+/**
+ * Result of comparing two profiling reports.
+ */
+export interface ReportComparison {
+    baseline: ProfileReportMetadata;
+    current: ProfileReportMetadata;
+    operations: OperationComparison[];
+    summary: {
+        improved: number;
+        regressed: number;
+        unchanged: number;
+        new: number;
+        removed: number;
+    };
+}
+/**
  * Initialize the profiler. Call once during extension activation.
  * Profiling is only enabled in Development mode.
  *
@@ -95,4 +156,45 @@ export declare function clearStats(): void;
  * Clear specific marks by name.
  */
 export declare function clearMarks(...names: string[]): void;
+/**
+ * Reset the session start time. Called automatically by initProfiler.
+ */
+export declare function resetSessionStart(): void;
+/**
+ * Get the current session duration in milliseconds.
+ */
+export declare function getSessionDurationMs(): number;
+/**
+ * Export current profiling data as a report.
+ *
+ * @param options - Optional metadata to include in the report
+ * @returns A ProfileReport object ready to be serialized
+ */
+export declare function exportReport(options?: {
+    label?: string;
+    gitCommit?: string;
+    gitBranch?: string;
+    extensionVersion?: string;
+    workspaceFolderCount?: number;
+}): ProfileReport;
+/**
+ * Import a report from JSON data.
+ *
+ * @param json - JSON string or parsed object
+ * @returns Parsed ProfileReport or null if invalid
+ */
+export declare function importReport(json: string | object): ProfileReport | null;
+/**
+ * Compare two profiling reports.
+ *
+ * @param baseline - The baseline report (e.g., before optimization)
+ * @param current - The current report (e.g., after optimization)
+ * @param thresholdPercent - Minimum percentage change to consider significant (default: 5%)
+ * @returns Comparison results with status for each operation
+ */
+export declare function compareReports(baseline: ProfileReport, current: ProfileReport, thresholdPercent?: number): ReportComparison;
+/**
+ * Format a comparison as a human-readable report.
+ */
+export declare function formatComparison(comparison: ReportComparison): string;
 //# sourceMappingURL=profiler.d.ts.map

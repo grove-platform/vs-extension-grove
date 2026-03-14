@@ -276,6 +276,12 @@ var require_profiler = __commonJS({
     exports2.logReport = logReport;
     exports2.clearStats = clearStats;
     exports2.clearMarks = clearMarks;
+    exports2.resetSessionStart = resetSessionStart;
+    exports2.getSessionDurationMs = getSessionDurationMs;
+    exports2.exportReport = exportReport;
+    exports2.importReport = importReport;
+    exports2.compareReports = compareReports;
+    exports2.formatComparison = formatComparison;
     var _isEnabled = false;
     var _stats = /* @__PURE__ */ new Map();
     var _marks = /* @__PURE__ */ new Map();
@@ -286,6 +292,7 @@ var require_profiler = __commonJS({
       _stats.clear();
       _marks.clear();
       _logger = logger;
+      _sessionStartTime = Date.now();
       if (_isEnabled && _logger) {
         _logger.info("Performance profiler enabled (development mode)");
       }
@@ -415,6 +422,145 @@ var require_profiler = __commonJS({
       for (const name of names) {
         _marks.delete(name);
       }
+    }
+    var _sessionStartTime = Date.now();
+    function resetSessionStart() {
+      _sessionStartTime = Date.now();
+    }
+    function getSessionDurationMs() {
+      return Date.now() - _sessionStartTime;
+    }
+    function exportReport(options) {
+      const statsObj = {};
+      let totalOperations = 0;
+      for (const [name, stats] of _stats) {
+        statsObj[name] = { ...stats };
+        totalOperations += stats.count;
+      }
+      return {
+        version: 1,
+        metadata: {
+          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+          label: options?.label,
+          sessionDurationMs: getSessionDurationMs(),
+          gitCommit: options?.gitCommit,
+          gitBranch: options?.gitBranch,
+          extensionVersion: options?.extensionVersion,
+          workspaceFolderCount: options?.workspaceFolderCount,
+          totalOperations
+        },
+        stats: statsObj
+      };
+    }
+    function importReport(json) {
+      try {
+        const data = typeof json === "string" ? JSON.parse(json) : json;
+        if (typeof data !== "object" || data === null || data.version !== 1 || !data.metadata || !data.stats) {
+          return null;
+        }
+        return data;
+      } catch {
+        return null;
+      }
+    }
+    function compareReports(baseline, current, thresholdPercent = 5) {
+      const operations = [];
+      const summary = {
+        improved: 0,
+        regressed: 0,
+        unchanged: 0,
+        new: 0,
+        removed: 0
+      };
+      const allNames = /* @__PURE__ */ new Set([
+        ...Object.keys(baseline.stats),
+        ...Object.keys(current.stats)
+      ]);
+      for (const name of allNames) {
+        const baselineStats = baseline.stats[name] || null;
+        const currentStats = current.stats[name] || null;
+        let avgChangePercent = null;
+        let avgChangeMs = null;
+        let status;
+        if (!baselineStats) {
+          status = "new";
+          summary.new++;
+        } else if (!currentStats) {
+          status = "removed";
+          summary.removed++;
+        } else {
+          const baselineAvg = baselineStats.totalMs / baselineStats.count;
+          const currentAvg = currentStats.totalMs / currentStats.count;
+          avgChangeMs = currentAvg - baselineAvg;
+          avgChangePercent = baselineAvg > 0 ? avgChangeMs / baselineAvg * 100 : 0;
+          if (Math.abs(avgChangePercent) < thresholdPercent) {
+            status = "unchanged";
+            summary.unchanged++;
+          } else if (avgChangePercent > 0) {
+            status = "regressed";
+            summary.regressed++;
+          } else {
+            status = "improved";
+            summary.improved++;
+          }
+        }
+        operations.push({
+          name,
+          baseline: baselineStats,
+          current: currentStats,
+          avgChangePercent,
+          avgChangeMs,
+          status
+        });
+      }
+      operations.sort((a, b) => {
+        const statusOrder = {
+          regressed: 0,
+          new: 1,
+          unchanged: 2,
+          improved: 3,
+          removed: 4
+        };
+        if (statusOrder[a.status] !== statusOrder[b.status]) {
+          return statusOrder[a.status] - statusOrder[b.status];
+        }
+        return Math.abs(b.avgChangePercent || 0) - Math.abs(a.avgChangePercent || 0);
+      });
+      return {
+        baseline: baseline.metadata,
+        current: current.metadata,
+        operations,
+        summary
+      };
+    }
+    function formatComparison(comparison) {
+      const lines = [
+        "\u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
+        "\u2502                     Grove Performance Comparison                           \u2502",
+        "\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524",
+        `\u2502 Baseline: ${(comparison.baseline.label || comparison.baseline.timestamp).slice(0, 30).padEnd(30)} \u2502 Current: ${(comparison.current.label || comparison.current.timestamp).slice(0, 20).padEnd(20)} \u2502`,
+        "\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524",
+        `\u2502 Summary: \u2705 ${comparison.summary.improved} improved, \u274C ${comparison.summary.regressed} regressed, \u2796 ${comparison.summary.unchanged} unchanged`.padEnd(78) + "\u2502",
+        "\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524",
+        "\u2502 Operation                     \u2502 Status   \u2502 Baseline \u2502 Current  \u2502  Change  \u2502",
+        "\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524"
+      ];
+      for (const op of comparison.operations) {
+        const displayName = op.name.length > 29 ? op.name.slice(0, 26) + "..." : op.name;
+        const statusIcon = {
+          improved: "\u2705 better",
+          regressed: "\u274C slower",
+          unchanged: "\u2796 same  ",
+          new: "\u{1F195} new   ",
+          removed: "\u{1F5D1}\uFE0F gone  "
+        }[op.status];
+        const baselineAvg = op.baseline ? formatMs(op.baseline.totalMs / op.baseline.count) : "   -   ";
+        const currentAvg = op.current ? formatMs(op.current.totalMs / op.current.count) : "   -   ";
+        const change = op.avgChangePercent !== null ? `${op.avgChangePercent > 0 ? "+" : ""}${op.avgChangePercent.toFixed(1)}%`.padStart(8) : "   -   ";
+        lines.push(`\u2502 ${displayName.padEnd(29)} \u2502 ${statusIcon} \u2502 ${baselineAvg} \u2502 ${currentAvg} \u2502 ${change} \u2502`);
+      }
+      lines.push("\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518");
+      return lines.join("\n");
     }
   }
 });
