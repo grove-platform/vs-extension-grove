@@ -17,6 +17,7 @@ import {
   type DirectiveRef,
 } from "./directive-parser";
 import { resolveDirectivePath } from "./path-resolver";
+import { resolveExtract } from "./extract-resolver";
 import { profile, profileSync } from "@grove/shared";
 
 /**
@@ -145,6 +146,41 @@ export class RstDirectiveCodeLensProvider implements vscode.CodeLensProvider {
     const workspaceRoot = getWorkspaceRoot(document);
 
     for (const ref of refs) {
+      // Position the lens on the directive line itself
+      const directiveLine = ref.range.start.line;
+      const lensRange = new vscode.Range(
+        new vscode.Position(directiveLine, 0),
+        new vscode.Position(directiveLine, 0),
+      );
+
+      // Handle extract includes differently - they resolve to YAML refs
+      if (ref.isExtract) {
+        const resolution = await profile("RstCodeLens.resolveExtract", () =>
+          resolveExtract(document.uri.fsPath, ref.targetPath),
+        );
+
+        if (resolution.exists) {
+          // Create CodeLens that links to YAML file
+          lenses.push(
+            new vscode.CodeLens(lensRange, {
+              title: "📋 extract",
+              command: "grove.openFileAtLine",
+              arguments: [resolution.yamlFilePath, resolution.lineNumber],
+              tooltip: `Go to ref: ${resolution.refName} in ${path.basename(resolution.yamlFilePath)}`,
+            }),
+          );
+        } else {
+          // Show error lens for missing extract
+          lenses.push(
+            new vscode.CodeLens(lensRange, {
+              title: `⚠️ Extract not found: ${resolution.refName}`,
+              command: "",
+            }),
+          );
+        }
+        continue; // Skip normal file handling
+      }
+
       const resolved = await profile("RstCodeLens.resolvePath", () =>
         resolveDirectivePath(
           document.uri.fsPath,
@@ -154,13 +190,6 @@ export class RstDirectiveCodeLensProvider implements vscode.CodeLensProvider {
             resolveSymlinks: ref.needsSymlinkResolution,
           },
         ),
-      );
-
-      // Position the lens on the directive line itself
-      const directiveLine = ref.range.start.line;
-      const lensRange = new vscode.Range(
-        new vscode.Position(directiveLine, 0),
-        new vscode.Position(directiveLine, 0),
       );
 
       if (resolved.exists) {
@@ -225,6 +254,20 @@ export class RstDirectiveDefinitionProvider
       return undefined;
     }
 
+    // Handle extract includes - navigate to YAML source
+    if (ref.isExtract) {
+      const resolution = await profile("RstDefinition.resolveExtract", () =>
+        resolveExtract(document.uri.fsPath, ref.targetPath),
+      );
+      if (resolution.exists) {
+        return new vscode.Location(
+          vscode.Uri.file(resolution.yamlFilePath),
+          new vscode.Position(resolution.lineNumber - 1, 0),
+        );
+      }
+      return undefined;
+    }
+
     const workspaceRoot = getWorkspaceRoot(document);
     const resolved = await profile("RstDefinition.resolvePath", () =>
       resolveDirectivePath(document.uri.fsPath, ref.targetPath, workspaceRoot, {
@@ -286,6 +329,28 @@ export class RstDirectiveLinkProvider implements vscode.DocumentLinkProvider {
     const workspaceRoot = getWorkspaceRoot(document);
 
     for (const ref of refs) {
+      // Handle extract includes - link to YAML source
+      if (ref.isExtract) {
+        const resolution = await profile("RstLinks.resolveExtract", () =>
+          resolveExtract(document.uri.fsPath, ref.targetPath),
+        );
+
+        if (resolution.exists) {
+          // Create URI with line number fragment for navigation
+          const uri = vscode.Uri.file(resolution.yamlFilePath).with({
+            fragment: `L${resolution.lineNumber}`,
+          });
+          const link = new vscode.DocumentLink(ref.pathRange, uri);
+          link.tooltip = `Go to ref: ${resolution.refName} in ${path.basename(resolution.yamlFilePath)}`;
+          links.push(link);
+        } else {
+          const link = new vscode.DocumentLink(ref.pathRange);
+          link.tooltip = resolution.error || "Extract not found";
+          links.push(link);
+        }
+        continue;
+      }
+
       const resolved = await profile("RstLinks.resolvePath", () =>
         resolveDirectivePath(
           document.uri.fsPath,
@@ -422,6 +487,27 @@ export function registerLiteralIncludeProviders(
             );
           }
         }
+      },
+    ),
+  );
+
+  // Register command for opening file at specific line (used by extract CodeLens)
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "grove.openFileAtLine",
+      async (filePath: string, lineNumber: number) => {
+        const uri = vscode.Uri.file(filePath);
+        const document = await vscode.workspace.openTextDocument(uri);
+        const editor = await vscode.window.showTextDocument(document, {
+          viewColumn: vscode.ViewColumn.Beside,
+          preview: true,
+        });
+        const position = new vscode.Position(lineNumber - 1, 0);
+        editor.selection = new vscode.Selection(position, position);
+        editor.revealRange(
+          new vscode.Range(position, position),
+          vscode.TextEditorRevealType.InCenter,
+        );
       },
     ),
   );

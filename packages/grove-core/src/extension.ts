@@ -19,6 +19,7 @@ import { MongoConnectionManager } from "./mongo/connection";
 import { registerMongoCommands } from "./mongo/commands";
 import { maskConnectionString } from "./mongo/credentials";
 import { registerLiteralIncludeProviders } from "./rst/LiteralIncludeProviders";
+import { clearExtractCache } from "./rst/extract-resolver";
 import { BluehawkPreviewProvider } from "./preview/BluehawkPreview";
 import { containsBluehawkDirectives } from "./preview/bluehawk-runner";
 import { registerTestCodeLens } from "./test-codelens";
@@ -454,6 +455,14 @@ export async function activate(context: vscode.ExtensionContext) {
   // Register literalinclude providers for RST files
   registerLiteralIncludeProviders(context);
   outputChannel.info("Registered literalinclude providers for RST files");
+
+  // Watch for changes to extract YAML files and invalidate cache
+  const extractsWatcher =
+    vscode.workspace.createFileSystemWatcher("**/extracts*.yaml");
+  extractsWatcher.onDidChange(() => clearExtractCache());
+  extractsWatcher.onDidCreate(() => clearExtractCache());
+  extractsWatcher.onDidDelete(() => clearExtractCache());
+  context.subscriptions.push(extractsWatcher);
 
   // Register test CodeLens providers for test files
   registerTestCodeLens(context);

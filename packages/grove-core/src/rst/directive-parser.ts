@@ -23,6 +23,8 @@ export interface DirectiveRef {
   targetPath: string;
   /** Whether this directive may need symlink resolution (code-examples) */
   needsSymlinkResolution: boolean;
+  /** Whether this is an extract include (YAML-based, not file-based) */
+  isExtract?: boolean;
   /** :snippet: value if present (literalinclude only) */
   snippetName?: string;
   /** :start-after: value if present */
@@ -113,6 +115,8 @@ function parseSimpleDirective(
     targetPath,
     // include:: never needs symlink resolution, literalinclude:: does
     needsSymlinkResolution: type === "literalinclude",
+    // Detect extract paths - these resolve to YAML refs, not files
+    isExtract: targetPath.includes("/extracts/"),
   };
 
   // Parse options on following lines
