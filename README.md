@@ -42,6 +42,7 @@ Access Grove commands via the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`):
 - `Grove: Create Symlink for Documentation` - Create symlinks from docs to code-examples
 - `Grove: Open Bluehawk Preview` - Preview extracted snippets
 - `Grove: Connect to MongoDB` - Connect with a connection string
+- `Grove: Send Feedback` - Report bugs or request features (creates Jira tickets)
 
 ## Repository Structure
 
@@ -52,6 +53,8 @@ grove-extension/
 │   ├── grove-core/       # Core extension
 │   └── grove-nodejs/     # Node.js language extension
 ├── meta/
+│   ├── features.md       # Feature roadmap and ideas
+│   ├── discovery.md      # Initial project discovery notes
 │   └── implementation/   # Design documents and planning
 ├── package.json          # Monorepo root (pnpm workspaces)
 └── pnpm-workspace.yaml   # Workspace configuration
@@ -67,10 +70,6 @@ grove-extension/
 ### Setup
 
 ```bash
-# Clone the repository
-git clone https://github.com/mongodb/vs-extension-grove.git
-cd vs-extension-grove
-
 # Install dependencies
 pnpm install
 
@@ -94,6 +93,20 @@ pnpm watch
 
 # Run tests for specific package
 pnpm --filter grove-core test
+```
+
+### Building VSIX for Local Installation
+
+```bash
+# Build all packages first
+pnpm build
+
+# Create the VSIX package
+cd packages/grove-core
+pnpm package
+
+# Install locally
+code --install-extension grove-core-0.0.1.vsix
 ```
 
 ### Running in VS Code

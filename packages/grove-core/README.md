@@ -28,25 +28,41 @@ grove-core/
 │   ├── language-status.ts    # Per-file Grove status in editor
 │   ├── symlink.ts            # Symlink creation and validation
 │   ├── panel/
-│   │   └── GrovePanel.ts     # Activity bar webview panel
+│   │   ├── GrovePanel.ts     # Activity bar webview panel
+│   │   └── ProfilerPanel.ts  # Real-time performance monitoring webview
 │   ├── preview/
 │   │   ├── BluehawkPreview.ts    # Bluehawk preview webview
 │   │   └── bluehawk-runner.ts    # CLI wrapper for bluehawk snip
+│   ├── feedback/
+│   │   ├── FeedbackPanel.ts          # Bug report / feature request webview
+│   │   ├── diagnostics-collector.ts  # Gathers system/extension info
+│   │   ├── feedback-submitter.ts     # Handles Jira submission
+│   │   ├── jira-url-builder.ts       # Builds Jira create issue URLs
+│   │   └── types.ts                  # Feedback type definitions
 │   ├── rst/
 │   │   ├── LiteralIncludeProviders.ts  # CodeLens, Definition, Links for RST
 │   │   ├── directive-parser.ts         # Generic RST directive parser
+│   │   ├── literalinclude-parser.ts    # Parses literalinclude options
+│   │   ├── extract-resolver.ts         # Resolves extract YAML references
 │   │   └── path-resolver.ts            # Symlink-aware path resolution
 │   ├── test-codelens/
 │   │   ├── TestCodeLensProvider.ts     # Run/Debug CodeLens for tests
 │   │   ├── TestHoverProvider.ts        # Hover details for test results
-│   │   └── TestDecorations.ts          # Pass/fail highlighting
+│   │   ├── TestDecorations.ts          # Pass/fail highlighting
+│   │   ├── TestResultStore.ts          # Stores test results across runs
+│   │   ├── test-parser.ts              # Parses test blocks in source files
+│   │   └── utils.ts                    # Shared test utilities
 │   ├── snippet-codelens/
 │   │   ├── SnippetCodeLensProvider.ts  # Reference count CodeLens
-│   │   └── ripgrep-searcher.ts         # Fast snippet reference search
+│   │   ├── ripgrep-searcher.ts         # Fast snippet reference search
+│   │   ├── reference-searcher.ts       # Reference search abstraction
+│   │   └── snippet-parser.ts           # Parses Bluehawk snippet tags
 │   └── mongo/
 │       ├── connection.ts     # MongoDB client lifecycle (lazy-loaded)
 │       ├── commands.ts       # VS Code command handlers
 │       └── credentials.ts    # SecretStorage wrapper
+├── resources/
+│   └── grove-icon.svg        # Activity bar icon
 └── package.json              # Extension manifest and contributions
 ```
 
@@ -66,20 +82,28 @@ The extension activates on the `workspaceContains:**/snip.js` event. On activati
 
 ### Commands
 
-| Command                     | Title                                   | Description                                  |
-| --------------------------- | --------------------------------------- | -------------------------------------------- |
-| `grove.runTests`            | Grove: Run Tests                        | Run tests using the detected language runner |
-| `grove.createSymlink`       | Grove: Create Symlink for Documentation | Create symlink from docs to code-examples    |
-| `grove.connectMongo`        | Grove: Connect to MongoDB               | Connect with a connection string             |
-| `grove.disconnectMongo`     | Grove: Disconnect from MongoDB          | Disconnect and clear session                 |
-| `grove.openBluehawkPreview` | Grove: Open Bluehawk Preview            | Show Bluehawk output for current file        |
+| Command                           | Title                                       | Description                                         |
+| --------------------------------- | ------------------------------------------- | --------------------------------------------------- |
+| `grove.runTests`                  | Grove: Run Tests                            | Run tests using the detected language runner        |
+| `grove.createSymlink`             | Grove: Create Symlink for Documentation     | Create symlink from docs to code-examples           |
+| `grove.connectMongo`              | Grove: Connect to MongoDB                   | Connect with a connection string                    |
+| `grove.disconnectMongo`           | Grove: Disconnect from MongoDB              | Disconnect and clear session                        |
+| `grove.openBluehawkPreview`       | Grove: Open Bluehawk Preview                | Show Bluehawk output for current file               |
+| `grove.sendFeedback`              | Grove: Send Feedback                        | Open feedback panel to report bugs/request features |
+| `grove.showPerformanceReport`     | Grove: Show Performance Report (Debug)      | Display profiling stats in output channel           |
+| `grove.clearPerformanceStats`     | Grove: Clear Performance Statistics (Debug) | Reset all profiling data                            |
+| `grove.savePerformanceReport`     | Grove: Save Performance Report (Debug)      | Save profiling data to a file                       |
+| `grove.comparePerformanceReports` | Grove: Compare Performance Reports (Debug)  | Compare two saved profiling reports                 |
+| `grove.openProfilerPanel`         | Grove: Open Performance Monitor (Debug)     | Open real-time performance monitoring panel         |
 
 ### Configuration
 
-| Setting              | Type    | Default | Description                                     |
-| -------------------- | ------- | ------- | ----------------------------------------------- |
-| `grove.autoDetect`   | boolean | `true`  | Automatically detect Grove projects on open     |
-| `grove.bluehawkPath` | string  | `""`    | Custom path to bluehawk CLI (uses npx if empty) |
+| Setting                                      | Type    | Default   | Description                                     |
+| -------------------------------------------- | ------- | --------- | ----------------------------------------------- |
+| `grove.autoDetect`                           | boolean | `true`    | Automatically detect Grove projects on open     |
+| `grove.bluehawkPath`                         | string  | `""`      | Custom path to bluehawk CLI (uses npx if empty) |
+| `grove.feedback.jiraProjectId`               | string  | `"14181"` | Jira project ID for feedback tickets (DOCSP)    |
+| `grove.feedback.includeDiagnosticsByDefault` | boolean | `true`    | Include diagnostic information by default       |
 
 ### Views
 
@@ -185,6 +209,24 @@ docs-node/
         └── tested → ../../../code-example-tests/content/code-examples/tested
 ```
 
+### Feedback System
+
+Provides a built-in feedback mechanism for reporting bugs and requesting features:
+
+- **Webview Panel** - Dedicated UI for composing feedback with title, description, and type selection
+- **Jira Integration** - Generates pre-filled Jira ticket URLs for the DOCSP project
+- **Diagnostic Collection** - Optionally includes system info, extension version, and workspace context
+- **Configurable** - Jira project ID and default diagnostic inclusion are configurable
+
+### Performance Profiling (Debug)
+
+Development-mode tooling for measuring extension performance:
+
+- **Real-time Monitor** - Live dashboard showing operation timings and call counts
+- **Report Generation** - Export profiling data for analysis
+- **Report Comparison** - Compare reports across sessions to detect regressions
+- **Git Integration** - Reports can include commit/branch metadata
+
 ## Extension API
 
 Grove Core exports an API for language extensions (e.g., `grove-nodejs`, `grove-python`):
@@ -221,8 +263,9 @@ Language extensions should:
 
 ## Dependencies
 
-- **`@grove/shared`** - Workspace package with project detection and security utilities
+- **`@grove/shared`** - Workspace package with project detection, profiling, and security utilities
 - **`@vscode/ripgrep`** - Fast file searching for snippet references
+- **`js-yaml`** - YAML parsing for extract files
 - **`mongodb`** - MongoDB driver (lazy-loaded on first connection)
 - **VS Code API** - Webview, SecretStorage, Diagnostics, LanguageStatus, CodeLens
 
@@ -238,6 +281,20 @@ pnpm test
 
 # Launch Extension Development Host
 code --extensionDevelopmentPath=./packages/grove-core /path/to/test/workspace
+```
+
+### Building a VSIX for Local Installation
+
+```bash
+# Build all packages first
+pnpm build
+
+# Create the VSIX package
+cd packages/grove-core
+pnpm package
+
+# Install locally
+code --install-extension grove-core-0.0.1.vsix
 ```
 
 ## License

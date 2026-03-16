@@ -9,10 +9,6 @@
 
 - Do a full security audit
 
-## Feedback
-
-- Build a feedback UI. Look at how Captain Bot integrates with Jira. Use similar workflow if viable. UI should give options for reporting a bug or requesting a feature. On submission, it should create a Jira ticket and assign it to DevDocs.
-
 ## Beyond code examples
 
 Based on analysis of the `docs-mongodb-internal` monorepo, here are opportunities to improve writer workflows:

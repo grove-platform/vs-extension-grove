@@ -5,7 +5,7 @@
   "version": "0.0.1",
   "publisher": "mongodb",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.110.0"
   },
   "categories": [
     "Other"
@@ -117,6 +117,7 @@
   "scripts": {
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:@vscode/ripgrep --format=cjs --platform=node",
     "watch": "npm run build -- --watch",
+    "package": "vsce package --no-dependencies",
     "lint": "eslint src --ext ts",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -131,6 +132,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.4.0",
     "@types/vscode": "^1.110.0",
+    "@vscode/vsce": "^3.7.1",
     "esbuild": "^0.27.0",
     "vitest": "^4.0.18"
   }
