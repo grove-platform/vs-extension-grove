@@ -1,12 +1,5 @@
 # Features to Develop
 
-## Snippets and includes
-
-- Extend "references" CodeLens feature to includes and literalincludes
-  - Will need to be careful with performance
-- Fix tested snippet code lens to point to actual test file and create a new one for "source" file that contains bluehawk markup
-- Create codelens support for extracts
-
 ## Performance
 
 - Ways to gracefully lazy load extension features to improve start up time?
@@ -15,6 +8,10 @@
 ## Security
 
 - Do a full security audit
+
+## Feedback
+
+- Build a feedback UI. Look at how Captain Bot integrates with Jira. Use similar workflow if viable. UI should give options for reporting a bug or requesting a feature. On submission, it should create a Jira ticket and assign it to DevDocs.
 
 ## Beyond code examples
 

@@ -44,6 +44,9 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
         case "showDatabases":
           vscode.commands.executeCommand("grove.showDatabases");
           break;
+        case "sendFeedback":
+          vscode.commands.executeCommand("grove.sendFeedback");
+          break;
       }
     });
 
@@ -168,6 +171,8 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
         html += '</div></div>';
         // Actions section
         html += '<div class="section"><div class="section-title">Actions</div><div class="actions"><button onclick="runTests()">Run Tests</button><button onclick="refresh()">Refresh</button></div></div>';
+        // Feedback section (always shown)
+        html += '<div class="section"><div class="section-title">Help</div><div class="actions" style="grid-template-columns: 1fr;"><button onclick="sendFeedback()">📝 Send Feedback</button></div></div>';
       }
       content.innerHTML = html;
     }
@@ -176,6 +181,7 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
     function connectMongo() { vscode.postMessage({ command: 'connectMongo' }); }
     function disconnectMongo() { vscode.postMessage({ command: 'disconnectMongo' }); }
     function showDatabases() { vscode.postMessage({ command: 'showDatabases' }); }
+    function sendFeedback() { vscode.postMessage({ command: 'sendFeedback' }); }
     refresh();
   </script>
 </body>

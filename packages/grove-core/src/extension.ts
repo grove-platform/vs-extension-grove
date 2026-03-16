@@ -30,6 +30,7 @@ import {
   getCachedProjects,
   invalidate as invalidateProjectCache,
 } from "./project-cache";
+import { FeedbackPanel } from "./feedback/FeedbackPanel";
 import {
   initProfiler,
   isProfilingEnabled,
@@ -586,6 +587,13 @@ export async function activate(context: vscode.ExtensionContext) {
           );
         },
       );
+    }),
+  );
+
+  // Register feedback command
+  context.subscriptions.push(
+    vscode.commands.registerCommand("grove.sendFeedback", () => {
+      FeedbackPanel.createOrShow(context.extensionUri);
     }),
   );
 

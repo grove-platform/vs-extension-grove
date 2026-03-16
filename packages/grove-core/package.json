@@ -27,6 +27,16 @@
           "type": "string",
           "default": "",
           "description": "Path to bluehawk CLI (uses npx if empty)"
+        },
+        "grove.feedback.jiraProjectId": {
+          "type": "string",
+          "default": "14181",
+          "description": "Jira project ID for feedback tickets (DOCSP = 14181)"
+        },
+        "grove.feedback.includeDiagnosticsByDefault": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include diagnostic information by default"
         }
       }
     },
@@ -93,6 +103,11 @@
       {
         "command": "grove.openProfilerPanel",
         "title": "Grove: Open Performance Monitor (Debug)"
+      },
+      {
+        "command": "grove.sendFeedback",
+        "title": "Send Feedback",
+        "category": "Grove"
       }
     ],
     "configurationDefaults": {

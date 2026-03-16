@@ -28,13 +28,18 @@ function getWorkspaceRoot(document: vscode.TextDocument): string | undefined {
   return workspaceFolder?.uri.fsPath;
 }
 
+interface SourceFileResult {
+  sourceFilePath: string;
+  snippetName: string;
+}
+
 interface TestFileResult {
   testFilePath: string;
   snippetName: string;
 }
 
 /**
- * Resolve a snippet file path to its original test file in code-example-tests/.
+ * Resolve a snippet file path to its original source file in code-example-tests/examples/.
  *
  * Grove's snip.js generates snippets from:
  *   code-example-tests/{lang}/driver/examples/... -> content/code-examples/tested/{lang}/driver/...
@@ -50,10 +55,10 @@ interface TestFileResult {
  *
  * Returns undefined if the path doesn't match the pattern.
  */
-function resolveTestFilePath(
+function resolveSourceFilePath(
   resolvedSnippetPath: string,
   workspaceRoot?: string,
-): TestFileResult | undefined {
+): SourceFileResult | undefined {
   if (!workspaceRoot) {
     return undefined;
   }
@@ -98,7 +103,7 @@ function resolveTestFilePath(
   const dir = path.dirname(restOfPath);
   const originalFilename = `${snippetMatch[1]}${snippetMatch[3]}`;
 
-  const testFilePath = path.join(
+  const sourceFilePath = path.join(
     workspaceRoot,
     "code-example-tests",
     langDriver,
@@ -107,7 +112,106 @@ function resolveTestFilePath(
     originalFilename,
   );
 
-  return { testFilePath, snippetName };
+  return { sourceFilePath, snippetName };
+}
+
+/**
+ * Resolve a snippet file path to its actual test file in code-example-tests/tests/.
+ *
+ * Test files follow patterns like:
+ *   - examples/time-series/create-query/create-query-collection.js -> tests/time-series/create-query-collection.test.js
+ *   - examples/time-series/sample-app.js -> tests/time-series/sample-app.test.js
+ *
+ * The function tries multiple possible test file locations.
+ */
+function resolveActualTestFilePath(
+  resolvedSnippetPath: string,
+  workspaceRoot?: string,
+): TestFileResult | undefined {
+  if (!workspaceRoot) {
+    return undefined;
+  }
+
+  const filename = path.basename(resolvedSnippetPath);
+
+  // Check for .snippet. pattern in filename
+  const snippetPattern = /^(.+)\.snippet\.([^.]+)(\.[^.]+)$/;
+  const snippetMatch = filename.match(snippetPattern);
+
+  if (!snippetMatch) {
+    return undefined;
+  }
+
+  const snippetName = snippetMatch[2];
+
+  // Check if this is in code-examples/tested/
+  const testedMatch = resolvedSnippetPath.match(
+    /[/\\]code-examples[/\\]tested[/\\](.+)$/,
+  );
+  if (!testedMatch) {
+    return undefined;
+  }
+
+  const testedRelPath = testedMatch[1];
+
+  // Parse the path: {lang}/driver/{rest}
+  const driverMatch = testedRelPath.match(/^([^/\\]+[/\\]driver)[/\\](.+)$/);
+  if (!driverMatch) {
+    return undefined;
+  }
+
+  const langDriver = driverMatch[1]; // e.g., "javascript/driver"
+  const restOfPath = driverMatch[2]; // e.g., "time-series/sample-app.snippet.example.js"
+
+  // Get the original filename (without .snippet.name)
+  const baseFilename = snippetMatch[1]; // e.g., "sample-app" or "create-query-collection"
+  const ext = snippetMatch[3]; // e.g., ".js"
+
+  // Get the directory path
+  const dir = path.dirname(restOfPath);
+
+  // Build test filename: add .test before extension
+  const testFilename = `${baseFilename}.test${ext}`;
+
+  // Try different possible test file locations
+  const possiblePaths = [
+    // 1. Direct mapping: examples/a/b/file.js -> tests/a/b/file.test.js
+    path.join(
+      workspaceRoot,
+      "code-example-tests",
+      langDriver,
+      "tests",
+      dir,
+      testFilename,
+    ),
+    // 2. Flattened: examples/a/b/file.js -> tests/a/file.test.js (one level up)
+    path.join(
+      workspaceRoot,
+      "code-example-tests",
+      langDriver,
+      "tests",
+      path.dirname(dir),
+      testFilename,
+    ),
+    // 3. Top-level of category: examples/a/b/c/file.js -> tests/a/file.test.js
+    path.join(
+      workspaceRoot,
+      "code-example-tests",
+      langDriver,
+      "tests",
+      dir.split(path.sep)[0],
+      testFilename,
+    ),
+  ];
+
+  // Return the first existing path
+  for (const testFilePath of possiblePaths) {
+    if (fs.existsSync(testFilePath)) {
+      return { testFilePath, snippetName };
+    }
+  }
+
+  return undefined;
 }
 
 /**
@@ -203,9 +307,28 @@ export class RstDirectiveCodeLensProvider implements vscode.CodeLensProvider {
         );
 
         // Check if this is a Grove code example snippet (has .snippet. in filename)
-        // Only show test link for literalinclude and io-code-block (not include)
+        // Only show source/test links for literalinclude and io-code-block (not include)
         if (ref.type !== "include") {
-          const testFileResult = resolveTestFilePath(
+          // "source" lens - links to the Bluehawk source file with markup tags
+          const sourceFileResult = resolveSourceFilePath(
+            resolved.absolutePath,
+            workspaceRoot,
+          );
+          if (
+            sourceFileResult &&
+            fs.existsSync(sourceFileResult.sourceFilePath)
+          ) {
+            lenses.push(
+              new vscode.CodeLens(lensRange, {
+                title: `📄 source: ${sourceFileResult.snippetName}`,
+                command: "grove.literalinclude.view",
+                arguments: [sourceFileResult.sourceFilePath, ref.snippetName],
+              }),
+            );
+          }
+
+          // "test" lens - links to the actual test file that runs the code
+          const testFileResult = resolveActualTestFilePath(
             resolved.absolutePath,
             workspaceRoot,
           );
