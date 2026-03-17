@@ -6,9 +6,28 @@
  */
 
 import * as vscode from "vscode";
+import * as path from "path";
 import { spawn } from "child_process";
-import { rgPath } from "@vscode/ripgrep";
 import { profile } from "@grove/shared";
+
+/**
+ * Get the path to VS Code's built-in ripgrep binary.
+ * VS Code ships with ripgrep, so we use that instead of bundling our own.
+ */
+function getVSCodeRipgrepPath(): string {
+  const isWindows = process.platform === "win32";
+  const binaryName = isWindows ? "rg.exe" : "rg";
+
+  // VS Code's ripgrep is located in the app's node_modules
+  return path.join(
+    vscode.env.appRoot,
+    "node_modules",
+    "@vscode",
+    "ripgrep",
+    "bin",
+    binaryName,
+  );
+}
 
 export interface SnippetReference {
   uri: vscode.Uri;
@@ -172,6 +191,7 @@ async function runRipgrep(
 
     // stdio: ignore stdin, pipe stdout/stderr
     // Without this, ripgrep may hang waiting for stdin
+    const rgPath = getVSCodeRipgrepPath();
     const rg = spawn(rgPath, args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],

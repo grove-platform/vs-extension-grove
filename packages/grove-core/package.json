@@ -2,7 +2,7 @@
   "name": "grove-core",
   "displayName": "Grove",
   "description": "MongoDB documentation code example testing platform",
-  "version": "0.0.1",
+  "version": "0.0.15",
   "publisher": "mongodb",
   "engines": {
     "vscode": "^1.110.0"
@@ -119,7 +119,7 @@
     }
   },
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:@vscode/ripgrep --format=cjs --platform=node",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
     "watch": "npm run build -- --watch",
     "package": "vsce package --no-dependencies",
     "lint": "eslint src --ext ts",
@@ -128,7 +128,6 @@
   },
   "dependencies": {
     "@grove/shared": "workspace:*",
-    "@vscode/ripgrep": "^1.17.1",
     "js-yaml": "^4.1.1",
     "mongodb": "^7.1.0"
   },

@@ -87,14 +87,14 @@ var require_project_detection = __commonJS({
     exports2.detectLanguage = detectLanguage2;
     exports2.validateSnipConfig = validateSnipConfig;
     exports2.findProjectForFile = findProjectForFile3;
-    var path9 = __importStar(require("path"));
+    var path10 = __importStar(require("path"));
     var fs7 = __importStar(require("fs/promises"));
     async function detectGroveProjects2(workspacePath) {
       const projects = [];
       const snipFiles = await findSnipFiles(workspacePath);
       for (const snipPath of snipFiles) {
-        const projectRoot = path9.dirname(snipPath);
-        const relativePath = path9.relative(workspacePath, projectRoot) || ".";
+        const projectRoot = path10.dirname(snipPath);
+        const relativePath = path10.relative(workspacePath, projectRoot) || ".";
         const language = await detectLanguage2(projectRoot);
         const hasValidConfig = await validateSnipConfig(snipPath);
         projects.push({
@@ -114,7 +114,7 @@ var require_project_detection = __commonJS({
       try {
         const entries = await fs7.readdir(dir, { withFileTypes: true });
         for (const entry of entries) {
-          const fullPath = path9.join(dir, entry.name);
+          const fullPath = path10.join(dir, entry.name);
           if (entry.isDirectory()) {
             if (entry.name === "node_modules" || entry.name.startsWith(".")) {
               continue;
@@ -131,7 +131,7 @@ var require_project_detection = __commonJS({
     }
     async function detectLanguage2(projectPath) {
       try {
-        const pkgPath = path9.join(projectPath, "package.json");
+        const pkgPath = path10.join(projectPath, "package.json");
         const content = await fs7.readFile(pkgPath, "utf-8");
         const pkg = JSON.parse(content);
         if (pkg.devDependencies?.jest || pkg.dependencies?.jest || pkg.devDependencies?.vitest || pkg.dependencies?.vitest) {
@@ -143,26 +143,26 @@ var require_project_detection = __commonJS({
       } catch {
       }
       try {
-        await fs7.access(path9.join(projectPath, "pyproject.toml"));
+        await fs7.access(path10.join(projectPath, "pyproject.toml"));
         return "python";
       } catch {
         try {
-          await fs7.access(path9.join(projectPath, "pytest.ini"));
+          await fs7.access(path10.join(projectPath, "pytest.ini"));
           return "python";
         } catch {
         }
       }
       try {
-        await fs7.access(path9.join(projectPath, "go.mod"));
+        await fs7.access(path10.join(projectPath, "go.mod"));
         return "go";
       } catch {
       }
       try {
-        await fs7.access(path9.join(projectPath, "pom.xml"));
+        await fs7.access(path10.join(projectPath, "pom.xml"));
         return "java";
       } catch {
         try {
-          await fs7.access(path9.join(projectPath, "build.gradle"));
+          await fs7.access(path10.join(projectPath, "build.gradle"));
           return "java";
         } catch {
         }
@@ -185,10 +185,10 @@ var require_project_detection = __commonJS({
       }
     }
     function findProjectForFile3(filePath, projects) {
-      const normalizedFile = path9.resolve(filePath).replace(/[/\\]+$/, "");
+      const normalizedFile = path10.resolve(filePath).replace(/[/\\]+$/, "");
       const matchingProjects = projects.filter((project) => {
-        const normalizedRoot = path9.resolve(project.rootPath).replace(/[/\\]+$/, "");
-        return normalizedFile === normalizedRoot || normalizedFile.startsWith(normalizedRoot + path9.sep);
+        const normalizedRoot = path10.resolve(project.rootPath).replace(/[/\\]+$/, "");
+        return normalizedFile === normalizedRoot || normalizedFile.startsWith(normalizedRoot + path10.sep);
       });
       if (matchingProjects.length === 0) {
         return void 0;
@@ -243,11 +243,11 @@ var require_security = __commonJS({
     exports2.isPathWithinBoundary = isPathWithinBoundary2;
     exports2.sanitizePath = sanitizePath;
     exports2.validateWorkspacePath = validateWorkspacePath2;
-    var path9 = __importStar(require("path"));
+    var path10 = __importStar(require("path"));
     function isPathWithinBoundary2(resolvedPath, basePath) {
-      const normalizedResolved = path9.normalize(resolvedPath);
-      const normalizedBase = path9.normalize(basePath);
-      return normalizedResolved.startsWith(normalizedBase + path9.sep) || normalizedResolved === normalizedBase;
+      const normalizedResolved = path10.normalize(resolvedPath);
+      const normalizedBase = path10.normalize(basePath);
+      return normalizedResolved.startsWith(normalizedBase + path10.sep) || normalizedResolved === normalizedBase;
     }
     function sanitizePath(relativePath) {
       let sanitized = relativePath.replace(/\0/g, "");
@@ -256,7 +256,7 @@ var require_security = __commonJS({
       return sanitized;
     }
     function validateWorkspacePath2(filePath, workspacePath) {
-      const resolvedPath = path9.resolve(filePath);
+      const resolvedPath = path10.resolve(filePath);
       return isPathWithinBoundary2(resolvedPath, workspacePath);
     }
   }
@@ -4131,17 +4131,17 @@ var require_bson = __commonJS({
       index = index + size;
       return index;
     }
-    function serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path9) {
-      if (path9.has(value)) {
+    function serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path10) {
+      if (path10.has(value)) {
         throw new BSONError("Cannot convert circular structure to BSON");
       }
-      path9.add(value);
+      path10.add(value);
       buffer2[index++] = Array.isArray(value) ? BSON_DATA_ARRAY : BSON_DATA_OBJECT;
       const numberOfWrittenBytes = ByteUtils.encodeUTF8Into(buffer2, key, index);
       index = index + numberOfWrittenBytes;
       buffer2[index++] = 0;
-      const endIndex = serializeInto(buffer2, value, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path9);
-      path9.delete(value);
+      const endIndex = serializeInto(buffer2, value, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path10);
+      path10.delete(value);
       return endIndex;
     }
     function serializeDecimal128(buffer2, key, value, index) {
@@ -4193,7 +4193,7 @@ var require_bson = __commonJS({
       buffer2[index++] = 0;
       return index;
     }
-    function serializeCode(buffer2, key, value, index, checkKeys = false, depth = 0, serializeFunctions = false, ignoreUndefined = true, path9) {
+    function serializeCode(buffer2, key, value, index, checkKeys = false, depth = 0, serializeFunctions = false, ignoreUndefined = true, path10) {
       if (value.scope && typeof value.scope === "object") {
         buffer2[index++] = BSON_DATA_CODE_W_SCOPE;
         const numberOfWrittenBytes = ByteUtils.encodeUTF8Into(buffer2, key, index);
@@ -4206,7 +4206,7 @@ var require_bson = __commonJS({
         NumberUtils.setInt32LE(buffer2, index, codeSize);
         buffer2[index + 4 + codeSize - 1] = 0;
         index = index + codeSize + 4;
-        const endIndex = serializeInto(buffer2, value.scope, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path9);
+        const endIndex = serializeInto(buffer2, value.scope, checkKeys, index, depth + 1, serializeFunctions, ignoreUndefined, path10);
         index = endIndex - 1;
         const totalSize = endIndex - startIndex;
         startIndex += NumberUtils.setInt32LE(buffer2, startIndex, totalSize);
@@ -4262,7 +4262,7 @@ var require_bson = __commonJS({
       buffer2[index++] = 0;
       return index;
     }
-    function serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path9) {
+    function serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path10) {
       buffer2[index++] = BSON_DATA_OBJECT;
       const numberOfWrittenBytes = ByteUtils.encodeUTF8Into(buffer2, key, index);
       index = index + numberOfWrittenBytes;
@@ -4276,13 +4276,13 @@ var require_bson = __commonJS({
         output.$db = value.db;
       }
       output = Object.assign(output, value.fields);
-      const endIndex = serializeInto(buffer2, output, false, index, depth + 1, serializeFunctions, true, path9);
+      const endIndex = serializeInto(buffer2, output, false, index, depth + 1, serializeFunctions, true, path10);
       const size = endIndex - startIndex;
       startIndex += NumberUtils.setInt32LE(buffer2, index, size);
       return endIndex;
     }
-    function serializeInto(buffer2, object, checkKeys, startingIndex, depth, serializeFunctions, ignoreUndefined, path9) {
-      if (path9 == null) {
+    function serializeInto(buffer2, object, checkKeys, startingIndex, depth, serializeFunctions, ignoreUndefined, path10) {
+      if (path10 == null) {
         if (object == null) {
           buffer2[0] = 5;
           buffer2[1] = 0;
@@ -4301,9 +4301,9 @@ var require_bson = __commonJS({
         } else if (isDate(object) || isRegExp(object) || isUint8Array(object) || isAnyArrayBuffer(object)) {
           throw new BSONError(`date, regexp, typedarray, and arraybuffer cannot be BSON documents`);
         }
-        path9 = /* @__PURE__ */ new Set();
+        path10 = /* @__PURE__ */ new Set();
       }
-      path9.add(object);
+      path10.add(object);
       let index = startingIndex + 4;
       if (Array.isArray(object)) {
         for (let i = 0; i < object.length; i++) {
@@ -4333,7 +4333,7 @@ var require_bson = __commonJS({
             } else if (value instanceof RegExp || isRegExp(value)) {
               index = serializeRegExp(buffer2, key, value, index);
             } else {
-              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path9);
+              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path10);
             }
           } else if (type2 === "object") {
             if (value[BSON_VERSION_SYMBOL] !== BSON_MAJOR_VERSION) {
@@ -4347,13 +4347,13 @@ var require_bson = __commonJS({
             } else if (value._bsontype === "Double") {
               index = serializeDouble(buffer2, key, value, index);
             } else if (value._bsontype === "Code") {
-              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path9);
+              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path10);
             } else if (value._bsontype === "Binary") {
               index = serializeBinary(buffer2, key, value, index);
             } else if (value._bsontype === "BSONSymbol") {
               index = serializeSymbol(buffer2, key, value, index);
             } else if (value._bsontype === "DBRef") {
-              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path9);
+              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path10);
             } else if (value._bsontype === "BSONRegExp") {
               index = serializeBSONRegExp(buffer2, key, value, index);
             } else if (value._bsontype === "Int32") {
@@ -4414,7 +4414,7 @@ var require_bson = __commonJS({
             } else if (value instanceof RegExp || isRegExp(value)) {
               index = serializeRegExp(buffer2, key, value, index);
             } else {
-              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path9);
+              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path10);
             }
           } else if (type2 === "object") {
             if (value[BSON_VERSION_SYMBOL] !== BSON_MAJOR_VERSION) {
@@ -4428,13 +4428,13 @@ var require_bson = __commonJS({
             } else if (value._bsontype === "Double") {
               index = serializeDouble(buffer2, key, value, index);
             } else if (value._bsontype === "Code") {
-              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path9);
+              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path10);
             } else if (value._bsontype === "Binary") {
               index = serializeBinary(buffer2, key, value, index);
             } else if (value._bsontype === "BSONSymbol") {
               index = serializeSymbol(buffer2, key, value, index);
             } else if (value._bsontype === "DBRef") {
-              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path9);
+              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path10);
             } else if (value._bsontype === "BSONRegExp") {
               index = serializeBSONRegExp(buffer2, key, value, index);
             } else if (value._bsontype === "Int32") {
@@ -4494,7 +4494,7 @@ var require_bson = __commonJS({
             } else if (value instanceof RegExp || isRegExp(value)) {
               index = serializeRegExp(buffer2, key, value, index);
             } else {
-              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path9);
+              index = serializeObject(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path10);
             }
           } else if (type2 === "object") {
             if (value[BSON_VERSION_SYMBOL] !== BSON_MAJOR_VERSION) {
@@ -4508,13 +4508,13 @@ var require_bson = __commonJS({
             } else if (value._bsontype === "Double") {
               index = serializeDouble(buffer2, key, value, index);
             } else if (value._bsontype === "Code") {
-              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path9);
+              index = serializeCode(buffer2, key, value, index, checkKeys, depth, serializeFunctions, ignoreUndefined, path10);
             } else if (value._bsontype === "Binary") {
               index = serializeBinary(buffer2, key, value, index);
             } else if (value._bsontype === "BSONSymbol") {
               index = serializeSymbol(buffer2, key, value, index);
             } else if (value._bsontype === "DBRef") {
-              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path9);
+              index = serializeDBRef(buffer2, key, value, index, depth, serializeFunctions, path10);
             } else if (value._bsontype === "BSONRegExp") {
               index = serializeBSONRegExp(buffer2, key, value, index);
             } else if (value._bsontype === "Int32") {
@@ -4529,7 +4529,7 @@ var require_bson = __commonJS({
           }
         }
       }
-      path9.delete(object);
+      path10.delete(object);
       buffer2[index++] = 0;
       const size = index - startingIndex;
       startingIndex += NumberUtils.setInt32LE(buffer2, startingIndex, size);
@@ -18718,14 +18718,14 @@ var require_url_state_machine = __commonJS({
       return url.replace(/\u0009|\u000A|\u000D/ug, "");
     }
     function shortenPath(url) {
-      const { path: path9 } = url;
-      if (path9.length === 0) {
+      const { path: path10 } = url;
+      if (path10.length === 0) {
         return;
       }
-      if (url.scheme === "file" && path9.length === 1 && isNormalizedWindowsDriveLetter(path9[0])) {
+      if (url.scheme === "file" && path10.length === 1 && isNormalizedWindowsDriveLetter(path10[0])) {
         return;
       }
-      path9.pop();
+      path10.pop();
     }
     function includesCredentials(url) {
       return url.username !== "" || url.password !== "";
@@ -38496,9 +38496,21 @@ function parseSnippetBlocks(document) {
 
 // src/snippet-codelens/ripgrep-searcher.ts
 var vscode20 = __toESM(require("vscode"));
+var path9 = __toESM(require("path"));
 var import_child_process2 = require("child_process");
-var import_ripgrep = require("@vscode/ripgrep");
 var import_shared10 = __toESM(require_dist());
+function getVSCodeRipgrepPath() {
+  const isWindows = process.platform === "win32";
+  const binaryName = isWindows ? "rg.exe" : "rg";
+  return path9.join(
+    vscode20.env.appRoot,
+    "node_modules",
+    "@vscode",
+    "ripgrep",
+    "bin",
+    binaryName
+  );
+}
 var CACHE_TTL_MS = 5 * 60 * 1e3;
 var CACHE_MAX_ENTRIES = 50;
 var referenceCache = /* @__PURE__ */ new Map();
@@ -38571,7 +38583,8 @@ async function runRipgrep(pattern, cwd, snippetName, sourceExt) {
       "--ignore-case",
       pattern
     ];
-    const rg = (0, import_child_process2.spawn)(import_ripgrep.rgPath, args, {
+    const rgPath = getVSCodeRipgrepPath();
+    const rg = (0, import_child_process2.spawn)(rgPath, args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"]
     });
@@ -39675,13 +39688,13 @@ async function activate(context) {
       const resolved = await resolveProject();
       if (!resolved) return;
       const projectPath = resolved.project.rootPath;
-      let env2;
+      let env3;
       let connectionString = null;
       const usingUiConnection = mongoConnectionManager?.status.connected;
       if (usingUiConnection) {
         connectionString = mongoConnectionManager.getConnectionStringForTests();
         if (connectionString) {
-          env2 = { CONNECTION_STRING: connectionString };
+          env3 = { CONNECTION_STRING: connectionString };
         }
       }
       const progressTitle = usingUiConnection ? "Running tests (using Grove MongoDB connection)..." : "Running tests...";
@@ -39692,7 +39705,7 @@ async function activate(context) {
           cancellable: false
         },
         async () => {
-          const outcome = await executeTests(projectPath, { env: env2 });
+          const outcome = await executeTests(projectPath, { env: env3 });
           if (!outcome) return;
           let sanitizedOutput = outcome.result.output ?? "";
           if (connectionString && sanitizedOutput.includes(connectionString)) {
