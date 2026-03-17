@@ -37112,18 +37112,18 @@ function resolveSourceFilePath(resolvedSnippetPath, workspaceRoot2) {
     return void 0;
   }
   const testedRelPath = testedMatch[1];
-  const driverMatch = testedRelPath.match(/^([^/\\]+[/\\]driver)[/\\](.+)$/);
-  if (!driverMatch) {
+  const projectMatch = testedRelPath.match(/^([^/\\]+[/\\][^/\\]+)[/\\](.+)$/);
+  if (!projectMatch) {
     return void 0;
   }
-  const langDriver = driverMatch[1];
-  const restOfPath = driverMatch[2];
+  const langProduct = projectMatch[1];
+  const restOfPath = projectMatch[2];
   const dir = path5.dirname(restOfPath);
   const originalFilename = `${snippetMatch[1]}${snippetMatch[3]}`;
   const sourceFilePath = path5.join(
     workspaceRoot2,
     "code-example-tests",
-    langDriver,
+    langProduct,
     "examples",
     dir,
     originalFilename
@@ -37148,45 +37148,53 @@ function resolveActualTestFilePath(resolvedSnippetPath, workspaceRoot2) {
     return void 0;
   }
   const testedRelPath = testedMatch[1];
-  const driverMatch = testedRelPath.match(/^([^/\\]+[/\\]driver)[/\\](.+)$/);
-  if (!driverMatch) {
+  const projectMatch = testedRelPath.match(/^([^/\\]+[/\\][^/\\]+)[/\\](.+)$/);
+  if (!projectMatch) {
     return void 0;
   }
-  const langDriver = driverMatch[1];
-  const restOfPath = driverMatch[2];
+  const langProduct = projectMatch[1];
+  const restOfPath = projectMatch[2];
   const baseFilename = snippetMatch[1];
   const ext = snippetMatch[3];
   const dir = path5.dirname(restOfPath);
   const testFilename = `${baseFilename}.test${ext}`;
-  const possiblePaths = [
-    // 1. Direct mapping: examples/a/b/file.js -> tests/a/b/file.test.js
-    path5.join(
-      workspaceRoot2,
-      "code-example-tests",
-      langDriver,
-      "tests",
-      dir,
-      testFilename
-    ),
-    // 2. Flattened: examples/a/b/file.js -> tests/a/file.test.js (one level up)
-    path5.join(
-      workspaceRoot2,
-      "code-example-tests",
-      langDriver,
-      "tests",
-      path5.dirname(dir),
-      testFilename
-    ),
-    // 3. Top-level of category: examples/a/b/c/file.js -> tests/a/file.test.js
-    path5.join(
-      workspaceRoot2,
-      "code-example-tests",
-      langDriver,
-      "tests",
-      dir.split(path5.sep)[0],
-      testFilename
-    )
-  ];
+  const testDirNames = ["tests", "tests_package"];
+  const possiblePaths = [];
+  for (const testDirName of testDirNames) {
+    possiblePaths.push(
+      path5.join(
+        workspaceRoot2,
+        "code-example-tests",
+        langProduct,
+        testDirName,
+        dir,
+        testFilename
+      )
+    );
+    possiblePaths.push(
+      path5.join(
+        workspaceRoot2,
+        "code-example-tests",
+        langProduct,
+        testDirName,
+        path5.dirname(dir),
+        testFilename
+      )
+    );
+    const topLevelDir = dir.split(path5.sep)[0];
+    if (topLevelDir && topLevelDir !== ".") {
+      possiblePaths.push(
+        path5.join(
+          workspaceRoot2,
+          "code-example-tests",
+          langProduct,
+          testDirName,
+          topLevelDir,
+          testFilename
+        )
+      );
+    }
+  }
   for (const testFilePath of possiblePaths) {
     if (fs5.existsSync(testFilePath)) {
       return { testFilePath, snippetName };
@@ -37275,7 +37283,7 @@ var RstDirectiveCodeLensProvider = class {
           if (sourceFileResult && fs5.existsSync(sourceFileResult.sourceFilePath)) {
             lenses.push(
               new vscode11.CodeLens(lensRange, {
-                title: `\u{1F4C4} source: ${sourceFileResult.snippetName}`,
+                title: `\u{1F4C4} source`,
                 command: "grove.literalinclude.view",
                 arguments: [sourceFileResult.sourceFilePath, ref.snippetName]
               })
@@ -37288,7 +37296,7 @@ var RstDirectiveCodeLensProvider = class {
           if (testFileResult && fs5.existsSync(testFileResult.testFilePath)) {
             lenses.push(
               new vscode11.CodeLens(lensRange, {
-                title: `\u{1F9EA} test: ${testFileResult.snippetName}`,
+                title: `\u{1F9EA} test`,
                 command: "grove.literalinclude.view",
                 arguments: [testFileResult.testFilePath, ref.snippetName]
               })

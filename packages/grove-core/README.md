@@ -88,6 +88,7 @@ The extension activates on the `workspaceContains:**/snip.js` event. On activati
 | `grove.createSymlink`             | Grove: Create Symlink for Documentation     | Create symlink from docs to code-examples           |
 | `grove.connectMongo`              | Grove: Connect to MongoDB                   | Connect with a connection string                    |
 | `grove.disconnectMongo`           | Grove: Disconnect from MongoDB              | Disconnect and clear session                        |
+| `grove.showDatabases`             | Grove: Show Databases                       | List databases on the connected MongoDB cluster     |
 | `grove.openBluehawkPreview`       | Grove: Open Bluehawk Preview                | Show Bluehawk output for current file               |
 | `grove.sendFeedback`              | Grove: Send Feedback                        | Open feedback panel to report bugs/request features |
 | `grove.showPerformanceReport`     | Grove: Show Performance Report (Debug)      | Display profiling stats in output channel           |
@@ -127,18 +128,21 @@ Projects are cached and automatically refreshed when:
 
 Provides CodeLens, go-to-definition, and clickable links for file-referencing RST directives:
 
-| Directive                              | CodeLens         | Description                            |
-| -------------------------------------- | ---------------- | -------------------------------------- |
-| `.. literalinclude:: /path`            | 📄 view, 🧪 test | Code examples with syntax highlighting |
-| `.. include:: /path`                   | 📄 view          | RST content inclusion                  |
-| `.. input:: /path` (in io-code-block)  | 📥 input         | Input examples                         |
-| `.. output:: /path` (in io-code-block) | 📤 output        | Output examples                        |
+| Directive                              | CodeLens                     | Description                            |
+| -------------------------------------- | ---------------------------- | -------------------------------------- |
+| `.. literalinclude:: /path`            | 📄 view, 📄 source, 🧪 test  | Code examples with syntax highlighting |
+| `.. include:: /path`                   | 📄 view                      | RST content inclusion                  |
+| `.. include:: /includes/extracts/...`  | 📋 extract                   | YAML extract file references           |
+| `.. input:: /path` (in io-code-block)  | 📥 input, 📄 source, 🧪 test | Input examples                         |
+| `.. output:: /path` (in io-code-block) | 📤 output                    | Output examples                        |
 
 Features:
 
 - **Symlink-aware resolution** - Follows symlinks for code-example paths
 - **Snippet navigation** - Jumps to `:snippet:` or `:start-after:` markers
-- **Test file linking** - "🧪 test" CodeLens links to the original test file in `code-example-tests/`
+- **Source file linking** - "📄 source" CodeLens links to the Bluehawk source file with markup tags in `code-example-tests/`
+- **Test file linking** - "🧪 test" CodeLens links to the test file in `code-example-tests/`
+- **Extract resolution** - Resolves extract YAML references and links to the definition
 
 ### Test CodeLens
 

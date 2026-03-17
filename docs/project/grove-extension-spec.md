@@ -17,45 +17,43 @@ Grove is MongoDB's test platform for documentation code examples. The Grove VS C
 
 ### Extension Pack Structure
 
-| Extension             | ID                      | Purpose                                                                             |
-| --------------------- | ----------------------- | ----------------------------------------------------------------------------------- |
-| **Grove Core**        | `mongodb.grove-core`    | Project detection, Grove Panel UI, Bluehawk preview, MCP server, symlink management |
-| **Grove for Node.js** | `mongodb.grove-nodejs`  | Jest runner, scaffolding, Node.js-specific MCP tools                                |
-| **Grove for Python**  | `mongodb.grove-python`  | pytest runner, scaffolding, Python-specific MCP tools                               |
-| **Grove for Go**      | `mongodb.grove-go`      | go test runner, scaffolding, Go-specific MCP tools                                  |
-| **Grove for Java**    | `mongodb.grove-java`    | JUnit runner, scaffolding, Java-specific MCP tools                                  |
-| **Grove for C#**      | `mongodb.grove-csharp`  | NUnit runner, scaffolding, C#-specific MCP tools                                    |
-| **Grove for mongosh** | `mongodb.grove-mongosh` | Jest runner, scaffolding, mongosh-specific MCP tools                                |
+| Extension             | ID                      | Purpose                                                                 |
+| --------------------- | ----------------------- | ----------------------------------------------------------------------- |
+| **Grove Core**        | `mongodb.grove-core`    | Project detection, Grove Panel UI, Bluehawk preview, symlink management |
+| **Grove for Node.js** | `mongodb.grove-nodejs`  | Jest runner, scaffolding, Node.js-specific AI skills                    |
+| **Grove for Python**  | `mongodb.grove-python`  | pytest runner, scaffolding, Python-specific AI skills                   |
+| **Grove for Go**      | `mongodb.grove-go`      | go test runner, scaffolding, Go-specific AI skills                      |
+| **Grove for Java**    | `mongodb.grove-java`    | JUnit runner, scaffolding, Java-specific AI skills                      |
+| **Grove for C#**      | `mongodb.grove-csharp`  | NUnit runner, scaffolding, C#-specific AI skills                        |
+| **Grove for mongosh** | `mongodb.grove-mongosh` | Jest runner, scaffolding, mongosh-specific AI skills                    |
 
 All extensions auto-detect Grove projects via `snip.js` presence using `workspaceContains:**/snip.js`.
 
-### AI Integration via MCP
+### AI Integration via Agents & Skills
 
-Grove exposes its functionality through **Model Context Protocol (MCP)**, allowing AI assistants like Augment Code to invoke Grove tools directly. The Grove MCP server runs as part of the VS Code extension and provides:
+> **Design Decision**: We evaluated MCP (Model Context Protocol) for AI integration but decided against it. Instead, Grove uses **AI agents and skill files** that work with any AI assistant that supports file-based context (Augment, Cursor, Copilot, etc.). This approach is simpler, more portable, and doesn't require running a separate server process.
 
-- **Tools**: Actions like creating examples, running tests, and snipping code
-- **Resources**: Access to Grove project structure, templates, and conventions
-- **Prompts**: Pre-built prompts for common workflows
+Grove's AI integration consists of:
+
+- **Skill Files** (`.skills/`): Markdown files containing instructions, conventions, and workflows for specific tasks
+- **Agent Definitions** (`.agents/`): Pre-configured AI agent personas for language-specific guidance
+- **Context Files**: Project structure and conventions exposed as readable files
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Augment Code                            │
-│  (or any MCP-compliant AI assistant)                        │
+│                     AI Assistant                            │
+│  (Augment, Cursor, Copilot, or any file-aware AI)          │
 └─────────────────────┬───────────────────────────────────────┘
-                      │ MCP Protocol
+                      │ Reads files as context
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   Grove MCP Server                          │
-│  (bundled in grove-core extension)                          │
+│              Grove Project Files                            │
 ├─────────────────────────────────────────────────────────────┤
-│  Tools:                    Resources:                       │
-│  • grove_create_example    • grove://project/structure      │
-│  • grove_create_test       • grove://templates/{language}   │
-│  • grove_run_tests         • grove://conventions            │
-│  • grove_snip                                               │
-│  • grove_read_file         Prompts:                         │
-│  • grove_list_examples     • create-example                 │
-│  • grove_get_status        • fix-test                       │
+│  .skills/                  .agents/                         │
+│  • create-example.md       • nodejs-grove-agent.md          │
+│  • write-test.md           • python-grove-agent.md          │
+│  • fix-test.md             • conventions.md                 │
+│  • snip-code.md                                             │
 └─────────────────────────────────────────────────────────────┘
                       │
                       ▼
@@ -75,7 +73,7 @@ Grove exposes its functionality through **Model Context Protocol (MCP)**, allowi
 
 ### Repository Structure
 
-Grove uses a **monorepo** with pnpm workspaces. The MCP server is a standalone package that can be published to npm independently while staying in sync with the extension.
+Grove uses a **monorepo** with pnpm workspaces:
 
 ```
 vs-extension-grove/
@@ -83,26 +81,10 @@ vs-extension-grove/
 │   ├── grove-core/                    # VS Code extension (mongodb.grove-core)
 │   │   ├── src/
 │   │   │   ├── extension.ts           # Extension entry point
-│   │   │   ├── mcp-bridge.ts          # Starts/manages MCP server lifecycle
 │   │   │   ├── panel/                 # Grove Panel webview
 │   │   │   └── providers/             # Tree views, diagnostics, etc.
 │   │   ├── package.json
 │   │   └── tsconfig.json
-│   │
-│   ├── grove-mcp-server/              # MCP server (standalone npm package)
-│   │   ├── src/
-│   │   │   ├── index.ts               # Server entry point
-│   │   │   ├── tools/                 # MCP tool implementations
-│   │   │   │   ├── create-example.ts
-│   │   │   │   ├── create-test.ts
-│   │   │   │   ├── run-tests.ts
-│   │   │   │   └── snip.ts
-│   │   │   └── resources/             # MCP resource implementations
-│   │   │       ├── conventions.ts
-│   │   │       └── templates.ts
-│   │   ├── bin/
-│   │   │   └── grove-mcp.js           # CLI entry for `npx @mongodb/grove-mcp`
-│   │   └── package.json               # Published as @mongodb/grove-mcp
 │   │
 │   ├── grove-nodejs/                  # Node.js language extension
 │   │   ├── src/
@@ -120,7 +102,18 @@ vs-extension-grove/
 │       │   └── types.ts               # Shared TypeScript types
 │       └── package.json
 │
-├── meta/                              # Design documents
+├── .skills/                           # AI skill files (shared across projects)
+│   ├── create-example.md
+│   ├── write-test.md
+│   ├── fix-test.md
+│   └── snip-code.md
+│
+├── .agents/                           # AI agent definitions
+│   ├── grove-nodejs.md
+│   ├── grove-python.md
+│   └── conventions.md
+│
+├── docs/project/                      # Design documents
 │   ├── grove-extension-spec.md
 │   └── repo-structure.md
 │
@@ -129,44 +122,11 @@ vs-extension-grove/
 └── tsconfig.base.json
 ```
 
-### MCP Server Distribution Strategy
+**Why monorepo?**
 
-The Grove MCP server uses a **hybrid distribution** approach to serve both VS Code users and users of other AI tools:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    @mongodb/grove-mcp (npm)                      │
-│                                                                  │
-│  • Single source of truth for MCP server logic                   │
-│  • Published to npm for standalone use                           │
-│  • Consumed by grove-core extension as a dependency              │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-        ┌───────────────────┼───────────────────┐
-        │                   │                   │
-        ▼                   ▼                   ▼
-┌───────────────┐   ┌───────────────┐   ┌───────────────┐
-│ VS Code +     │   │ Claude        │   │ Cursor /      │
-│ Augment       │   │ Desktop       │   │ Other AI      │
-│               │   │               │   │               │
-│ Auto-config:  │   │ Manual setup: │   │ Manual setup: │
-│ Extension     │   │ npx @mongodb/ │   │ npx @mongodb/ │
-│ handles setup │   │ grove-mcp     │   │ grove-mcp     │
-└───────────────┘   └───────────────┘   └───────────────┘
-```
-
-| Distribution Channel     | Target Users                    | Setup Experience                                 |
-| ------------------------ | ------------------------------- | ------------------------------------------------ |
-| **VS Code Extension**    | Writers using Augment           | Zero-config: extension auto-registers MCP server |
-| **npm package**          | Claude Desktop, Cursor users    | `npx @mongodb/grove-mcp` in MCP config           |
-| **Bundled in extension** | Offline/air-gapped environments | Works without npm access                         |
-
-**Why monorepo instead of separate repo?**
-
-- ✅ Extension and MCP server always stay in sync
+- ✅ All extensions stay in sync
 - ✅ Single CI/CD pipeline for releases
 - ✅ Shared code via `packages/shared`
-- ✅ Can still publish `@mongodb/grove-mcp` to npm independently
 - ✅ Easier for contributors (one repo to clone)
 
 ## Core Features
@@ -212,58 +172,58 @@ A **webview in the sidebar** that serves as the command center for all Grove ope
 - Inline warnings for issues (missing symlinks, broken references)
 - Progress indicators for long-running operations
 
-**Works Without AI**: The Grove Panel is fully functional without Augment:
+**Works Without AI**: The Grove Panel is fully functional without any AI assistant:
 
 - "+ Example" button opens template picker (no AI required)
 - "Run Tests" button works directly
 - "Snip" button works directly
-- AI features via MCP are additive, not required
+- AI skills are additive, not required
 
-### 2. MCP Tools
+### 2. AI Skills & Agents
 
-Grove exposes controlled tools via MCP that AI assistants (like Augment) can invoke:
+Grove provides skill files and agent definitions that any file-aware AI assistant can use:
 
-| MCP Tool                | Description                                      | Parameters                                  |
-| ----------------------- | ------------------------------------------------ | ------------------------------------------- |
-| `grove_create_example`  | Generates example file from template             | `language`, `topic`, `name`, `description`  |
-| `grove_create_test`     | Generates test stub for an example               | `examplePath`, `assertions[]`               |
-| `grove_run_tests`       | Executes test command, returns output            | `testPath?` (optional, runs all if omitted) |
-| `grove_snip`            | Runs Bluehawk snip, returns extracted file paths | `projectPath?`                              |
-| `grove_read_file`       | Reads file content for AI context                | `filePath`                                  |
-| `grove_list_examples`   | Lists all examples in current project            | `language?`, `topic?`                       |
-| `grove_get_status`      | Returns project status (connection, tests, etc.) | none                                        |
-| `grove_get_conventions` | Returns Grove conventions for a language         | `language`                                  |
+| Skill File          | Description                                                  |
+| ------------------- | ------------------------------------------------------------ |
+| `create-example.md` | Instructions for creating example files with Bluehawk markup |
+| `write-test.md`     | Instructions for writing tests for examples                  |
+| `fix-test.md`       | Troubleshooting guide for common test failures               |
+| `snip-code.md`      | How to run Bluehawk snip and verify output                   |
 
-**Example interaction with Augment**:
+| Agent File        | Description                                  |
+| ----------------- | -------------------------------------------- |
+| `grove-nodejs.md` | Node.js-specific conventions and patterns    |
+| `grove-python.md` | Python-specific conventions and patterns     |
+| `conventions.md`  | General Grove conventions and best practices |
+
+**Example interaction with AI**:
 
 ```
 Writer: Create a code example showing how to insert a document in Node.js
 
-Augment: [Calls grove_get_conventions with language="nodejs"]
-         [Calls grove_create_example with language="nodejs", topic="crud/insert",
-          name="basic-insert", description="Insert a single document"]
+AI: [Reads .agents/grove-nodejs.md for conventions]
+    [Reads .skills/create-example.md for workflow]
 
-         I've created the example file at examples/crud/insert/basic-insert.js.
-         It includes:
-         - MongoClient import
-         - Connection using CONNECTION_STRING env var
-         - insertOne() call with a sample document
-         - Proper Bluehawk markup for snipping
+    I've created the example file at examples/crud/insert/basic-insert.js.
+    It includes:
+    - MongoClient import
+    - Connection using CONNECTION_STRING env var
+    - insertOne() call with a sample document
+    - Proper Bluehawk markup for snipping
 
-         Would you like me to also create the test file?
+    Would you like me to also create the test file?
 
 Writer: Yes, please
 
-Augment: [Calls grove_create_test with examplePath="examples/crud/insert/basic-insert.js",
-          assertions=["insertedId is returned", "document exists in collection"]]
+AI: [Reads .skills/write-test.md for test patterns]
 
-         Created tests/crud/insert.test.js. Run the tests?
+    Created tests/crud/insert.test.js. Run the tests?
 
 Writer: Run them
 
-Augment: [Calls grove_run_tests with testPath="tests/crud/insert.test.js"]
+AI: [Executes: npm test -- tests/crud/insert.test.js]
 
-         ✓ All tests passed! Ready to snip.
+    ✓ All tests passed! Ready to snip.
 ```
 
 ### 3. Bluehawk Preview
@@ -294,39 +254,24 @@ Inline diagnostics for common issues:
 
 ## Security Considerations
 
-### MCP Tool Security Model
+### General Security Model
 
-AI assistants invoke MCP tools without direct user initiation. Grove treats all AI-provided input as **untrusted** and enforces the following safeguards:
+Grove validates all inputs and enforces the following safeguards:
 
-| Safeguard                 | Implementation                                                                            |
-| ------------------------- | ----------------------------------------------------------------------------------------- |
-| **Path validation**       | All file paths must resolve within workspace boundaries (`path.resolve()` + prefix check) |
-| **Command allowlisting**  | Test commands limited to known runners (jest, pytest, go test, etc.)                      |
-| **Execution timeout**     | `grove_run_tests` times out after 60 seconds (max: 300 seconds configurable)              |
-| **No watch mode via MCP** | `watch: true` only available via Panel UI, not AI tools                                   |
-| **Concurrency queue**     | Max 1 execution per tool type at a time                                                   |
-| **File size cap**         | `grove_create_example` rejects files larger than 100KB                                    |
-| **snip.js validation**    | Validate snip.js is a known Bluehawk config format before parsing                         |
-| **Audit logging**         | All tool invocations logged to "Grove" output channel                                     |
+| Safeguard                | Implementation                                                                            |
+| ------------------------ | ----------------------------------------------------------------------------------------- |
+| **Path validation**      | All file paths must resolve within workspace boundaries (`path.resolve()` + prefix check) |
+| **Command allowlisting** | Test commands limited to known runners (jest, pytest, go test, etc.)                      |
+| **Execution timeout**    | Test runners time out after 60 seconds (max: 300 seconds configurable)                    |
+| **snip.js validation**   | Validate snip.js is a known Bluehawk config format before parsing                         |
+| **Audit logging**        | All operations logged to "Grove" output channel                                           |
 
 ### Credential Exposure Prevention
 
-The `grove_get_status` tool returns only minimal, non-sensitive information:
-
-```typescript
-// grove_get_status response - NEVER includes connection strings
-{
-  connected: boolean,
-  clusterType: "Atlas" | "local" | "unknown",
-  projectPath: string,
-  hasSnipConfig: boolean
-}
-```
-
-- Never include connection strings, hostnames, or credentials in MCP tool responses
 - Use `context.secrets.store()` / `context.secrets.get()` for MongoDB connection strings
 - Never log credentials in plain text
 - Clear credentials from memory after use
+- Skill files never include or expose credentials
 
 ### Workspace Trust
 
@@ -350,212 +295,53 @@ Declare `untrustedWorkspaces: { supported: 'limited' }`. In untrusted workspaces
 
 ## Implementation Priorities
 
-### Phase 1a: Core + Basic MCP
+### Phase 1a: Core Foundation
 
 1. **Project Detection**: Detect Grove projects via `snip.js`, activate extension
 2. **Status Bar**: Show Grove project status in VS Code status bar
-3. **MCP Server (minimal)**: `grove_get_status` tool only
-4. **Augment Setup UX**: "Copy MCP Configuration" command + guided setup
+3. **AI Skills Setup**: Create initial skill and agent files for AI assistance
 
-_Validates: MCP integration works end-to-end with Augment_
+_Validates: Extension activates correctly, AI can read skill files_
 
-### Phase 1b: Grove Panel + Read Tools
+### Phase 1b: Grove Panel + Basic UI
 
-5. **Grove Panel (skeleton)**: Webview in sidebar with project info, quick actions
-6. **`grove_read_file` tool**: Read file content for AI context
-7. **Panel ↔ Extension messaging**: Basic webview communication
+4. **Grove Panel (skeleton)**: Webview in sidebar with project info, quick actions
+5. **Panel ↔ Extension messaging**: Basic webview communication
+6. **Template Picker**: UI for selecting example templates without AI
 
-_Validates: Webview messaging works, AI can read project files_
+_Validates: Webview messaging works, extension is usable without AI_
 
 ### Phase 1c: Node.js Extension + Test Runner
 
-8. **Grove for Node.js**: Jest runner integration
-9. **`grove_run_tests` tool**: Execute tests, return results
-10. **Test runner registration**: Language extensions register runners with grove-core
+7. **Grove for Node.js**: Jest runner integration
+8. **Test runner registration**: Language extensions register runners with grove-core
+9. **Run tests from Panel**: One-click test execution
 
 _Validates: Test runner architecture, language extension pattern_
 
-### Phase 2: Full MCP Tool Suite
+### Phase 2: Full Feature Set
 
-11. **Creation Tools**: `grove_create_example`, `grove_create_test` with template support
-12. **Execution Tools**: `grove_snip` with Bluehawk library integration
-13. **Bluehawk Preview**: Live extraction preview pane
-14. **Enhanced Panel**: Activity log, inline warnings, progress indicators
+10. **Template-based Creation**: Create examples from templates via Panel UI
+11. **Bluehawk Snip**: Run snip with Bluehawk library integration
+12. **Bluehawk Preview**: Live extraction preview pane
+13. **Enhanced Panel**: Activity log, inline warnings, progress indicators
 
 ### Phase 3: Multi-Language & Polish
 
-15. **Additional Languages**: Python, Go, Java, C#, mongosh extensions
-16. **MCP Resources**: Expose project structure, templates, and conventions
-17. **Diagnostics**: Full diagnostic collection for all issue types
-18. **literalinclude Navigation**: Click-to-open for RST file references
-
-## MCP Server Configuration
-
-### MCP Server Lifecycle
-
-| Aspect             | Implementation                                       |
-| ------------------ | ---------------------------------------------------- |
-| **Transport**      | stdio (matches Claude Desktop pattern, simplest)     |
-| **Crash handling** | Auto-restart with exponential backoff, max 3 retries |
-| **Multi-window**   | One server per workspace folder                      |
-
-### For VS Code + Augment Users (Recommended)
-
-The Grove extension provides **guided setup** for Augment MCP configuration:
-
-**How it works**:
-
-1. Extension activates when `snip.js` is detected in workspace
-2. Extension starts the bundled MCP server
-3. Grove Panel shows "Connect to Augment" setup wizard (if not configured)
-4. User runs **"Grove: Copy MCP Configuration"** command
-5. User pastes JSON into Augment Settings → MCP → Import from JSON
-6. Grove tools become available in Augment's chat
-
-> **Note**: Augment does not currently expose an API for programmatic MCP server registration. If this changes in the future, we'll add auto-registration.
-
-### For Claude Desktop / Other AI Tools
-
-Users can install Grove's MCP server via npm:
-
-```bash
-# Install globally
-npm install -g @mongodb/grove-mcp
-
-# Or run directly with npx (recommended)
-npx @mongodb/grove-mcp
-```
-
-Then add to Claude Desktop's `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "grove": {
-      "command": "npx",
-      "args": ["-y", "@mongodb/grove-mcp"],
-      "env": {
-        "GROVE_PROJECT_PATH": "/path/to/code-example-tests/javascript/driver"
-      }
-    }
-  }
-}
-```
-
-### For Augment (Manual Configuration)
-
-If auto-configuration doesn't work, manually add to Augment's MCP settings:
-
-```json
-{
-  "mcpServers": {
-    "grove": {
-      "command": "npx",
-      "args": ["-y", "@mongodb/grove-mcp"],
-      "env": {
-        "GROVE_PROJECT_PATH": "${workspaceFolder}"
-      }
-    }
-  }
-}
-```
-
-### MCP Tool Definitions
-
-```typescript
-// grove_create_example tool schema
-{
-  name: "grove_create_example",
-  description: "Create a new code example file with Bluehawk markup",
-  inputSchema: {
-    type: "object",
-    properties: {
-      language: {
-        type: "string",
-        enum: ["nodejs", "python", "go", "java", "csharp", "mongosh"],
-        description: "Target programming language"
-      },
-      topic: {
-        type: "string",
-        description: "Topic path (e.g., 'crud/insert', 'aggregation/match')"
-      },
-      name: {
-        type: "string",
-        description: "Example file name (without extension)"
-      },
-      description: {
-        type: "string",
-        description: "Brief description of what the example demonstrates"
-      }
-    },
-    required: ["language", "topic", "name"]
-  }
-}
-
-// grove_run_tests tool schema
-{
-  name: "grove_run_tests",
-  description: "Run Grove tests and return results",
-  inputSchema: {
-    type: "object",
-    properties: {
-      testPath: {
-        type: "string",
-        description: "Path to specific test file (optional, runs all if omitted)"
-      }
-      // Note: watch mode is NOT available via MCP (security constraint)
-      // Use Grove Panel UI for watch mode
-    }
-  }
-}
-```
-
-### MCP Resources
-
-Grove exposes the following resources for AI context:
-
-| Resource URI                     | Description                                    |
-| -------------------------------- | ---------------------------------------------- |
-| `grove://project/structure`      | Current project layout (examples, tests, etc.) |
-| `grove://templates/{language}`   | Code templates for the specified language      |
-| `grove://conventions`            | Grove conventions and best practices           |
-| `grove://conventions/{language}` | Language-specific conventions                  |
-
-### MCP Error Handling
-
-All MCP tools return structured errors with AI-friendly messages:
-
-```typescript
-// Error response format
-{
-  isError: true,
-  content: [{
-    type: "text",
-    text: "Could not run tests: Jest is not installed in this project. Run `npm install` first."
-  }]
-}
-
-// Success response format
-{
-  content: [{
-    type: "text",
-    text: "Tests passed! 3 tests in 1.2s"
-  }]
-}
-```
-
-This format allows AI assistants to understand errors and suggest remediation steps.
+14. **Additional Languages**: Python, Go, Java, C#, mongosh extensions
+15. **Language-specific Skills**: Skill files for each supported language
+16. **Diagnostics**: Full diagnostic collection for all issue types
+17. **literalinclude Navigation**: Click-to-open for RST file references
 
 ## Multi-Project Workspace Handling
 
 Workspaces may contain multiple Grove projects (e.g., monorepo with `javascript/driver/` AND `python/driver/`).
 
-| Behavior             | Implementation                                                                    |
-| -------------------- | --------------------------------------------------------------------------------- |
-| **Detection**        | Glob for `**/snip.js` at activation                                               |
-| **Panel UI**         | Project picker dropdown when multiple projects detected                           |
-| **MCP tools**        | Accept optional `projectPath` parameter; defaults to "current" project from Panel |
-| **Server instances** | One MCP server instance handles multiple project contexts                         |
+| Behavior      | Implementation                                          |
+| ------------- | ------------------------------------------------------- |
+| **Detection** | Glob for `**/snip.js` at activation                     |
+| **Panel UI**  | Project picker dropdown when multiple projects detected |
+| **Context**   | Skill files use current project from Panel selection    |
 
 ## Test Framework Detection
 
@@ -573,9 +359,9 @@ groveCore.registerTestRunner({
 });
 ```
 
-When `grove_run_tests` is called:
+When tests are run:
 
-1. Detect language from project structure or `projectPath`
+1. Detect language from project structure
 2. Look up registered runner for that language
 3. Execute runner command with appropriate arguments
 4. Parse results and return structured output
@@ -607,9 +393,9 @@ const result = await snip({
 
 ### Creating a New Code Example
 
-1. **Open Grove Panel** → Click "+ Example" or ask Augment in natural language
+1. **Open Grove Panel** → Click "+ Example" or ask AI in natural language
 2. **Describe what you need** → "Create a Node.js example that inserts a document"
-3. **AI uses Grove tools** → Augment calls `grove_create_example`, shows generated code
+3. **AI reads skills** → AI reads `.skills/create-example.md` and `.agents/grove-nodejs.md`
 4. **Review output** → Writer sees file with proper Bluehawk markup
 5. **Run tests** → One-click in Panel or ask "run the tests"
 6. **Snip** → Extract tested code to `content/code-examples/tested/`
@@ -617,35 +403,34 @@ const result = await snip({
 ### Fixing a Failing Test
 
 1. **See failure in Panel** → Activity log shows failed test
-2. **Ask Augment** → "Why did filter.test.js fail?"
-3. **AI reads context** → Augment calls `grove_read_file` to get test output
+2. **Ask AI** → "Why did filter.test.js fail?"
+3. **AI reads context** → AI reads `.skills/fix-test.md` and the test output
 4. **Get explanation** → AI explains the failure in plain language
 5. **Apply fix** → AI suggests changes, writer confirms
 
-### Using Grove with Augment
+### Using Grove with AI Assistants
 
-Writers interact with Grove through natural language in Augment's chat:
+Writers interact with Grove through natural language with any AI assistant:
 
-| Writer Says                                 | Augment Uses                                 |
-| ------------------------------------------- | -------------------------------------------- |
-| "Create a Python aggregation example"       | `grove_create_example` + `grove_create_test` |
-| "Run the tests for insert examples"         | `grove_run_tests`                            |
-| "What's wrong with my filter test?"         | `grove_read_file` + analysis                 |
-| "Show me the Grove conventions for Node.js" | `grove://conventions/nodejs` resource        |
-| "Snip all examples in this project"         | `grove_snip`                                 |
+| Writer Says                                 | AI Reads & Does                                  |
+| ------------------------------------------- | ------------------------------------------------ |
+| "Create a Python aggregation example"       | Reads skills, creates example + test files       |
+| "Run the tests for insert examples"         | Executes `npm test` or equivalent                |
+| "What's wrong with my filter test?"         | Reads test output, explains failure              |
+| "Show me the Grove conventions for Node.js" | Reads `.agents/grove-nodejs.md`                  |
+| "Snip all examples in this project"         | Reads `.skills/snip-code.md`, runs Bluehawk snip |
 
 ## Resolved Design Decisions
 
 The following questions were resolved during the spec audit (see `grove-spec-audit.md`):
 
-| Question                           | Decision                                                                                     |
-| ---------------------------------- | -------------------------------------------------------------------------------------------- |
-| **Panel vs. Sidebar**              | Webview in sidebar container (like GitLens, MongoDB extension)                               |
-| **Tool Confirmation**              | Trust Augment's confirmation UX; Grove logs to output channel + shows toast after completion |
-| **Auto-registration with Augment** | No API exists; implement "Copy to Clipboard" + guided setup UX                               |
-| **Frontend Technology**            | Plain HTML/CSS for MVP; Lit/Web Components if needed; no React                               |
-| **Bluehawk Integration**           | Import `@mongodb-oss/bluehawk` as library (not CLI)                                          |
-| **Telemetry**                      | Deferred to post-MVP                                                                         |
+| Question                 | Decision                                                                  |
+| ------------------------ | ------------------------------------------------------------------------- |
+| **Panel vs. Sidebar**    | Webview in sidebar container (like GitLens, MongoDB extension)            |
+| **AI Integration**       | File-based skills & agents instead of MCP server (simpler, more portable) |
+| **Frontend Technology**  | Plain HTML/CSS for MVP; Lit/Web Components if needed; no React            |
+| **Bluehawk Integration** | Import `@mongodb-oss/bluehawk` as library (not CLI)                       |
+| **Telemetry**            | Deferred to post-MVP                                                      |
 
 ## References
 

@@ -42,16 +42,18 @@ interface TestFileResult {
  * Resolve a snippet file path to its original source file in code-example-tests/examples/.
  *
  * Grove's snip.js generates snippets from:
- *   code-example-tests/{lang}/driver/examples/... -> content/code-examples/tested/{lang}/driver/...
+ *   code-example-tests/{lang}/{product}/examples/... -> content/code-examples/tested/{lang}/{product}/...
  *
  * Each docs project symlinks to the shared snippets:
  *   content/manual/v8.0/source/code-examples/tested -> ../../../../code-examples/tested
  *
  * So the resolved path may look like:
  *   .../content/manual/v8.0/source/code-examples/tested/javascript/driver/time-series/sample-app.snippet.example.js
+ *   .../content/code-examples/tested/python/pymongo/aggregation/pipelines/filter_tutorial.snippet.sort.py
  *
  * We need to transform to:
  *   code-example-tests/javascript/driver/examples/time-series/sample-app.js
+ *   code-example-tests/python/pymongo/examples/aggregation/pipelines/filter_tutorial.py
  *
  * Returns undefined if the path doesn't match the pattern.
  */
@@ -87,17 +89,19 @@ function resolveSourceFilePath(
   }
 
   // testedMatch[1] is like: javascript/driver/time-series/sample-app.snippet.example.js
+  // or: python/pymongo/aggregation/pipelines/filter_tutorial.snippet.sort.py
   const testedRelPath = testedMatch[1];
 
-  // Parse the path to insert "examples" after "{lang}/driver/"
-  // Pattern: {lang}/driver/{rest} -> {lang}/driver/examples/{rest}
-  const driverMatch = testedRelPath.match(/^([^/\\]+[/\\]driver)[/\\](.+)$/);
-  if (!driverMatch) {
+  // Parse the path to insert "examples" after "{lang}/{product}/"
+  // Pattern: {lang}/{product}/{rest} -> {lang}/{product}/examples/{rest}
+  // Supports: javascript/driver, python/pymongo, command-line/mongosh, etc.
+  const projectMatch = testedRelPath.match(/^([^/\\]+[/\\][^/\\]+)[/\\](.+)$/);
+  if (!projectMatch) {
     return undefined;
   }
 
-  const langDriver = driverMatch[1]; // e.g., "javascript/driver"
-  const restOfPath = driverMatch[2]; // e.g., "time-series/sample-app.snippet.example.js"
+  const langProduct = projectMatch[1]; // e.g., "javascript/driver", "python/pymongo"
+  const restOfPath = projectMatch[2]; // e.g., "time-series/sample-app.snippet.example.js"
 
   // Reconstruct with original filename (without .snippet.name)
   const dir = path.dirname(restOfPath);
@@ -106,7 +110,7 @@ function resolveSourceFilePath(
   const sourceFilePath = path.join(
     workspaceRoot,
     "code-example-tests",
-    langDriver,
+    langProduct,
     "examples",
     dir,
     originalFilename,
@@ -122,7 +126,10 @@ function resolveSourceFilePath(
  *   - examples/time-series/create-query/create-query-collection.js -> tests/time-series/create-query-collection.test.js
  *   - examples/time-series/sample-app.js -> tests/time-series/sample-app.test.js
  *
- * The function tries multiple possible test file locations.
+ * The function tries multiple possible test file locations and project structures:
+ *   - javascript/driver (uses tests/)
+ *   - python/pymongo (uses tests_package/)
+ *   - command-line/mongosh (uses tests/)
  */
 function resolveActualTestFilePath(
   resolvedSnippetPath: string,
@@ -154,14 +161,15 @@ function resolveActualTestFilePath(
 
   const testedRelPath = testedMatch[1];
 
-  // Parse the path: {lang}/driver/{rest}
-  const driverMatch = testedRelPath.match(/^([^/\\]+[/\\]driver)[/\\](.+)$/);
-  if (!driverMatch) {
+  // Parse the path: {lang}/{product}/{rest}
+  // Supports: javascript/driver, python/pymongo, command-line/mongosh, etc.
+  const projectMatch = testedRelPath.match(/^([^/\\]+[/\\][^/\\]+)[/\\](.+)$/);
+  if (!projectMatch) {
     return undefined;
   }
 
-  const langDriver = driverMatch[1]; // e.g., "javascript/driver"
-  const restOfPath = driverMatch[2]; // e.g., "time-series/sample-app.snippet.example.js"
+  const langProduct = projectMatch[1]; // e.g., "javascript/driver", "python/pymongo"
+  const restOfPath = projectMatch[2]; // e.g., "time-series/sample-app.snippet.example.js"
 
   // Get the original filename (without .snippet.name)
   const baseFilename = snippetMatch[1]; // e.g., "sample-app" or "create-query-collection"
@@ -173,36 +181,50 @@ function resolveActualTestFilePath(
   // Build test filename: add .test before extension
   const testFilename = `${baseFilename}.test${ext}`;
 
+  // Test directory names vary by project
+  const testDirNames = ["tests", "tests_package"];
+
   // Try different possible test file locations
-  const possiblePaths = [
+  const possiblePaths: string[] = [];
+
+  for (const testDirName of testDirNames) {
     // 1. Direct mapping: examples/a/b/file.js -> tests/a/b/file.test.js
-    path.join(
-      workspaceRoot,
-      "code-example-tests",
-      langDriver,
-      "tests",
-      dir,
-      testFilename,
-    ),
+    possiblePaths.push(
+      path.join(
+        workspaceRoot,
+        "code-example-tests",
+        langProduct,
+        testDirName,
+        dir,
+        testFilename,
+      ),
+    );
     // 2. Flattened: examples/a/b/file.js -> tests/a/file.test.js (one level up)
-    path.join(
-      workspaceRoot,
-      "code-example-tests",
-      langDriver,
-      "tests",
-      path.dirname(dir),
-      testFilename,
-    ),
+    possiblePaths.push(
+      path.join(
+        workspaceRoot,
+        "code-example-tests",
+        langProduct,
+        testDirName,
+        path.dirname(dir),
+        testFilename,
+      ),
+    );
     // 3. Top-level of category: examples/a/b/c/file.js -> tests/a/file.test.js
-    path.join(
-      workspaceRoot,
-      "code-example-tests",
-      langDriver,
-      "tests",
-      dir.split(path.sep)[0],
-      testFilename,
-    ),
-  ];
+    const topLevelDir = dir.split(path.sep)[0];
+    if (topLevelDir && topLevelDir !== ".") {
+      possiblePaths.push(
+        path.join(
+          workspaceRoot,
+          "code-example-tests",
+          langProduct,
+          testDirName,
+          topLevelDir,
+          testFilename,
+        ),
+      );
+    }
+  }
 
   // Return the first existing path
   for (const testFilePath of possiblePaths) {
@@ -320,7 +342,7 @@ export class RstDirectiveCodeLensProvider implements vscode.CodeLensProvider {
           ) {
             lenses.push(
               new vscode.CodeLens(lensRange, {
-                title: `📄 source: ${sourceFileResult.snippetName}`,
+                title: `📄 source`,
                 command: "grove.literalinclude.view",
                 arguments: [sourceFileResult.sourceFilePath, ref.snippetName],
               }),
@@ -335,7 +357,7 @@ export class RstDirectiveCodeLensProvider implements vscode.CodeLensProvider {
           if (testFileResult && fs.existsSync(testFileResult.testFilePath)) {
             lenses.push(
               new vscode.CodeLens(lensRange, {
-                title: `🧪 test: ${testFileResult.snippetName}`,
+                title: `🧪 test`,
                 command: "grove.literalinclude.view",
                 arguments: [testFileResult.testFilePath, ref.snippetName],
               }),

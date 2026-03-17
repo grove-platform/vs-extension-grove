@@ -81,6 +81,10 @@
         "title": "Grove: Disconnect from MongoDB"
       },
       {
+        "command": "grove.showDatabases",
+        "title": "Grove: Show Databases"
+      },
+      {
         "command": "grove.openBluehawkPreview",
         "title": "Grove: Open Bluehawk Preview"
       },
