@@ -5,13 +5,13 @@
  */
 
 import * as vscode from "vscode";
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface BluehawkSnippet {
   /** Name of the snippet */
@@ -41,16 +41,18 @@ export interface BluehawkResult {
 }
 
 /**
- * Get the bluehawk CLI command path.
- * Uses the setting if provided, otherwise defaults to npx.
+ * Get the bluehawk CLI command as a binary + args tuple.
+ * Uses the setting if provided, otherwise defaults to npx bluehawk.
+ * Returns separate bin and args so callers can use execFile (no shell).
  */
-function getBluehawkCommand(): string {
+function getBluehawkCommand(): { bin: string; baseArgs: string[] } {
   const config = vscode.workspace.getConfiguration("grove");
-  const customPath = config.get<string>("bluehawkPath", "");
-  if (customPath && customPath.trim().length > 0) {
-    return customPath;
+  const customPath = config.get<string>("bluehawkPath", "").trim();
+  if (customPath.length > 0) {
+    return { bin: customPath, baseArgs: [] };
   }
-  return "npx bluehawk";
+  // Default: invoke bluehawk via npx so it doesn't need a global install
+  return { bin: "npx", baseArgs: ["bluehawk"] };
 }
 
 /**
@@ -81,7 +83,6 @@ export function containsBluehawkDirectives(content: string): boolean {
 export async function runBluehawkDryRun(
   filePath: string,
 ): Promise<BluehawkResult> {
-  const bluehawk = getBluehawkCommand();
   const workingDir = path.dirname(filePath);
 
   // Create a temporary directory for output
@@ -90,8 +91,10 @@ export async function runBluehawkDryRun(
   );
 
   try {
-    // Run bluehawk snip with output to temp directory
-    await execAsync(`${bluehawk} snip -o "${tempDir}" "${filePath}"`, {
+    // Run bluehawk snip with output to temp directory.
+    // execFile avoids shell interpolation — args are passed directly to the process.
+    const { bin, baseArgs } = getBluehawkCommand();
+    await execFileAsync(bin, [...baseArgs, "snip", "-o", tempDir, filePath], {
       cwd: workingDir,
       timeout: 30000, // 30 second timeout
     });

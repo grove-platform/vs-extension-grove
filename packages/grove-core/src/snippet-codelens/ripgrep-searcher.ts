@@ -181,6 +181,7 @@ async function runRipgrep(
 
     const args = [
       "--json",
+      "--fixed-strings", // treat pattern as a literal string, not a regex
       "--glob",
       "content/**/source/**/*.rst",
       "--glob",

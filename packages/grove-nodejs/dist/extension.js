@@ -661,10 +661,10 @@ async function runJestTests(options) {
     const startTime = Date.now();
     let output = "";
     let timedOut = false;
-    const proc = (0, import_child_process.spawn)("npm", args, {
+    const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
+    const proc = (0, import_child_process.spawn)(npmBin, args, {
       cwd: projectPath,
-      env: { ...process.env, CI: "true", ...env },
-      shell: true
+      env: { ...process.env, CI: "true", ...env }
     });
     const timeoutId = setTimeout(() => {
       timedOut = true;

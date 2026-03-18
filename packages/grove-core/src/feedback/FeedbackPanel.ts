@@ -10,6 +10,7 @@ import type { FeedbackSubmission, FeedbackWebviewMessage, DiagnosticInfo } from 
 import { collectDiagnostics } from "./diagnostics-collector";
 import { submitFeedback } from "./feedback-submitter";
 import { getWebviewHtml } from "./webview-html";
+import { getNonce } from "../panel/nonce";
 
 /**
  * Feedback panel webview provider.
@@ -34,8 +35,8 @@ export class FeedbackPanel {
   private constructor(panel: vscode.WebviewPanel, _extensionUri: vscode.Uri) {
     this._panel = panel;
 
-    // Set initial HTML content
-    this._panel.webview.html = getWebviewHtml();
+    // Set initial HTML content with a fresh nonce per render
+    this._panel.webview.html = getWebviewHtml(getNonce());
 
     // Handle messages from the webview
     this._panel.webview.onDidReceiveMessage(

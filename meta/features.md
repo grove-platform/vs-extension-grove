@@ -1,8 +1,7 @@
 # Features to Develop
 
-## snippets and includes
+## Snippets and includes
 
-- snippet codelens to point to test file for tested examples
 - add reference lookup codelens for all includes and literalincludes
 
 ## Performance

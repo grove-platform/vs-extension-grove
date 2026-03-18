@@ -8206,7 +8206,7 @@ var require_utils = __commonJS({
     function squashError(_error) {
       return;
     }
-    var randomBytes = (size) => {
+    var randomBytes2 = (size) => {
       return new Promise((resolve3, reject) => {
         crypto2.randomBytes(size, (error, buf) => {
           if (error)
@@ -8215,7 +8215,7 @@ var require_utils = __commonJS({
         });
       });
     };
-    exports2.randomBytes = randomBytes;
+    exports2.randomBytes = randomBytes2;
     async function once(ee, name, options) {
       options?.signal?.throwIfAborted();
       const { promise, resolve: resolve3, reject } = promiseWithResolvers();
@@ -32892,6 +32892,14 @@ var vscode28 = __toESM(require("vscode"));
 
 // src/panel/GrovePanel.ts
 var vscode = __toESM(require("vscode"));
+
+// src/panel/nonce.ts
+var import_crypto = require("crypto");
+function getNonce() {
+  return (0, import_crypto.randomBytes)(16).toString("base64");
+}
+
+// src/panel/GrovePanel.ts
 var GrovePanelProvider = class {
   constructor(_extensionUri, _getStatus) {
     this._extensionUri = _extensionUri;
@@ -32945,12 +32953,13 @@ var GrovePanelProvider = class {
     });
   }
   _getHtml() {
+    const nonce = getNonce();
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <title>Grove</title>
   <style>
     body {
@@ -32997,9 +33006,18 @@ var GrovePanelProvider = class {
 <body>
   <div id="loading">Loading Grove status...</div>
   <div id="content" class="hidden"></div>
-  <script>
+  <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     let currentStatus = null;
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
 
     window.addEventListener('message', event => {
       const message = event.data;
@@ -33025,7 +33043,7 @@ var GrovePanelProvider = class {
       } else {
         html += '<div class="section"><div class="section-title">Projects</div>';
         html += currentStatus.projects.map(p =>
-          '<div class="status-row"><span class="status-icon">' + (p.hasValidConfig ? '\u2713' : '!') + '</span><span>' + (p.relativePath || 'Root') + '</span><span>(' + (p.language || 'unknown') + ')</span></div>'
+          '<div class="status-row"><span class="status-icon">' + (p.hasValidConfig ? '\u2713' : '!') + '</span><span>' + escapeHtml(p.relativePath || 'Root') + '</span><span>(' + escapeHtml(p.language || 'unknown') + ')</span></div>'
         ).join('');
         html += '</div>';
         // MongoDB section with connection status and actions
@@ -33033,7 +33051,7 @@ var GrovePanelProvider = class {
         const mongoConnected = currentStatus.mongoConnection.connected;
         const clusterType = currentStatus.mongoConnection.clusterType;
         html += '<div class="status-row"><span class="status-icon">' + (mongoConnected ? '\u2713' : '\u25CB') + '</span>';
-        html += '<span>' + (mongoConnected ? 'Connected (' + clusterType + ')' : 'Not connected') + '</span></div>';
+        html += '<span>' + (mongoConnected ? 'Connected (' + escapeHtml(clusterType) + ')' : 'Not connected') + '</span></div>';
         html += '<div class="actions" style="margin-top: 8px;">';
         if (mongoConnected) {
           html += '<button onclick="showDatabases()">Show Databases</button>';
@@ -37550,14 +37568,14 @@ var import_util = require("util");
 var path6 = __toESM(require("path"));
 var fs6 = __toESM(require("fs"));
 var os = __toESM(require("os"));
-var execAsync = (0, import_util.promisify)(import_child_process.exec);
+var execFileAsync = (0, import_util.promisify)(import_child_process.execFile);
 function getBluehawkCommand() {
   const config = vscode12.workspace.getConfiguration("grove");
-  const customPath = config.get("bluehawkPath", "");
-  if (customPath && customPath.trim().length > 0) {
-    return customPath;
+  const customPath = config.get("bluehawkPath", "").trim();
+  if (customPath.length > 0) {
+    return { bin: customPath, baseArgs: [] };
   }
-  return "npx bluehawk";
+  return { bin: "npx", baseArgs: ["bluehawk"] };
 }
 function containsBluehawkDirectives(content) {
   const markers = [
@@ -37575,13 +37593,13 @@ function containsBluehawkDirectives(content) {
   return markers.some((marker) => content.includes(marker));
 }
 async function runBluehawkDryRun(filePath) {
-  const bluehawk = getBluehawkCommand();
   const workingDir = path6.dirname(filePath);
   const tempDir = await fs6.promises.mkdtemp(
     path6.join(os.tmpdir(), "grove-bluehawk-")
   );
   try {
-    await execAsync(`${bluehawk} snip -o "${tempDir}" "${filePath}"`, {
+    const { bin, baseArgs } = getBluehawkCommand();
+    await execFileAsync(bin, [...baseArgs, "snip", "-o", tempDir, filePath], {
       cwd: workingDir,
       timeout: 3e4
       // 30 second timeout
@@ -38576,6 +38594,8 @@ async function runRipgrep(pattern, cwd, snippetName, sourceExt) {
     const references = [];
     const args = [
       "--json",
+      "--fixed-strings",
+      // treat pattern as a literal string, not a regex
       "--glob",
       "content/**/source/**/*.rst",
       "--glob",
@@ -39154,13 +39174,13 @@ function getScript2() {
     })();
   `;
 }
-function getWebviewHtml() {
+function getWebviewHtml(nonce) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <title>Send Feedback</title>
   <style>${getStyles2()}</style>
 </head>
@@ -39244,7 +39264,7 @@ function getWebviewHtml() {
     </div>
   </div>
 
-  <script>${getScript2()}</script>
+  <script nonce="${nonce}">${getScript2()}</script>
 </body>
 </html>`;
 }
@@ -39264,7 +39284,7 @@ var FeedbackPanel = class _FeedbackPanel {
    */
   constructor(panel, _extensionUri) {
     this._panel = panel;
-    this._panel.webview.html = getWebviewHtml();
+    this._panel.webview.html = getWebviewHtml(getNonce());
     this._panel.webview.onDidReceiveMessage(
       async (message) => {
         await this._handleMessage(message);

@@ -74,10 +74,12 @@ export async function runJestTests(
 
     // Merge injected env vars with process.env
     // Injected vars (like CONNECTION_STRING from Grove UI) take precedence
-    const proc = spawn("npm", args, {
+    // Use npm.cmd on Windows; shell: true is intentionally omitted to prevent
+    // shell injection if testFile contains metacharacters.
+    const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
+    const proc = spawn(npmBin, args, {
       cwd: projectPath,
       env: { ...process.env, CI: "true", ...env },
-      shell: true,
     });
 
     const timeoutId = setTimeout(() => {

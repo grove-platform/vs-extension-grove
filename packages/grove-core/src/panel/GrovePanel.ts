@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import type { GroveStatus } from "@grove/shared";
+import { getNonce } from "./nonce";
 
 export class GrovePanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = "grove.panel";
@@ -72,12 +73,13 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
   }
 
   private _getHtml(): string {
+    const nonce = getNonce();
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <title>Grove</title>
   <style>
     body {
@@ -124,9 +126,18 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
 <body>
   <div id="loading">Loading Grove status...</div>
   <div id="content" class="hidden"></div>
-  <script>
+  <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     let currentStatus = null;
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
 
     window.addEventListener('message', event => {
       const message = event.data;
@@ -152,7 +163,7 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
       } else {
         html += '<div class="section"><div class="section-title">Projects</div>';
         html += currentStatus.projects.map(p =>
-          '<div class="status-row"><span class="status-icon">' + (p.hasValidConfig ? '✓' : '!') + '</span><span>' + (p.relativePath || 'Root') + '</span><span>(' + (p.language || 'unknown') + ')</span></div>'
+          '<div class="status-row"><span class="status-icon">' + (p.hasValidConfig ? '✓' : '!') + '</span><span>' + escapeHtml(p.relativePath || 'Root') + '</span><span>(' + escapeHtml(p.language || 'unknown') + ')</span></div>'
         ).join('');
         html += '</div>';
         // MongoDB section with connection status and actions
@@ -160,7 +171,7 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
         const mongoConnected = currentStatus.mongoConnection.connected;
         const clusterType = currentStatus.mongoConnection.clusterType;
         html += '<div class="status-row"><span class="status-icon">' + (mongoConnected ? '✓' : '○') + '</span>';
-        html += '<span>' + (mongoConnected ? 'Connected (' + clusterType + ')' : 'Not connected') + '</span></div>';
+        html += '<span>' + (mongoConnected ? 'Connected (' + escapeHtml(clusterType) + ')' : 'Not connected') + '</span></div>';
         html += '<div class="actions" style="margin-top: 8px;">';
         if (mongoConnected) {
           html += '<button onclick="showDatabases()">Show Databases</button>';

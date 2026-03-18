@@ -229,15 +229,16 @@ function getScript(): string {
 
 /**
  * Generate the complete HTML content for the feedback webview.
+ * @param nonce - A per-render cryptographic nonce for the script-src CSP directive.
  * @returns The HTML string for the webview.
  */
-export function getWebviewHtml(): string {
+export function getWebviewHtml(nonce: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <title>Send Feedback</title>
   <style>${getStyles()}</style>
 </head>
@@ -321,7 +322,7 @@ export function getWebviewHtml(): string {
     </div>
   </div>
 
-  <script>${getScript()}</script>
+  <script nonce="${nonce}">${getScript()}</script>
 </body>
 </html>`;
 }
