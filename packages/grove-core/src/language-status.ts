@@ -66,9 +66,7 @@ export function updateLanguageStatus(
 
     languageStatusItem.text = `${langIcon} ${project.relativePath || "root"}`;
     languageStatusItem.detail = `Grove project (${langName})`;
-    languageStatusItem.severity = project.hasValidConfig
-      ? vscode.LanguageStatusSeverity.Information
-      : vscode.LanguageStatusSeverity.Warning;
+    languageStatusItem.severity = vscode.LanguageStatusSeverity.Information;
   } else {
     languageStatusItem.text = "$(tree) Grove";
     languageStatusItem.detail = "Not in a Grove project";

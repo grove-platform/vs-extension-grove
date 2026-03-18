@@ -132,6 +132,35 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
     .project-link:hover {
       text-decoration: underline;
     }
+    small { display: block; margin-top: 2px; }
+    .info-icon {
+      position: relative;
+      cursor: help;
+      opacity: 0.5;
+      font-size: 16px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .info-icon::after {
+      content: attr(data-tooltip);
+      position: fixed;
+      left: 10px;
+      right: 10px;
+      top: auto;
+      background: var(--vscode-editorHoverWidget-background);
+      color: var(--vscode-editorHoverWidget-foreground);
+      border: 1px solid var(--vscode-editorHoverWidget-border);
+      padding: 4px 8px;
+      font-size: 11px;
+      white-space: normal;
+      word-wrap: break-word;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.1s;
+      z-index: 10;
+    }
+    .info-icon:hover { opacity: 1; }
+    .info-icon:hover::after { opacity: 1; }
   </style>
 </head>
 <body>
@@ -175,7 +204,6 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
         html += '<div class="section"><div class="section-title">Projects</div>';
         html += currentStatus.projects.map(p =>
           '<div class="status-row">' +
-          '<span class="status-icon">' + (p.hasValidConfig ? '✓' : '⚠') + '</span>' +
           '<a href="#" class="project-link" data-root-path="' + escapeHtml(p.rootPath) + '">' +
             escapeHtml(p.displayName) +
           '</a>' +
@@ -183,21 +211,37 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
         ).join('');
         html += '</div>';
         // MongoDB section with connection status and actions
-        html += '<div class="section"><div class="section-title">MongoDB</div>';
-        const mongoConnected = currentStatus.mongoConnection.connected;
-        const clusterType = currentStatus.mongoConnection.clusterType;
-        html += '<div class="status-row"><span class="status-icon">' + (mongoConnected ? '✓' : '○') + '</span>';
-        html += '<span>' + (mongoConnected ? 'Connected (' + escapeHtml(clusterType) + ')' : 'Not connected') + '</span></div>';
-        html += '<div class="actions" style="margin-top: 8px;">';
-        if (mongoConnected) {
-          html += '<button onclick="showDatabases()">Show Databases</button>';
-          html += '<button onclick="disconnectMongo()">Disconnect</button>';
+        const mongo = currentStatus.mongoConnection;
+        const activeProject = currentStatus.activeProject;
+        const sectionTitle = activeProject ? 'Grove ' + escapeHtml(activeProject.displayName) : 'MongoDB';
+        html += '<div class="section"><div class="section-title">' + sectionTitle + '</div>';
+
+        if (mongo.source === 'ui' || mongo.source === 'env-file') {
+          html += '<div class="status-row"><span class="status-icon">✓</span>';
+          html += '<span>Connected';
+          if (mongo.clusterType && mongo.clusterType !== 'unknown') html += ' (' + escapeHtml(mongo.clusterType) + ')';
+          if (mongo.host) html += '<br><small style="opacity:0.7">' + escapeHtml(mongo.host) + '</small>';
+          html += '</span></div>';
+          html += '<div class="actions" style="margin-top: 8px;">';
+          html += '<button data-action="showDatabases">Show Databases</button>';
+          html += '<button data-action="disconnectMongo">Disconnect</button>';
+          html += '</div>';
+        } else if (mongo.source === 'connection-failed') {
+          const tooltip = mongo.host ? 'No MongoDB instance found at ' + escapeHtml(mongo.host) : 'Could not reach MongoDB instance';
+          html += '<div class="status-row"><span class="status-icon">✗</span><span>Could not connect' + (mongo.host ? '<br><small style="opacity:0.7">' + escapeHtml(mongo.host) + '</small>' : '') + '</span><span class="info-icon" data-tooltip="' + tooltip + '">ⓘ</span></div>';
+          html += '<div class="actions" style="margin-top: 8px;">';
+          html += '<button data-action="connectMongo" style="grid-column: span 2;">Connect to MongoDB</button>';
+          html += '</div>';
         } else {
-          html += '<button onclick="connectMongo()" style="grid-column: span 2;">Connect to MongoDB</button>';
+          html += '<div class="status-row"><span class="status-icon">○</span><span>Not configured</span></div>';
+          html += '<div class="actions" style="margin-top: 8px;">';
+          html += '<button data-action="connectMongo" style="grid-column: span 2;">Connect to MongoDB</button>';
+          html += '</div>';
         }
-        html += '</div></div>';
+
+        html += '</div>'; // close section
         // Feedback section (always shown)
-        html += '<div class="section"><div class="section-title">Help</div><div class="actions" style="grid-template-columns: 1fr;"><button onclick="sendFeedback()">📝 Send Feedback</button></div></div>';
+        html += '<div class="section"><div class="section-title">Help</div><div class="actions" style="grid-template-columns: 1fr;"><button data-action="sendFeedback">📝 Send Feedback</button></div></div>';
       }
       content.innerHTML = html;
     }
@@ -206,14 +250,14 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
       if (link) {
         e.preventDefault();
         vscode.postMessage({ command: 'openProjectRoot', rootPath: link.dataset.rootPath });
+        return;
+      }
+      const btn = e.target.closest('[data-action]');
+      if (btn) {
+        vscode.postMessage({ command: btn.dataset.action });
       }
     });
-    function connectMongo() { vscode.postMessage({ command: 'connectMongo' }); }
-    function disconnectMongo() { vscode.postMessage({ command: 'disconnectMongo' }); }
-    function showDatabases() { vscode.postMessage({ command: 'showDatabases' }); }
-    function sendFeedback() { vscode.postMessage({ command: 'sendFeedback' }); }
-    function refresh() { vscode.postMessage({ command: 'refresh' }); }
-    refresh();
+    vscode.postMessage({ command: 'refresh' });
   </script>
 </body>
 </html>`;

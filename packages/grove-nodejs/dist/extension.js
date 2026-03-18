@@ -91,11 +91,13 @@ var require_project_detection = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.detectGroveProjects = detectGroveProjects2;
     exports2.detectLanguage = detectLanguage;
-    exports2.validateSnipConfig = validateSnipConfig;
     exports2.findProjectForFile = findProjectForFile2;
     var path3 = __importStar(require("path"));
     var fs2 = __importStar(require("fs/promises"));
     var types_1 = require_types();
+    function supportsEnvInjection(language) {
+      return language !== "nodejs" && language !== "mongosh";
+    }
     async function detectGroveProjects2(workspacePath) {
       const projects = [];
       const snipFiles = await findSnipFiles(workspacePath);
@@ -103,13 +105,12 @@ var require_project_detection = __commonJS({
         const projectRoot = path3.dirname(snipPath);
         const relativePath = path3.relative(workspacePath, projectRoot) || ".";
         const language = await detectLanguage(projectRoot);
-        const hasValidConfig = await validateSnipConfig(snipPath);
         projects.push({
           rootPath: projectRoot,
           relativePath,
           displayName: types_1.GROVE_PROJECT_DISPLAY_NAMES[relativePath] ?? relativePath,
           language,
-          hasValidConfig
+          supportsEnvInjection: supportsEnvInjection(language)
         });
       }
       return projects;
@@ -183,14 +184,6 @@ var require_project_detection = __commonJS({
       } catch {
       }
       return null;
-    }
-    async function validateSnipConfig(snipPath) {
-      try {
-        const content = await fs2.readFile(snipPath, "utf-8");
-        return content.includes("module.exports") || content.includes("export default") || content.includes("import ");
-      } catch {
-        return false;
-      }
     }
     function findProjectForFile2(filePath, projects) {
       const normalizedFile = path3.resolve(filePath).replace(/[/\\]+$/, "");

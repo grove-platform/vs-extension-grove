@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import type { GroveStatus, GroveProject } from "@grove/shared";
+import { findProjectForFile } from "@grove/shared";
 import { GrovePanelProvider } from "./panel/GrovePanel";
 import { getApi as getTestRunnerApi } from "./test-runner-api";
 import {
@@ -63,6 +64,8 @@ async function registerRstProvidersLazy(context: vscode.ExtensionContext): Promi
 
 let currentStatus: GroveStatus | null = null;
 let mongoConnectionManager: MongoConnectionManager;
+/** Tracks whether the current connection was auto-established from a .env file */
+let autoConnectedFromEnv = false;
 
 /**
  * Get the current detected projects.
@@ -310,25 +313,70 @@ async function getStatus(): Promise<GroveStatus> {
     connected: false,
     clusterType: "unknown" as const,
   };
-  const mongoConnection = {
-    connected: mongoStatus.connected,
-    clusterType: mongoStatus.clusterType,
-  };
 
   if (!workspaceFolders) {
     return {
       hasProject: false,
       activeProject: null,
       projects: [],
-      mongoConnection,
+      mongoConnection: {
+        connected: mongoStatus.connected,
+        clusterType: mongoStatus.clusterType,
+        source: "none" as const,
+      },
     };
   }
 
   const projects = await getCachedProjects();
 
+  // Determine active project based on the currently open editor
+  const activeFile = vscode.window.activeTextEditor?.document.uri.fsPath;
+  const activeProject = (activeFile
+    ? findProjectForFile(activeFile, projects)
+    : projects[0]) ?? null;
+
+  // Determine connection source and host for display.
+  let source: "ui" | "env-file" | "connection-failed" | "none" = "none";
+  let host: string | undefined;
+
+  if (mongoStatus.connected) {
+    // Already connected — determine whether it came from UI or .env auto-connect
+    source = autoConnectedFromEnv ? "env-file" : "ui";
+    const cs = mongoConnectionManager.getConnectionStringForTests();
+    if (cs) {
+      const { extractHost } = await import("./env-file");
+      host = extractHost(cs);
+    }
+  } else if (activeProject) {
+    // Not connected — check if the active project has a .env with CONNECTION_STRING
+    // and auto-connect from it
+    const { loadEnvFile, extractHost } = await import("./env-file");
+    const envVars = await loadEnvFile(activeProject.rootPath);
+    if (envVars?.CONNECTION_STRING) {
+      try {
+        await mongoConnectionManager.connect(envVars.CONNECTION_STRING);
+        source = "env-file";
+        host = extractHost(envVars.CONNECTION_STRING);
+        autoConnectedFromEnv = true;
+      } catch {
+        source = "connection-failed";
+        host = extractHost(envVars.CONNECTION_STRING);
+      }
+    }
+  }
+
+  // Re-read status in case we auto-connected above
+  const finalStatus = mongoConnectionManager?.status ?? mongoStatus;
+  const mongoConnection = {
+    connected: finalStatus.connected,
+    clusterType: finalStatus.clusterType,
+    source,
+    host,
+  };
+
   currentStatus = {
     hasProject: projects.length > 0,
-    activeProject: projects[0] ?? null,
+    activeProject,
     projects,
     mongoConnection,
   };
@@ -401,11 +449,15 @@ export async function activate(context: vscode.ExtensionContext) {
     const projects = await profile("activation.detectProjects", () =>
       detectProjectsWithProgress(workspaceFolders[0].uri.fsPath),
     );
+    const activeFile = vscode.window.activeTextEditor?.document.uri.fsPath;
+    const activeProject = (activeFile
+      ? findProjectForFile(activeFile, projects)
+      : projects[0]) ?? null;
     currentStatus = {
       hasProject: projects.length > 0,
-      activeProject: projects[0] ?? null,
+      activeProject,
       projects,
-      mongoConnection: { connected: false, clusterType: "unknown" },
+      mongoConnection: { connected: false, clusterType: "unknown", source: "none" as const },
     };
     status = currentStatus;
     outputChannel.info(`Detected ${projects.length} Grove project(s)`);
@@ -432,6 +484,13 @@ export async function activate(context: vscode.ExtensionContext) {
   // Register language status handlers (updates on editor change)
   registerLanguageStatusHandlers(context, getDetectedProjects);
 
+  // Refresh panel when active editor changes (so MongoDB section reflects the active project)
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(() => {
+      panelProvider.refresh();
+    }),
+  );
+
   // Update language status for current editor
   const activeEditor = vscode.window.activeTextEditor;
   if (activeEditor) {
@@ -455,6 +514,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register MongoDB commands with callback to refresh panel on connection changes
   registerMongoCommands(context, mongoConnectionManager, () => {
+    autoConnectedFromEnv = false;
     panelProvider.refresh();
   });
 
@@ -629,19 +689,17 @@ export async function activate(context: vscode.ExtensionContext) {
 
       const projectPath = resolved.project.rootPath;
 
-      // Check if we have a MongoDB connection to inject
-      let env: Record<string, string> | undefined;
-      let connectionString: string | null = null;
-      const usingUiConnection = mongoConnectionManager?.status.connected;
+      // Resolve test environment: .env file values + optional UI connection override
+      const uiConnectionString = mongoConnectionManager?.status.connected
+        ? mongoConnectionManager.getConnectionStringForTests() ?? undefined
+        : undefined;
 
-      if (usingUiConnection) {
-        connectionString = mongoConnectionManager.getConnectionStringForTests();
-        if (connectionString) {
-          env = { CONNECTION_STRING: connectionString };
-        }
-      }
+      const { resolveTestEnv } = await import("./test-env");
+      const env = await resolveTestEnv(resolved.project, uiConnectionString);
 
-      // Build progress title with indicator if using UI connection
+      const usingUiConnection =
+        resolved.project.supportsEnvInjection && !!uiConnectionString;
+
       const progressTitle = usingUiConnection
         ? "Running tests (using Grove MongoDB connection)..."
         : "Running tests...";
@@ -658,10 +716,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
           // Sanitize output to mask connection string if it appears
           let sanitizedOutput = outcome.result.output ?? "";
-          if (connectionString && sanitizedOutput.includes(connectionString)) {
-            const masked = maskConnectionString(connectionString);
+          if (uiConnectionString && sanitizedOutput.includes(uiConnectionString)) {
+            const masked = maskConnectionString(uiConnectionString);
             sanitizedOutput = sanitizedOutput.replaceAll(
-              connectionString,
+              uiConnectionString,
               masked,
             );
             outputChannel.warn(

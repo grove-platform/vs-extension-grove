@@ -19,7 +19,6 @@ describe("detectGroveProjects", () => {
     await fs.writeFile(path.join(tempDir, "snip.js"), "module.exports = {};");
     const projects = await detectGroveProjects(tempDir);
     expect(projects).toHaveLength(1);
-    expect(projects[0].hasValidConfig).toBe(true);
   });
 
   it("should detect multiple projects in subdirectories", async () => {

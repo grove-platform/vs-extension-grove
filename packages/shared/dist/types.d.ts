@@ -7,8 +7,12 @@ export interface GroveProject {
     displayName: string;
     /** Detected language based on project structure */
     language: GroveLanguage | null;
-    /** Whether snip.js was successfully parsed */
-    hasValidConfig: boolean;
+    /**
+     * Whether Grove can inject CONNECTION_STRING into this suite's test process.
+     * False for nodejs and mongosh, which load .env via shell-level export in
+     * their npm test script, overwriting the process env after spawn.
+     */
+    supportsEnvInjection: boolean;
 }
 /**
  * Canonical display names for all known Grove projects, keyed by relativePath.
@@ -28,6 +32,14 @@ export interface GroveStatus {
     mongoConnection: {
         connected: boolean;
         clusterType: "Atlas" | "local" | "unknown";
+        /** Whether the connection comes from the Grove UI, a .env file, failed to connect, or is absent. */
+        source: "ui" | "env-file" | "connection-failed" | "none";
+        /**
+         * Hostname extracted from the active connection string, for display only.
+         * No credentials. E.g. "cluster0.abc.mongodb.net" or "localhost".
+         * Undefined when source is "none".
+         */
+        host?: string;
     };
 }
 //# sourceMappingURL=types.d.ts.map

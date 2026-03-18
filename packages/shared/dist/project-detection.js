@@ -35,11 +35,18 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.detectGroveProjects = detectGroveProjects;
 exports.detectLanguage = detectLanguage;
-exports.validateSnipConfig = validateSnipConfig;
 exports.findProjectForFile = findProjectForFile;
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs/promises"));
 const types_1 = require("./types");
+/**
+ * Returns whether Grove can inject CONNECTION_STRING for projects of this language.
+ * nodejs and mongosh load .env via shell-level export in npm test, which overwrites
+ * the process env after spawn — making injection ineffective for those suites.
+ */
+function supportsEnvInjection(language) {
+    return language !== "nodejs" && language !== "mongosh";
+}
 /**
  * Detect Grove projects by finding snip.js files.
  * @param workspacePath - Absolute path to workspace root
@@ -52,13 +59,12 @@ async function detectGroveProjects(workspacePath) {
         const projectRoot = path.dirname(snipPath);
         const relativePath = path.relative(workspacePath, projectRoot) || ".";
         const language = await detectLanguage(projectRoot);
-        const hasValidConfig = await validateSnipConfig(snipPath);
         projects.push({
             rootPath: projectRoot,
             relativePath,
             displayName: types_1.GROVE_PROJECT_DISPLAY_NAMES[relativePath] ?? relativePath,
             language,
-            hasValidConfig,
+            supportsEnvInjection: supportsEnvInjection(language),
         });
     }
     return projects;
@@ -163,21 +169,6 @@ async function detectLanguage(projectPath) {
         // Not C#
     }
     return null;
-}
-/**
- * Validate snip.js configuration.
- */
-async function validateSnipConfig(snipPath) {
-    try {
-        const content = await fs.readFile(snipPath, "utf-8");
-        // Basic validation: check if it looks like a valid JS module export
-        return (content.includes("module.exports") ||
-            content.includes("export default") ||
-            content.includes("import "));
-    }
-    catch {
-        return false;
-    }
 }
 /**
  * Find which Grove project contains a given file path.

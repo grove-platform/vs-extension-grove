@@ -273,6 +273,53 @@ Language extensions should:
 - **`mongodb`** - MongoDB driver (lazy-loaded on first connection)
 - **VS Code API** - Webview, SecretStorage, Diagnostics, LanguageStatus, CodeLens
 
+## MongoDB Connection
+
+Grove needs a MongoDB connection string to run tests. There are two ways to provide one, depending on which test suite you are working with.
+
+### Option 1: .env file (required for JavaScript and mongosh)
+
+All test suites support a `.env` file in the project root directory. Create a file named `.env` in the test suite directory (e.g. `code-example-tests/javascript/driver/.env`) with at minimum:
+
+```
+CONNECTION_STRING="mongodb+srv://user:password@cluster.mongodb.net/"
+```
+
+Some suites require additional variables. For example, the JavaScript driver and mongosh suites require:
+
+```
+CONNECTION_STRING="mongodb+srv://user:password@cluster.mongodb.net/"
+TZ=UTC
+```
+
+The `TZ=UTC` setting ensures consistent timezone handling in date-related test assertions.
+
+Refer to each suite's own README for the full list of required variables.
+
+### Option 2: Grove UI connection (Python, Go, C#, Java)
+
+For suites that read environment variables at runtime — Python (PyMongo), Go, C#, and Java — you can connect via the Grove panel instead of creating a `.env` file:
+
+1. Open the Grove panel in the VS Code sidebar
+2. Click **Connect to MongoDB**
+3. Enter your connection string
+
+When you run tests, Grove injects the connection string into the test process. This takes priority over any `CONNECTION_STRING` value in a `.env` file.
+
+If a `.env` file is also present, all other variables in it (such as `TZ=UTC`) are still passed to the test process even when using the Grove UI connection.
+
+### Why the JavaScript and mongosh suites are different
+
+The JavaScript driver and mongosh test suites load the `.env` file using a shell-level `export` command inside the `npm test` script:
+
+```
+export $(xargs < .env) && jest ...
+```
+
+This runs after Grove has already launched the process, overwriting any environment variables Grove injected. As a result, Grove's "Connect to MongoDB" button has no effect on what connection string these suites use — the `.env` file is always the authoritative source.
+
+The Grove panel will display the hostname from your `.env` file when one is present, but the Connect button is not shown for these suites.
+
 ## Development
 
 ```bash

@@ -3,6 +3,15 @@ import * as fs from "fs/promises";
 import { GroveProject, GroveLanguage, GROVE_PROJECT_DISPLAY_NAMES } from "./types";
 
 /**
+ * Returns whether Grove can inject CONNECTION_STRING for projects of this language.
+ * nodejs and mongosh load .env via shell-level export in npm test, which overwrites
+ * the process env after spawn — making injection ineffective for those suites.
+ */
+function supportsEnvInjection(language: GroveLanguage | null): boolean {
+  return language !== "nodejs" && language !== "mongosh";
+}
+
+/**
  * Detect Grove projects by finding snip.js files.
  * @param workspacePath - Absolute path to workspace root
  * @returns Array of detected Grove projects
@@ -17,14 +26,13 @@ export async function detectGroveProjects(
     const projectRoot = path.dirname(snipPath);
     const relativePath = path.relative(workspacePath, projectRoot) || ".";
     const language = await detectLanguage(projectRoot);
-    const hasValidConfig = await validateSnipConfig(snipPath);
 
     projects.push({
       rootPath: projectRoot,
       relativePath,
       displayName: GROVE_PROJECT_DISPLAY_NAMES[relativePath] ?? relativePath,
       language,
-      hasValidConfig,
+      supportsEnvInjection: supportsEnvInjection(language),
     });
   }
 
@@ -140,23 +148,6 @@ export async function detectLanguage(
   }
 
   return null;
-}
-
-/**
- * Validate snip.js configuration.
- */
-export async function validateSnipConfig(snipPath: string): Promise<boolean> {
-  try {
-    const content = await fs.readFile(snipPath, "utf-8");
-    // Basic validation: check if it looks like a valid JS module export
-    return (
-      content.includes("module.exports") ||
-      content.includes("export default") ||
-      content.includes("import ")
-    );
-  } catch {
-    return false;
-  }
 }
 
 /**
