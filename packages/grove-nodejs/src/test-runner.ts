@@ -8,6 +8,8 @@ export interface TestRunOptions {
   timeout?: number;
   /** Additional environment variables to inject into the test process */
   env?: Record<string, string>;
+  /** Test name pattern for filtering tests (passed as -t to Jest) */
+  testNamePattern?: string;
 }
 
 export interface TestResult {
@@ -57,14 +59,24 @@ export async function detectJestProject(projectPath: string): Promise<boolean> {
 export async function runJestTests(
   options: TestRunOptions,
 ): Promise<TestResult> {
-  const { projectPath, testFile, timeout = DEFAULT_TIMEOUT, env } = options;
+  const {
+    projectPath,
+    testFile,
+    timeout = DEFAULT_TIMEOUT,
+    env,
+    testNamePattern,
+  } = options;
   const effectiveTimeout = Math.min(timeout, MAX_TIMEOUT);
 
-  // Use the project's npm test script, optionally with a specific file
-  const args = ["test"];
+  // Use the project's npm test script, optionally scoped to a specific file and test name.
+  // --testPathPattern restricts which test files Jest runs (avoids running all suites).
+  // -t filters by test name within matched files.
+  const args = ["test", "--"];
   if (testFile) {
-    // Pass the test file as an argument to npm test
-    args.push("--", testFile);
+    args.push("--testPathPatterns", testFile);
+  }
+  if (testNamePattern) {
+    args.push("-t", testNamePattern);
   }
 
   return new Promise((resolve) => {
@@ -130,7 +142,11 @@ export async function runJestTests(
 
 /**
  * Parse Jest console output to extract test counts.
- * Looks for patterns like "Tests: 5 passed, 2 failed, 7 total"
+ * Looks for the "Tests:" summary line and extracts counts regardless of order.
+ * Jest outputs counts in varying order, e.g.:
+ *   "Tests:  7 passed, 7 total"
+ *   "Tests:  135 skipped, 7 passed, 142 total"
+ *   "Tests:  2 failed, 5 passed, 7 total"
  */
 function parseJestOutput(output: string): {
   total: number;
@@ -140,19 +156,21 @@ function parseJestOutput(output: string): {
 } {
   const defaults = { total: 0, passed: 0, failed: 0, skipped: 0 };
 
-  // Match Jest summary line: "Tests: X passed, Y failed, Z total"
-  const testsMatch = output.match(
-    /Tests:\s*(?:(\d+)\s*passed)?[,\s]*(?:(\d+)\s*failed)?[,\s]*(?:(\d+)\s*skipped)?[,\s]*(\d+)\s*total/i,
-  );
+  // Find the "Tests:" summary line
+  const testsLine = output.match(/Tests:\s*(.+total)/i);
+  if (!testsLine) return defaults;
 
-  if (testsMatch) {
-    return {
-      passed: parseInt(testsMatch[1] || "0", 10),
-      failed: parseInt(testsMatch[2] || "0", 10),
-      skipped: parseInt(testsMatch[3] || "0", 10),
-      total: parseInt(testsMatch[4] || "0", 10),
-    };
-  }
+  const line = testsLine[1];
 
-  return defaults;
+  const passed = line.match(/(\d+)\s*passed/i);
+  const failed = line.match(/(\d+)\s*failed/i);
+  const skipped = line.match(/(\d+)\s*skipped/i);
+  const total = line.match(/(\d+)\s*total/i);
+
+  return {
+    passed: passed ? parseInt(passed[1], 10) : 0,
+    failed: failed ? parseInt(failed[1], 10) : 0,
+    skipped: skipped ? parseInt(skipped[1], 10) : 0,
+    total: total ? parseInt(total[1], 10) : 0,
+  };
 }

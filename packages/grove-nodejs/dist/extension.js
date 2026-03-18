@@ -655,11 +655,20 @@ async function detectJestProject(projectPath) {
   }
 }
 async function runJestTests(options) {
-  const { projectPath, testFile, timeout = DEFAULT_TIMEOUT, env } = options;
+  const {
+    projectPath,
+    testFile,
+    timeout = DEFAULT_TIMEOUT,
+    env,
+    testNamePattern
+  } = options;
   const effectiveTimeout = Math.min(timeout, MAX_TIMEOUT);
-  const args = ["test"];
+  const args = ["test", "--"];
   if (testFile) {
-    args.push("--", testFile);
+    args.push("--testPathPatterns", testFile);
+  }
+  if (testNamePattern) {
+    args.push("-t", testNamePattern);
   }
   return new Promise((resolve) => {
     const startTime = Date.now();
@@ -710,18 +719,19 @@ async function runJestTests(options) {
 }
 function parseJestOutput(output) {
   const defaults = { total: 0, passed: 0, failed: 0, skipped: 0 };
-  const testsMatch = output.match(
-    /Tests:\s*(?:(\d+)\s*passed)?[,\s]*(?:(\d+)\s*failed)?[,\s]*(?:(\d+)\s*skipped)?[,\s]*(\d+)\s*total/i
-  );
-  if (testsMatch) {
-    return {
-      passed: parseInt(testsMatch[1] || "0", 10),
-      failed: parseInt(testsMatch[2] || "0", 10),
-      skipped: parseInt(testsMatch[3] || "0", 10),
-      total: parseInt(testsMatch[4] || "0", 10)
-    };
-  }
-  return defaults;
+  const testsLine = output.match(/Tests:\s*(.+total)/i);
+  if (!testsLine) return defaults;
+  const line = testsLine[1];
+  const passed = line.match(/(\d+)\s*passed/i);
+  const failed = line.match(/(\d+)\s*failed/i);
+  const skipped = line.match(/(\d+)\s*skipped/i);
+  const total = line.match(/(\d+)\s*total/i);
+  return {
+    passed: passed ? parseInt(passed[1], 10) : 0,
+    failed: failed ? parseInt(failed[1], 10) : 0,
+    skipped: skipped ? parseInt(skipped[1], 10) : 0,
+    total: total ? parseInt(total[1], 10) : 0
+  };
 }
 
 // src/extension.ts

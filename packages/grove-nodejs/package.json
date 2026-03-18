@@ -2,7 +2,7 @@
   "name": "grove-nodejs",
   "displayName": "Grove for Node.js",
   "description": "Node.js/Jest support for Grove documentation testing",
-  "version": "0.0.1",
+  "version": "0.0.15",
   "publisher": "mongodb",
   "engines": {
     "vscode": "^1.85.0"
@@ -33,7 +33,8 @@
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
     "watch": "npm run build -- --watch",
     "test": "vitest run",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "package": "pnpm run build && vsce package --no-dependencies"
   },
   "dependencies": {
     "@grove/shared": "workspace:*"
@@ -45,4 +46,3 @@
     "vitest": "^4.0.18"
   }
 }
-

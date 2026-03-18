@@ -4,6 +4,10 @@
 
 - add reference lookup codelens for all includes and literalincludes
 
+## Internal consistency
+
+- after connecting to a DB instance for one project, we need to handle navigation to another project. That other project could have an env file with a different connection string. We need to either 1) warn the user and ask if they want to connect to the new project's DB or 2) auto-connect to the new project's DB if the connection string is different. Option 2 is probably better.
+
 ## Beyond code examples
 
 Based on analysis of the `docs-mongodb-internal` monorepo, here are opportunities to improve writer workflows:

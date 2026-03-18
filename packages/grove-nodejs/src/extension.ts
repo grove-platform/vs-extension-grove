@@ -16,6 +16,7 @@ interface GroveCoreApi {
       projectPath: string;
       testFile?: string;
       timeout?: number;
+      testNamePattern?: string;
     }) => Promise<{
       success: boolean;
       total?: number;
