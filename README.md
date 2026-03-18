@@ -98,16 +98,15 @@ pnpm --filter grove-core test
 ### Building VSIX for Local Installation
 
 ```bash
-# Build all packages first
-pnpm build
-
-# Create the VSIX package
-cd packages/grove-core
+# Package all extensions (grove-core + grove-nodejs)
 pnpm package
 
-# Install locally
-code --install-extension grove-core-0.0.2.vsix
+# Install both extensions locally
+code --install-extension packages/grove-core/grove-core-0.0.2.vsix
+code --install-extension packages/grove-nodejs/grove-nodejs-0.0.15.vsix
 ```
+
+> **Note:** Grove Core alone provides project detection, Bluehawk preview, and RST navigation. To run tests, you also need a language extension (e.g., Grove for Node.js).
 
 ### Running in VS Code
 

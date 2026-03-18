@@ -66,6 +66,8 @@ let currentStatus: GroveStatus | null = null;
 let mongoConnectionManager: MongoConnectionManager;
 /** Tracks whether the current connection was auto-established from a .env file */
 let autoConnectedFromEnv = false;
+/** Tracks whether the user explicitly disconnected — suppresses .env auto-reconnect */
+let userDisconnected = false;
 
 /**
  * Get the current detected projects.
@@ -347,9 +349,9 @@ async function getStatus(): Promise<GroveStatus> {
       const { extractHost } = await import("./env-file");
       host = extractHost(cs);
     }
-  } else if (activeProject) {
+  } else if (activeProject && !userDisconnected) {
     // Not connected — check if the active project has a .env with CONNECTION_STRING
-    // and auto-connect from it
+    // and auto-connect from it (unless user explicitly disconnected)
     const { loadEnvFile, extractHost } = await import("./env-file");
     const envVars = await loadEnvFile(activeProject.rootPath);
     if (envVars?.CONNECTION_STRING) {
@@ -513,8 +515,13 @@ export async function activate(context: vscode.ExtensionContext) {
   });
 
   // Register MongoDB commands with callback to refresh panel on connection changes
-  registerMongoCommands(context, mongoConnectionManager, () => {
+  registerMongoCommands(context, mongoConnectionManager, (event?: "connect" | "disconnect") => {
     autoConnectedFromEnv = false;
+    if (event === "disconnect") {
+      userDisconnected = true;
+    } else if (event === "connect") {
+      userDisconnected = false;
+    }
     panelProvider.refresh();
   });
 

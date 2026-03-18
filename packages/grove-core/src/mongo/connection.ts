@@ -29,7 +29,7 @@ export interface ConnectionStatus {
 
 // MongoDB driver types (dynamically imported)
 type MongoClient = {
-  connect(): Promise<void>;
+  connect(): Promise<unknown>;
   close(): Promise<void>;
   db(name?: string): {
     admin(): {

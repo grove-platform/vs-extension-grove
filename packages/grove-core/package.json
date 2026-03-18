@@ -2,7 +2,7 @@
   "name": "grove-core",
   "displayName": "Grove",
   "description": "MongoDB documentation code example testing platform",
-  "version": "0.0.2",
+  "version": "0.0.21",
   "publisher": "mongodb",
   "engines": {
     "vscode": "^1.110.0"

@@ -13,7 +13,7 @@ import { MongoConnectionManager } from "./connection";
 export function registerMongoCommands(
   context: vscode.ExtensionContext,
   connectionManager: MongoConnectionManager,
-  onConnectionChange: () => void,
+  onConnectionChange: (event?: "connect" | "disconnect") => void,
 ): void {
   // Connect to MongoDB
   context.subscriptions.push(
@@ -56,7 +56,7 @@ export function registerMongoCommands(
         vscode.window.showInformationMessage(
           `Connected to MongoDB (${connectionManager.status.clusterType})`,
         );
-        onConnectionChange();
+        onConnectionChange("connect");
       } catch (error) {
         vscode.window.showErrorMessage(
           `Failed to connect: ${error instanceof Error ? error.message : String(error)}`,
@@ -99,7 +99,7 @@ export function registerMongoCommands(
       }
 
       vscode.window.showInformationMessage("Disconnected from MongoDB");
-      onConnectionChange();
+      onConnectionChange("disconnect");
     }),
   );
 

@@ -46,7 +46,7 @@ async function getDetectedProjectNames(): Promise<string[]> {
     // Import dynamically to avoid circular dependencies
     const { getCachedProjects } = await import("../project-cache");
     const projects = await getCachedProjects();
-    return projects.map((p) => p.name || p.rootPath);
+    return projects.map((p) => p.displayName || p.rootPath);
   } catch {
     return [];
   }

@@ -92,7 +92,7 @@ export function generateJiraURL(submission: FeedbackSubmission): string {
   };
 
   // Use URLSearchParams for proper encoding
-  const searchParams = new URLSearchParams(params as Record<string, string>);
+  const searchParams = new URLSearchParams(params as unknown as Record<string, string>);
 
   // Add labels separately (Jira expects multiple label params for multiple labels)
   searchParams.append("labels", "grove-extension");
