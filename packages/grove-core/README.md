@@ -257,6 +257,14 @@ interface TestRunner {
   run: (options: TestRunOptions) => Promise<TestResult>;
   detect: (projectPath: string) => Promise<boolean>;
 }
+
+interface TestRunOptions {
+  projectPath: string;
+  testFile?: string;
+  timeout?: number;
+  env?: Record<string, string>;
+  testNamePattern?: string;
+}
 ```
 
 Language extensions should:
@@ -345,7 +353,7 @@ cd packages/grove-core
 pnpm package
 
 # Install locally
-code --install-extension grove-core-0.0.1.vsix
+code --install-extension grove-core-0.0.2.vsix
 ```
 
 ## License

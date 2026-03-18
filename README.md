@@ -55,7 +55,7 @@ grove-extension/
 ├── meta/
 │   ├── features.md       # Feature roadmap and ideas
 │   ├── discovery.md      # Initial project discovery notes
-│   └── implementation/   # Design documents and planning
+│   └── future/           # Future phase planning documents
 ├── package.json          # Monorepo root (pnpm workspaces)
 └── pnpm-workspace.yaml   # Workspace configuration
 ```
@@ -106,7 +106,7 @@ cd packages/grove-core
 pnpm package
 
 # Install locally
-code --install-extension grove-core-0.0.1.vsix
+code --install-extension grove-core-0.0.2.vsix
 ```
 
 ### Running in VS Code

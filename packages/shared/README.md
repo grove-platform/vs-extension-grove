@@ -62,13 +62,17 @@ Core type definitions shared across all Grove packages.
 
 ```typescript
 interface GroveProject {
-  rootPath: string;           // Absolute path to project root
-  relativePath: string;       // Relative path from workspace root
+  rootPath: string;              // Absolute path to project root
+  relativePath: string;          // Relative path from workspace root
+  displayName: string;           // Human-readable name for UI
   language: GroveLanguage | null;
-  hasValidConfig: boolean;    // Whether snip.js was parsed successfully
+  supportsEnvInjection: boolean; // Whether Grove can inject CONNECTION_STRING
 }
 
 type GroveLanguage = "nodejs" | "python" | "go" | "java" | "csharp" | "mongosh";
+
+// Canonical display names keyed by relativePath
+const GROVE_PROJECT_DISPLAY_NAMES: Record<string, string>;
 
 interface GroveStatus {
   hasProject: boolean;
@@ -77,6 +81,8 @@ interface GroveStatus {
   mongoConnection: {
     connected: boolean;
     clusterType: "Atlas" | "local" | "unknown";
+    source: "ui" | "env-file" | "connection-failed" | "none";
+    host?: string; // Hostname for display (no credentials)
   };
 }
 ```

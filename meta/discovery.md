@@ -18,12 +18,10 @@ This extension pack provides a core extension for shared Grove functionality plu
 All extensions use modern tooling:
 
 - **TypeScript 5.x** with strict mode
-- **Vite** for fast bundling and development
+- **esbuild** for production bundling
 - **pnpm** for workspace management
-- **Mocha + Chai** for all testing (via `@vscode/test-electron`)
+- **Vitest** for unit testing
 - **ESLint 9.x + Prettier 3.x** for code quality
-
-See [repo-structure.md](./repo-structure.md) for detailed tech stack and tooling configuration.
 
 ### Extension Pack Structure
 
@@ -114,13 +112,7 @@ Restrict file access to workspace folders:
 
 4. **Comparison API autocomplete**: Provide IntelliSense for the `Expect` fluent API and expected-output file syntax (ellipsis patterns, `ignoreFieldValues`, MongoDB constructors).
 
-5. **Differentiated AI agents**: Language-specific Chat participants that understand driver patterns and Grove conventions. Examples:
-   - **Node.js Driver**: Knows MongoDB Node.js Driver best practices, Grove comparison API, can create new test files based on prompts
-   - **mongosh**: Understands mongosh commands and patterns, Grove comparison API, can create shell-based test files
-   - **PyMongo**: Understands Python patterns, pytest/unittest conventions, Grove comparison API
-   - **Go Driver**: Understands Go idioms, go test conventions, Grove comparison API
-   - **C# Driver**: Understands .NET patterns, NUnit conventions, Grove comparison API
-   - **Java Driver**: Understands Java patterns, JUnit conventions, Grove comparison API
+5. **AI-assisted workflows** (future): Language-specific skill and agent files that any file-aware AI assistant (Augment, Cursor, Copilot, etc.) can read for context on Grove conventions and patterns per driver language
 
 ## Implementation Steps
 
@@ -138,50 +130,15 @@ Restrict file access to workspace folders:
 
 5. **Implement Bluehawk preview in Core**: Register command `grove.previewSnippet` that runs `bluehawk snip --dry-run` on the current file, parses JSON output, and renders extracted snippets in a Webview panel with syntax highlighting.
 
-6. **Create agent definition schema in `.github/agents/`**: Define YAML agent files (e.g., `grove-nodejs.agent.yml`) specifying: agent name, description, system prompt (referencing existing migration instructions), and declared tools. Core extension loads these at activation.
+6. **AI integration via skill and agent files** (future): Define markdown-based `.skills/` and `.agents/` files that any file-aware AI assistant can read for context. This approach was chosen over Chat participants and MCP for portability across AI tools.
 
-7. **Register Chat participants from agent files**: For each agent file in `.github/agents/`, register a `ChatParticipant` via `vscode.chat.createChatParticipant()`. Bind declared tools using `ChatParticipantToolAccess` with explicit tool implementations that agents invoke (never direct filesystem access).
-
-8. **Define tool interfaces for agents**: Create tools like `grove.createExampleFile`, `grove.createTestFile`, `grove.runTests`, `grove.runSnip`. Agents invoke these via the Chat tool API; tools handle file creation with user confirmation prompts before writing.
-
-9. **Implement per-language test runners**: Each language extension registers a `TestController` that discovers tests in `tests/` directories and runs via the appropriate command (Jest, pytest, go test, mvn test, dotnet test). Implement lazy discovery via `resolveHandler`.
+7. **Implement per-language test runners**: Each language extension registers a test runner with grove-core's `registerTestRunner()` API. The runner provides `run()` and `detect()` functions. Currently implemented for Node.js (Jest/Vitest).
 
 10. **Add graceful degradation**: Wrap each feature in try-catch blocks. Disable broken features rather than crashing the extension. Log errors to the Output channel.
 
-## Agent Tool Boundaries
+## AI Integration Approach
 
-Agents invoke these tools (never raw filesystem APIs):
-
-| Tool                      | Behavior                                               | Confirmation Required |
-| ------------------------- | ------------------------------------------------------ | --------------------- |
-| `grove.createExampleFile` | Generates example from template, writes to `examples/` | Yes (shows preview)   |
-| `grove.createTestFile`    | Generates test stub, writes to `tests/`                | Yes (shows preview)   |
-| `grove.runTests`          | Executes test command, streams output                  | No                    |
-| `grove.runSnip`           | Runs `bluehawk snip`, shows extracted files            | No                    |
-| `grove.readFile`          | Reads file content for agent context                   | No                    |
-
-## Agent Definition Schema
-
-Agent files in `.github/agents/` use YAML format to align with GitHub Actions conventions:
-
-```yaml
-# .github/agents/grove-nodejs.agent.yml
-name: grove-nodejs
-displayName: Grove Node.js Agent
-description: Creates and tests Node.js Driver code examples
-systemPrompt: |
-  You are an expert in MongoDB Node.js Driver code examples.
-  Follow the patterns in code-example-tests/javascript/driver/.
-  Use Bluehawk markup for snippets. Use the Expect API for assertions.
-promptFiles:
-  - .github/prompts/grove/javascript-code-example-test-migration-instructions.md
-tools:
-  - grove.createExampleFile
-  - grove.createTestFile
-  - grove.runTests
-  - grove.runSnip
-  - grove.readFile
-```
+> **Design Decision**: The original discovery proposed Chat participants with YAML agent definitions in `.github/agents/`. This was replaced with a simpler file-based approach using markdown `.skills/` and `.agents/` files (see [grove-extension-spec.md](../docs/project/grove-extension-spec.md)). These are not yet implemented but are planned for a future phase.
 
 ## Maintenance & Operations
 

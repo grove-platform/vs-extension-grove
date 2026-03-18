@@ -66,9 +66,9 @@ Grove's AI integration consists of:
 ### Tech Stack
 
 - **TypeScript 5.x** with strict mode
-- **Vite** for fast bundling
+- **esbuild** for production bundling
 - **pnpm** for workspace management
-- **Mocha + Chai** for extension testing (via `@vscode/test-electron`)
+- **Vitest** for unit testing
 - **ESLint 9.x + Prettier 3.x** for code quality
 
 ### Repository Structure
@@ -81,41 +81,37 @@ vs-extension-grove/
 │   ├── grove-core/                    # VS Code extension (mongodb.grove-core)
 │   │   ├── src/
 │   │   │   ├── extension.ts           # Extension entry point
-│   │   │   ├── panel/                 # Grove Panel webview
-│   │   │   └── providers/             # Tree views, diagnostics, etc.
+│   │   │   ├── panel/                 # Grove Panel and Profiler webviews
+│   │   │   ├── preview/               # Bluehawk preview
+│   │   │   ├── feedback/              # Feedback/Jira integration
+│   │   │   ├── rst/                   # RST directive providers
+│   │   │   ├── test-codelens/         # Test CodeLens providers
+│   │   │   ├── snippet-codelens/      # Snippet reference CodeLens
+│   │   │   └── mongo/                 # MongoDB connection management
 │   │   ├── package.json
 │   │   └── tsconfig.json
 │   │
 │   ├── grove-nodejs/                  # Node.js language extension
 │   │   ├── src/
 │   │   │   ├── extension.ts
-│   │   │   ├── test-runner.ts         # Jest integration
-│   │   │   └── templates/             # Node.js example templates
+│   │   │   └── test-runner.ts         # Jest integration
 │   │   └── package.json
 │   │
-│   ├── grove-python/                  # Python language extension
-│   ├── grove-go/                      # Go language extension
-│   └── shared/                        # Shared utilities
+│   └── shared/                        # Shared utilities (@grove/shared)
 │       ├── src/
-│       │   ├── bluehawk.ts            # Bluehawk parsing utilities
 │       │   ├── project-detection.ts   # Grove project detection
-│       │   └── types.ts               # Shared TypeScript types
+│       │   ├── types.ts               # Shared TypeScript types
+│       │   ├── security.ts            # Path validation utilities
+│       │   └── profiler.ts            # Performance profiling
 │       └── package.json
 │
-├── .skills/                           # AI skill files (shared across projects)
-│   ├── create-example.md
-│   ├── write-test.md
-│   ├── fix-test.md
-│   └── snip-code.md
+├── meta/                              # Planning and design documents
+│   ├── features.md
+│   ├── discovery.md
+│   └── future/
 │
-├── .agents/                           # AI agent definitions
-│   ├── grove-nodejs.md
-│   ├── grove-python.md
-│   └── conventions.md
-│
-├── docs/project/                      # Design documents
-│   ├── grove-extension-spec.md
-│   └── repo-structure.md
+├── docs/project/                      # Specifications
+│   └── grove-extension-spec.md
 │
 ├── pnpm-workspace.yaml
 ├── package.json
@@ -351,11 +347,9 @@ Language extensions register test runners with grove-core:
 // Language extension registers a runner
 groveCore.registerTestRunner({
   language: "nodejs",
-  command: "npx jest",
-  filePattern: "**/*.test.{js,ts}",
-  parseResults: (output) => {
-    /* parse Jest output */
-  },
+  name: "Jest",
+  run: (options: TestRunOptions) => Promise<TestResult>,
+  detect: (projectPath: string) => Promise<boolean>,
 });
 ```
 
@@ -369,23 +363,20 @@ When tests are run:
 
 ## Bluehawk Integration
 
-Grove uses `@mongodb-oss/bluehawk` as a **library** (not CLI) for snippet extraction:
+Grove uses the Bluehawk **CLI** for snippet extraction, invoked via a wrapper in `bluehawk-runner.ts`:
 
-| Benefit                   | Description                                |
-| ------------------------- | ------------------------------------------ |
-| **Smaller footprint**     | ~1MB vs ~5MB for CLI bundle                |
-| **Faster execution**      | No process spawn overhead                  |
-| **Better error handling** | Direct exceptions vs parsing CLI output    |
-| **Zero-config**           | Bundled in extension, no user installation |
+- Defaults to `npx bluehawk` (no global install required)
+- Configurable via the `grove.bluehawkPath` setting for custom installations
+- Uses `execFile` (no shell) to prevent command injection
+- Runs `bluehawk snip` with a temporary output directory for previews
+- 30-second timeout for CLI execution
 
 ```typescript
-// Direct library usage
-import { snip } from "@mongodb-oss/bluehawk";
-
-const result = await snip({
-  input: projectPath,
-  output: outputPath,
-  state: "tested",
+// CLI wrapper usage (simplified)
+const { bin, baseArgs } = getBluehawkCommand();
+await execFileAsync(bin, [...baseArgs, "snip", "-o", tempDir, filePath], {
+  cwd: workingDir,
+  timeout: 30000,
 });
 ```
 
@@ -429,7 +420,7 @@ The following questions were resolved during the spec audit (see `grove-spec-aud
 | **Panel vs. Sidebar**    | Webview in sidebar container (like GitLens, MongoDB extension)            |
 | **AI Integration**       | File-based skills & agents instead of MCP server (simpler, more portable) |
 | **Frontend Technology**  | Plain HTML/CSS for MVP; Lit/Web Components if needed; no React            |
-| **Bluehawk Integration** | Import `@mongodb-oss/bluehawk` as library (not CLI)                       |
+| **Bluehawk Integration** | CLI via `npx bluehawk` (configurable path), wrapped with `execFile`       |
 | **Telemetry**            | Deferred to post-MVP                                                      |
 
 ## References
