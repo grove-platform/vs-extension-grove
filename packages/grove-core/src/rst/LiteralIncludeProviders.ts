@@ -233,7 +233,124 @@ function resolveActualTestFilePath(
     }
   }
 
+  // Fallback: search test files for imports that reference the source file.
+  // This handles cases where the test file name doesn't match the source file name
+  // (e.g., quick-start.test.js imports from quick-start-setup.js).
+  const sourceFileResult = resolveSourceFilePath(resolvedSnippetPath, workspaceRoot);
+  if (sourceFileResult) {
+    const testByImport = findTestByImport(
+      sourceFileResult.sourceFilePath,
+      workspaceRoot,
+      langProduct,
+      testDirNames,
+    );
+    if (testByImport) {
+      return { testFilePath: testByImport, snippetName };
+    }
+  }
+
   return undefined;
+}
+
+/**
+ * Cache for import-based test file lookups.
+ * Maps source file path -> test file path (or empty string if not found).
+ */
+const importTestFileCache = new Map<string, string>();
+
+/**
+ * Find a test file that imports a given source file by scanning import statements.
+ *
+ * When the test filename doesn't match the source filename (e.g., quick-start.test.js
+ * imports quick-start-setup.js), we fall back to reading test files and checking
+ * their imports/requires for references to the source file.
+ */
+function findTestByImport(
+  sourceFilePath: string,
+  workspaceRoot: string,
+  langProduct: string,
+  testDirNames: string[],
+): string | undefined {
+  const cacheKey = sourceFilePath;
+  const cached = importTestFileCache.get(cacheKey);
+  if (cached !== undefined) {
+    return cached || undefined;
+  }
+
+  // Build the relative path from {lang}/{product}/ to the source file
+  // e.g., "examples/time-series/quick-start/quick-start-setup.js"
+  const projectRoot = path.join(workspaceRoot, "code-example-tests", langProduct);
+  const sourceRelPath = path.relative(projectRoot, sourceFilePath);
+
+  // Build search strings from the source file's relative path.
+  // Normalize to forward slashes for matching.
+  const sourceRelForward = sourceRelPath.replace(/\\/g, "/");
+  // Strip extension for matching (imports often omit it)
+  const sourceRelNoExt = sourceRelForward.replace(/\.[^.]+$/, "");
+  // Dot-separated path for Python imports (examples.module.name)
+  const sourceDotPath = sourceRelNoExt.replace(/\//g, ".");
+  // Path without "examples/" prefix for mongosh-style string references
+  // (e.g., outputFromExampleFiles(["aggregation/expressions/convert/load-data.js"]))
+  const sourceWithoutExamples = sourceRelForward.replace(/^examples\//, "");
+
+  for (const testDirName of testDirNames) {
+    const testsDir = path.join(projectRoot, testDirName);
+    if (!fs.existsSync(testsDir)) {
+      continue;
+    }
+
+    const testFiles = collectFiles(testsDir);
+    for (const testFile of testFiles) {
+      let content: string;
+      try {
+        content = fs.readFileSync(testFile, "utf-8");
+      } catch {
+        continue;
+      }
+
+      // Check if any import/require/string reference points to the source file.
+      // Covers patterns like:
+      //   import { fn } from '../../examples/time-series/quick-start/quick-start-setup.js'
+      //   require("../../examples/time-series/quick-start/quick-start-setup")
+      //   import examples.timeseries.ts_quick_start as alias  (Python)
+      //   "driver-examples/examples/time-series/quick-start/quick-start-setup"  (Go)
+      //   outputFromExampleFiles(["time-series/quick-start/quick-start-setup.js"])  (mongosh)
+      if (
+        content.includes(sourceRelForward) ||
+        content.includes(sourceRelNoExt) ||
+        content.includes(sourceDotPath) ||
+        content.includes(sourceWithoutExamples)
+      ) {
+        importTestFileCache.set(cacheKey, testFile);
+        return testFile;
+      }
+    }
+  }
+
+  importTestFileCache.set(cacheKey, "");
+  return undefined;
+}
+
+/**
+ * Recursively collect all files in a directory.
+ */
+function collectFiles(dir: string): string[] {
+  const results: string[] = [];
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return results;
+  }
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...collectFiles(fullPath));
+    } else if (entry.isFile()) {
+      results.push(fullPath);
+    }
+  }
+  return results;
 }
 
 /**
