@@ -35,6 +35,15 @@ var require_types = __commonJS({
   "../shared/dist/types.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.GROVE_PROJECT_DISPLAY_NAMES = void 0;
+    exports2.GROVE_PROJECT_DISPLAY_NAMES = {
+      "code-example-tests/javascript/driver": "Node.js Driver",
+      "code-example-tests/python/pymongo": "PyMongo",
+      "code-example-tests/go/driver": "Go Driver",
+      "code-example-tests/java/driver-sync": "Java Sync Driver",
+      "code-example-tests/csharp/driver": "C# Driver",
+      "code-example-tests/command-line/mongosh": "mongosh"
+    };
   }
 });
 
@@ -86,6 +95,7 @@ var require_project_detection = __commonJS({
     exports2.findProjectForFile = findProjectForFile2;
     var path3 = __importStar(require("path"));
     var fs2 = __importStar(require("fs/promises"));
+    var types_1 = require_types();
     async function detectGroveProjects2(workspacePath) {
       const projects = [];
       const snipFiles = await findSnipFiles(workspacePath);
@@ -97,6 +107,7 @@ var require_project_detection = __commonJS({
         projects.push({
           rootPath: projectRoot,
           relativePath,
+          displayName: types_1.GROVE_PROJECT_DISPLAY_NAMES[relativePath] ?? relativePath,
           language,
           hasValidConfig
         });
@@ -176,7 +187,7 @@ var require_project_detection = __commonJS({
     async function validateSnipConfig(snipPath) {
       try {
         const content = await fs2.readFile(snipPath, "utf-8");
-        return content.includes("module.exports") || content.includes("export default");
+        return content.includes("module.exports") || content.includes("export default") || content.includes("import ");
       } catch {
         return false;
       }

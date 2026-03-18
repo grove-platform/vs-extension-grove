@@ -66,10 +66,19 @@ export function registerSnippetCodeLens(
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "grove.peekSnippetReferences",
-      async (uri: vscode.Uri, snippetName: string, line: number) => {
+      async (uri: vscode.Uri | undefined, snippetName: string, line: number) => {
         await peekSnippetReferences(uri, snippetName, line);
       },
     ),
+  );
+
+  // Invalidate instance cache when a file is edited so counts refresh
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument((e) => {
+      if (e.contentChanges.length > 0) {
+        snippetCodeLensProvider.invalidateDocument(e.document.uri);
+      }
+    }),
   );
 }
 
@@ -77,7 +86,7 @@ export function registerSnippetCodeLens(
  * Find snippet references using ripgrep and show in QuickPick.
  */
 async function peekSnippetReferences(
-  uri: vscode.Uri,
+  uri: vscode.Uri | undefined,
   snippetName: string,
   _line: number,
 ): Promise<void> {

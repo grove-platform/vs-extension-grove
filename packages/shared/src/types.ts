@@ -3,11 +3,27 @@ export interface GroveProject {
   rootPath: string;
   /** Relative path from workspace root */
   relativePath: string;
+  /** Human-readable display name for UI */
+  displayName: string;
   /** Detected language based on project structure */
   language: GroveLanguage | null;
   /** Whether snip.js was successfully parsed */
   hasValidConfig: boolean;
 }
+
+/**
+ * Canonical display names for all known Grove projects, keyed by relativePath.
+ * Add a new entry here whenever a new code-example-tests project is introduced.
+ * Unknown projects fall back to their relativePath.
+ */
+export const GROVE_PROJECT_DISPLAY_NAMES: Record<string, string> = {
+  "code-example-tests/javascript/driver": "Node.js Driver",
+  "code-example-tests/python/pymongo":    "PyMongo",
+  "code-example-tests/go/driver":         "Go Driver",
+  "code-example-tests/java/driver-sync":  "Java Sync Driver",
+  "code-example-tests/csharp/driver":     "C# Driver",
+  "code-example-tests/command-line/mongosh": "mongosh",
+};
 
 export type GroveLanguage =
   | "nodejs"

@@ -1,6 +1,6 @@
 import * as path from "path";
 import * as fs from "fs/promises";
-import { GroveProject, GroveLanguage } from "./types";
+import { GroveProject, GroveLanguage, GROVE_PROJECT_DISPLAY_NAMES } from "./types";
 
 /**
  * Detect Grove projects by finding snip.js files.
@@ -22,6 +22,7 @@ export async function detectGroveProjects(
     projects.push({
       rootPath: projectRoot,
       relativePath,
+      displayName: GROVE_PROJECT_DISPLAY_NAMES[relativePath] ?? relativePath,
       language,
       hasValidConfig,
     });
@@ -149,7 +150,9 @@ export async function validateSnipConfig(snipPath: string): Promise<boolean> {
     const content = await fs.readFile(snipPath, "utf-8");
     // Basic validation: check if it looks like a valid JS module export
     return (
-      content.includes("module.exports") || content.includes("export default")
+      content.includes("module.exports") ||
+      content.includes("export default") ||
+      content.includes("import ")
     );
   } catch {
     return false;

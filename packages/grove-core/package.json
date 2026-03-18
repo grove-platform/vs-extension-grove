@@ -2,7 +2,7 @@
   "name": "grove-core",
   "displayName": "Grove",
   "description": "MongoDB documentation code example testing platform",
-  "version": "0.0.15",
+  "version": "0.0.17",
   "publisher": "mongodb",
   "engines": {
     "vscode": "^1.110.0"
@@ -112,16 +112,31 @@
         "command": "grove.sendFeedback",
         "title": "Send Feedback",
         "category": "Grove"
+      },
+      {
+        "command": "grove.refreshPanel",
+        "title": "Refresh",
+        "icon": "$(refresh)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "grove.refreshPanel",
+          "when": "view == grove.panel",
+          "group": "navigation"
+        }
+      ]
+    },
     "configurationDefaults": {
       "editor.codeLensFontSize": 14
     }
   },
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
-    "watch": "npm run build -- --watch",
-    "package": "vsce package --no-dependencies",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify --define:process.env.NODE_ENV=\\\"production\\\" --sourcemap=external --target=node18",
+    "build:dev": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap=inline --target=node18",
+    "watch": "pnpm run build:dev -- --watch",
+    "package": "pnpm run build && vsce package --no-dependencies",
     "lint": "eslint src --ext ts",
     "test": "vitest run",
     "test:watch": "vitest"

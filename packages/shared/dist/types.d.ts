@@ -3,11 +3,19 @@ export interface GroveProject {
     rootPath: string;
     /** Relative path from workspace root */
     relativePath: string;
+    /** Human-readable display name for UI */
+    displayName: string;
     /** Detected language based on project structure */
     language: GroveLanguage | null;
     /** Whether snip.js was successfully parsed */
     hasValidConfig: boolean;
 }
+/**
+ * Canonical display names for all known Grove projects, keyed by relativePath.
+ * Add a new entry here whenever a new code-example-tests project is introduced.
+ * Unknown projects fall back to their relativePath.
+ */
+export declare const GROVE_PROJECT_DISPLAY_NAMES: Record<string, string>;
 export type GroveLanguage = "nodejs" | "python" | "go" | "java" | "csharp" | "mongosh";
 export interface GroveStatus {
     /** Whether extension detected a valid Grove project */

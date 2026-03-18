@@ -5,7 +5,8 @@
     "build": "pnpm -r build",
     "watch": "pnpm -r --parallel watch",
     "lint": "pnpm -r lint",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "package": "pnpm --filter grove-core package"
   },
   "devDependencies": {
     "@vscode/vsce": "^3.7.1",

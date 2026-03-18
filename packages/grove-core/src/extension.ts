@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import type { GroveStatus, GroveProject } from "@grove/shared";
 import { GrovePanelProvider } from "./panel/GrovePanel";
-import { ProfilerPanel } from "./panel/ProfilerPanel";
 import { getApi as getTestRunnerApi } from "./test-runner-api";
 import {
   resolveProject,
@@ -18,19 +17,12 @@ import { registerSymlinkCommand } from "./symlink";
 import { MongoConnectionManager } from "./mongo/connection";
 import { registerMongoCommands } from "./mongo/commands";
 import { maskConnectionString } from "./mongo/credentials";
-import { registerLiteralIncludeProviders } from "./rst/LiteralIncludeProviders";
-import { clearExtractCache } from "./rst/extract-resolver";
-import { BluehawkPreviewProvider } from "./preview/BluehawkPreview";
-import { containsBluehawkDirectives } from "./preview/bluehawk-runner";
-import { registerTestCodeLens } from "./test-codelens";
-import { registerSnippetCodeLens } from "./snippet-codelens";
 import { initLogger, getLogChannel } from "./logger";
 import {
   initProjectCache,
   getCachedProjects,
   invalidate as invalidateProjectCache,
 } from "./project-cache";
-import { FeedbackPanel } from "./feedback/FeedbackPanel";
 import {
   initProfiler,
   isProfilingEnabled,
@@ -45,6 +37,29 @@ import {
   formatComparison,
   type ProfileReport,
 } from "@grove/shared";
+
+async function registerTestCodeLensLazy(context: vscode.ExtensionContext): Promise<void> {
+  const { registerTestCodeLens } = await import("./test-codelens");
+  registerTestCodeLens(context);
+}
+
+async function registerSnippetCodeLensLazy(context: vscode.ExtensionContext): Promise<void> {
+  const { registerSnippetCodeLens } = await import("./snippet-codelens");
+  registerSnippetCodeLens(context);
+}
+
+async function registerRstProvidersLazy(context: vscode.ExtensionContext): Promise<void> {
+  const { registerLiteralIncludeProviders } = await import("./rst/LiteralIncludeProviders");
+  const { clearExtractCache } = await import("./rst/extract-resolver");
+
+  registerLiteralIncludeProviders(context);
+
+  const extractsWatcher = vscode.workspace.createFileSystemWatcher("**/extracts*.yaml");
+  extractsWatcher.onDidChange(() => clearExtractCache());
+  extractsWatcher.onDidCreate(() => clearExtractCache());
+  extractsWatcher.onDidDelete(() => clearExtractCache());
+  context.subscriptions.push(extractsWatcher);
+}
 
 let currentStatus: GroveStatus | null = null;
 let mongoConnectionManager: MongoConnectionManager;
@@ -453,39 +468,120 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  // Register literalinclude providers for RST files
-  registerLiteralIncludeProviders(context);
-  outputChannel.info("Registered literalinclude providers for RST files");
+  // Lazily register RST providers — defer module load until first .rst/.txt file is opened
+  {
+    const rstLanguages = new Set(["restructuredtext", "plaintext"]);
+    const rstExtensions = [".rst", ".txt"];
 
-  // Watch for changes to extract YAML files and invalidate cache
-  const extractsWatcher =
-    vscode.workspace.createFileSystemWatcher("**/extracts*.yaml");
-  extractsWatcher.onDidChange(() => clearExtractCache());
-  extractsWatcher.onDidCreate(() => clearExtractCache());
-  extractsWatcher.onDidDelete(() => clearExtractCache());
-  context.subscriptions.push(extractsWatcher);
+    const isRstDocument = (doc: vscode.TextDocument) =>
+      rstLanguages.has(doc.languageId) ||
+      rstExtensions.some((ext) => doc.uri.fsPath.endsWith(ext));
 
-  // Register test CodeLens providers for test files
-  registerTestCodeLens(context);
-  outputChannel.info("Registered test CodeLens providers");
+    const alreadyOpen = vscode.workspace.textDocuments.some(isRstDocument);
 
-  // Register snippet CodeLens providers for Bluehawk snippets
-  registerSnippetCodeLens(context);
-  outputChannel.info("Registered snippet CodeLens providers");
+    if (alreadyOpen) {
+      registerRstProvidersLazy(context).then(() => {
+        outputChannel.info("Registered RST providers (file already open)");
+      });
+    } else {
+      const disposable = vscode.workspace.onDidOpenTextDocument((doc) => {
+        if (isRstDocument(doc)) {
+          disposable.dispose();
+          registerRstProvidersLazy(context).then(() => {
+            outputChannel.info("Registered RST providers (lazy, on first open)");
+          });
+        }
+      });
+      context.subscriptions.push(disposable);
+    }
+  }
+
+  // Lazy test CodeLens — defer until first test/source file is opened
+  {
+    const testFilePatterns = [".test.js", ".test.ts", ".spec.js", ".spec.ts", ".test.mjs", ".spec.mjs"];
+    const testDirPatterns = ["/tests/", "/tests_package/", "\\tests\\", "\\tests_package\\"];
+
+    const isTestDocument = (doc: vscode.TextDocument) => {
+      const p = doc.uri.fsPath;
+      return (
+        testFilePatterns.some((ext) => p.endsWith(ext)) ||
+        testDirPatterns.some((dir) => p.includes(dir))
+      );
+    };
+
+    const alreadyOpenTest = vscode.workspace.textDocuments.some(isTestDocument);
+    if (alreadyOpenTest) {
+      registerTestCodeLensLazy(context).then(() => {
+        outputChannel.info("Registered test CodeLens providers (file already open)");
+      });
+    } else {
+      const disposable = vscode.workspace.onDidOpenTextDocument((doc) => {
+        if (isTestDocument(doc)) {
+          disposable.dispose();
+          registerTestCodeLensLazy(context).then(() => {
+            outputChannel.info("Registered test CodeLens providers (lazy)");
+          });
+        }
+      });
+      context.subscriptions.push(disposable);
+    }
+  }
+
+  // Lazy snippet CodeLens — defer until first source code file is opened
+  {
+    const snippetSourceExtensions = [".js", ".ts", ".mjs", ".cjs", ".py", ".go", ".java", ".cs", ".sh"];
+
+    const isSnippetSourceDocument = (doc: vscode.TextDocument) => {
+      const p = doc.uri.fsPath;
+      return snippetSourceExtensions.some((ext) => p.endsWith(ext));
+    };
+
+    const alreadyOpenSnippet = vscode.workspace.textDocuments.some(isSnippetSourceDocument);
+    if (alreadyOpenSnippet) {
+      registerSnippetCodeLensLazy(context).then(() => {
+        outputChannel.info("Registered snippet CodeLens providers (file already open)");
+      });
+    } else {
+      const disposable = vscode.workspace.onDidOpenTextDocument((doc) => {
+        if (isSnippetSourceDocument(doc)) {
+          disposable.dispose();
+          registerSnippetCodeLensLazy(context).then(() => {
+            outputChannel.info("Registered snippet CodeLens providers (lazy)");
+          });
+        }
+      });
+      context.subscriptions.push(disposable);
+    }
+  }
+  // mark represents "provider registration initiated" — lazy registrations may still be pending
   mark("activation.providersRegistered");
 
-  // Register Bluehawk preview provider
-  const bluehawkPreviewProvider = new BluehawkPreviewProvider(
-    context.extensionUri,
-  );
+  // Lazy Bluehawk preview — defers module load until first use
+  let _bluehawkProvider: import("./preview/BluehawkPreview").BluehawkPreviewProvider | undefined;
+
+  async function getBluehawkProvider(): Promise<import("./preview/BluehawkPreview").BluehawkPreviewProvider> {
+    if (!_bluehawkProvider) {
+      const { BluehawkPreviewProvider } = await import("./preview/BluehawkPreview");
+      _bluehawkProvider = new BluehawkPreviewProvider(context.extensionUri);
+    }
+    return _bluehawkProvider;
+  }
+
+  const lazyBluehawkProxy: vscode.WebviewViewProvider = {
+    resolveWebviewView(webviewView, ctx, token) {
+      getBluehawkProvider().then((provider) => {
+        provider.resolveWebviewView(webviewView, ctx, token);
+      });
+    },
+  };
+
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
-      BluehawkPreviewProvider.viewType,
-      bluehawkPreviewProvider,
+      "grove.bluehawkPreview",
+      lazyBluehawkProxy,
     ),
   );
 
-  // Register Bluehawk preview commands
   context.subscriptions.push(
     vscode.commands.registerCommand("grove.openBluehawkPreview", async () => {
       const editor = vscode.window.activeTextEditor;
@@ -493,39 +589,37 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.showWarningMessage("No active editor");
         return;
       }
-      await bluehawkPreviewProvider.updatePreview(editor.document);
-      // Focus the Bluehawk preview panel
+      const provider = await getBluehawkProvider();
+      await provider.updatePreview(editor.document);
       await vscode.commands.executeCommand("grove.bluehawkPreview.focus");
     }),
-    vscode.commands.registerCommand(
-      "grove.refreshBluehawkPreview",
-      async () => {
-        const editor = vscode.window.activeTextEditor;
-        if (editor) {
-          await bluehawkPreviewProvider.updatePreview(editor.document);
-        }
-      },
-    ),
+    vscode.commands.registerCommand("grove.refreshBluehawkPreview", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor) {
+        const provider = await getBluehawkProvider();
+        await provider.updatePreview(editor.document);
+      }
+    }),
   );
 
-  // Update Bluehawk preview on document save
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument(async (document) => {
+      const { containsBluehawkDirectives } = await import("./preview/bluehawk-runner");
       if (containsBluehawkDirectives(document.getText())) {
-        await bluehawkPreviewProvider.updatePreview(document);
+        const provider = await getBluehawkProvider();
+        await provider.updatePreview(document);
       }
     }),
-  );
-
-  // Update Bluehawk preview when active editor changes
-  context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor(async (editor) => {
-      if (editor && containsBluehawkDirectives(editor.document.getText())) {
-        bluehawkPreviewProvider.debouncedUpdate(editor.document);
+      if (!editor) return;
+      const { containsBluehawkDirectives } = await import("./preview/bluehawk-runner");
+      if (containsBluehawkDirectives(editor.document.getText())) {
+        const provider = await getBluehawkProvider();
+        provider.debouncedUpdate(editor.document);
       }
     }),
   );
-  outputChannel.info("Registered Bluehawk preview provider");
+  outputChannel.info("Registered Bluehawk preview provider (lazy)");
 
   // Register run tests command (delegates to language-specific runner)
   context.subscriptions.push(
@@ -592,7 +686,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register feedback command
   context.subscriptions.push(
-    vscode.commands.registerCommand("grove.sendFeedback", () => {
+    vscode.commands.registerCommand("grove.sendFeedback", async () => {
+      const { FeedbackPanel } = await import("./feedback/FeedbackPanel");
       FeedbackPanel.createOrShow(context.extensionUri);
     }),
   );
@@ -644,7 +739,8 @@ export async function activate(context: vscode.ExtensionContext) {
         await comparePerformanceReports(context, outputChannel);
       },
     ),
-    vscode.commands.registerCommand("grove.openProfilerPanel", () => {
+    vscode.commands.registerCommand("grove.openProfilerPanel", async () => {
+      const { ProfilerPanel } = await import("./panel/ProfilerPanel");
       ProfilerPanel.createOrShow(context.extensionUri);
     }),
   );

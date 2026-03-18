@@ -4,15 +4,6 @@
 
 - add reference lookup codelens for all includes and literalincludes
 
-## Performance
-
-- Ways to gracefully lazy load extension features to improve start up time?
-- Optimize build
-
-## Security
-
-- Do a full security audit
-
 ## Beyond code examples
 
 Based on analysis of the `docs-mongodb-internal` monorepo, here are opportunities to improve writer workflows:

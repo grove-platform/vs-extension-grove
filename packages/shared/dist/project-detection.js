@@ -39,6 +39,7 @@ exports.validateSnipConfig = validateSnipConfig;
 exports.findProjectForFile = findProjectForFile;
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs/promises"));
+const types_1 = require("./types");
 /**
  * Detect Grove projects by finding snip.js files.
  * @param workspacePath - Absolute path to workspace root
@@ -55,6 +56,7 @@ async function detectGroveProjects(workspacePath) {
         projects.push({
             rootPath: projectRoot,
             relativePath,
+            displayName: types_1.GROVE_PROJECT_DISPLAY_NAMES[relativePath] ?? relativePath,
             language,
             hasValidConfig,
         });
@@ -169,7 +171,9 @@ async function validateSnipConfig(snipPath) {
     try {
         const content = await fs.readFile(snipPath, "utf-8");
         // Basic validation: check if it looks like a valid JS module export
-        return (content.includes("module.exports") || content.includes("export default"));
+        return (content.includes("module.exports") ||
+            content.includes("export default") ||
+            content.includes("import "));
     }
     catch {
         return false;

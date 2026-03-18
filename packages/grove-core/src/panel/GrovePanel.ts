@@ -33,8 +33,11 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
         case "refresh":
           await this.refresh();
           break;
-        case "runTests":
-          vscode.commands.executeCommand("grove.runTests");
+        case "openProjectRoot":
+          if (message.rootPath) {
+            const uri = vscode.Uri.file(message.rootPath);
+            vscode.commands.executeCommand("revealInExplorer", uri);
+          }
           break;
         case "connectMongo":
           vscode.commands.executeCommand("grove.connectMongo");
@@ -121,6 +124,14 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
     }
     .setup-wizard h3 { margin: 0 0 8px 0; }
     .hidden { display: none; }
+    .project-link {
+      color: var(--vscode-textLink-foreground);
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .project-link:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -163,7 +174,12 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
       } else {
         html += '<div class="section"><div class="section-title">Projects</div>';
         html += currentStatus.projects.map(p =>
-          '<div class="status-row"><span class="status-icon">' + (p.hasValidConfig ? '✓' : '!') + '</span><span>' + escapeHtml(p.relativePath || 'Root') + '</span><span>(' + escapeHtml(p.language || 'unknown') + ')</span></div>'
+          '<div class="status-row">' +
+          '<span class="status-icon">' + (p.hasValidConfig ? '✓' : '⚠') + '</span>' +
+          '<a href="#" class="project-link" data-root-path="' + escapeHtml(p.rootPath) + '">' +
+            escapeHtml(p.displayName) +
+          '</a>' +
+          '</div>'
         ).join('');
         html += '</div>';
         // MongoDB section with connection status and actions
@@ -180,19 +196,23 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
           html += '<button onclick="connectMongo()" style="grid-column: span 2;">Connect to MongoDB</button>';
         }
         html += '</div></div>';
-        // Actions section
-        html += '<div class="section"><div class="section-title">Actions</div><div class="actions"><button onclick="runTests()">Run Tests</button><button onclick="refresh()">Refresh</button></div></div>';
         // Feedback section (always shown)
         html += '<div class="section"><div class="section-title">Help</div><div class="actions" style="grid-template-columns: 1fr;"><button onclick="sendFeedback()">📝 Send Feedback</button></div></div>';
       }
       content.innerHTML = html;
     }
-    function refresh() { vscode.postMessage({ command: 'refresh' }); }
-    function runTests() { vscode.postMessage({ command: 'runTests' }); }
+    document.addEventListener('click', e => {
+      const link = e.target.closest('.project-link');
+      if (link) {
+        e.preventDefault();
+        vscode.postMessage({ command: 'openProjectRoot', rootPath: link.dataset.rootPath });
+      }
+    });
     function connectMongo() { vscode.postMessage({ command: 'connectMongo' }); }
     function disconnectMongo() { vscode.postMessage({ command: 'disconnectMongo' }); }
     function showDatabases() { vscode.postMessage({ command: 'showDatabases' }); }
     function sendFeedback() { vscode.postMessage({ command: 'sendFeedback' }); }
+    function refresh() { vscode.postMessage({ command: 'refresh' }); }
     refresh();
   </script>
 </body>
