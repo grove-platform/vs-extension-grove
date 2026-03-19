@@ -21,7 +21,7 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  packages/grove-core:
+  packages/grove-platform-core:
     dependencies:
       '@grove/shared':
         specifier: workspace:*
@@ -55,7 +55,7 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@25.4.0)
 
-  packages/grove-nodejs:
+  packages/grove-platform-nodejs:
     dependencies:
       '@grove/shared':
         specifier: workspace:*

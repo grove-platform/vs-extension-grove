@@ -10,7 +10,7 @@ import * as os from "os";
 import type { DiagnosticInfo } from "./types";
 
 /** Extension ID for Grove core */
-const GROVE_EXTENSION_ID = "mongodb.grove-core";
+const GROVE_EXTENSION_ID = "GrovePlatform.grove-platform-core";
 
 /**
  * Get the Grove extension version from package.json.

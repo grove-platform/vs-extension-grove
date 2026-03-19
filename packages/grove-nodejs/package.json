@@ -1,9 +1,9 @@
 {
-  "name": "grove-nodejs",
-  "displayName": "Grove for Node.js",
+  "name": "grove-platform-nodejs",
+  "displayName": "Grove UI for Node.js",
   "description": "Node.js/Jest support for Grove documentation testing",
   "version": "0.0.15",
-  "publisher": "mongodb",
+  "publisher": "GrovePlatform",
   "engines": {
     "vscode": "^1.110.0"
   },
@@ -15,7 +15,7 @@
   ],
   "main": "./dist/extension.js",
   "extensionDependencies": [
-    "mongodb.grove-core"
+    "GrovePlatform.grove-platform-core"
   ],
   "contributes": {
     "commands": [

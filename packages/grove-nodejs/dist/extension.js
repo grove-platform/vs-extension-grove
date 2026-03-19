@@ -749,7 +749,7 @@ async function findProjectPathForFile(filePath) {
 }
 async function activate(context) {
   console.log("Grove for Node.js extension activating...");
-  const groveCore = vscode.extensions.getExtension("mongodb.grove-core");
+  const groveCore = vscode.extensions.getExtension("GrovePlatform.grove-platform-core");
   if (!groveCore) {
     vscode.window.showErrorMessage(
       "Grove Core extension not found. Please install it first."

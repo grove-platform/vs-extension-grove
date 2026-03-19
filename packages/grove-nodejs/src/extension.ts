@@ -53,7 +53,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Get grove-core extension
   const groveCore =
-    vscode.extensions.getExtension<GroveCoreApi>("mongodb.grove-core");
+    vscode.extensions.getExtension<GroveCoreApi>("GrovePlatform.grove-platform-core");
 
   if (!groveCore) {
     vscode.window.showErrorMessage(
