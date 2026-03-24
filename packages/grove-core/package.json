@@ -2,7 +2,7 @@
   "name": "grove-platform-core",
   "displayName": "Grove UI",
   "description": "MongoDB documentation code example testing platform",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "publisher": "GrovePlatform",
   "engines": {
     "vscode": "^1.110.0"
@@ -11,7 +11,7 @@
     "Other"
   ],
   "activationEvents": [
-    "workspaceContains:**/snip.js"
+    "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "contributes": {
