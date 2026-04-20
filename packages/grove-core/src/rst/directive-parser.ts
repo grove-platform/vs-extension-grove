@@ -9,17 +9,22 @@
 
 import * as vscode from "vscode";
 
-/** Types of directives that reference files */
-export type DirectiveType = "literalinclude" | "include" | "input" | "output";
+/** Types of directives that reference files (or, for code-block, inline code). */
+export type DirectiveType =
+  | "literalinclude"
+  | "include"
+  | "input"
+  | "output"
+  | "code-block";
 
 export interface DirectiveRef {
   /** Type of directive */
   type: DirectiveType;
   /** Position of the directive in the RST file */
   range: vscode.Range;
-  /** The range of just the file path for navigation */
+  /** The range of just the file path (or language arg, for code-block) */
   pathRange: vscode.Range;
-  /** Referenced file path (as written in RST) */
+  /** Referenced file path (as written in RST). Empty string for code-block. */
   targetPath: string;
   /** Whether this directive may need symlink resolution (code-examples) */
   needsSymlinkResolution: boolean;
@@ -33,8 +38,11 @@ export interface DirectiveRef {
   endBefore?: string;
   /** :lines: value if present */
   lines?: string;
-  /** :language: value if present */
+  /** :language: value if present (for literalinclude/io-code-block) or
+   *  positional arg (for code-block). */
   language?: string;
+  /** Inline code content, populated only for code-block directives. */
+  code?: string;
 }
 
 /**
@@ -50,6 +58,10 @@ export function parseDirectives(document: vscode.TextDocument): DirectiveRef[] {
   // Pattern for io-code-block's input/output sub-directives
   // Format: .. input:: /path/to/file or .. output:: /path/to/file
   const ioDirectivePattern = /^(\s+)\.\.\s+(input|output)::\s+(.+?)\s*$/;
+
+  // Pattern for code-block:: with a language positional arg.
+  // Omits code-block directives without a language (rare and not migratable).
+  const codeBlockPattern = /^(\s*)\.\.\s+code-block::\s+([a-zA-Z0-9_+.-]+)\s*$/;
 
   for (let lineNum = 0; lineNum < document.lineCount; lineNum++) {
     const line = document.lineAt(lineNum);
@@ -79,10 +91,99 @@ export function parseDirectives(document: vscode.TextDocument): DirectiveRef[] {
         match[3],
       );
       refs.push(ref);
+      continue;
+    }
+
+    // Try code-block
+    match = text.match(codeBlockPattern);
+    if (match) {
+      const ref = parseCodeBlockDirective(document, lineNum, match[1], match[2]);
+      refs.push(ref);
     }
   }
 
   return refs;
+}
+
+/**
+ * Parse a code-block:: directive and extract its indented content block.
+ *
+ * RST content blocks start after optional blank lines and are indented
+ * relative to the directive line. This captures consecutive content lines
+ * and stops at the first non-blank line indented less than the content.
+ */
+function parseCodeBlockDirective(
+  document: vscode.TextDocument,
+  lineNum: number,
+  indent: string,
+  language: string,
+): DirectiveRef {
+  const line = document.lineAt(lineNum);
+  const langStartChar = line.text.indexOf(language);
+  const pathRange = new vscode.Range(
+    new vscode.Position(lineNum, langStartChar),
+    new vscode.Position(lineNum, langStartChar + language.length),
+  );
+
+  // Find where content starts (skip blank lines after directive)
+  let contentLineNum = lineNum + 1;
+  while (
+    contentLineNum < document.lineCount &&
+    document.lineAt(contentLineNum).text.trim() === ""
+  ) {
+    contentLineNum++;
+  }
+
+  // Content must be indented deeper than the directive itself.
+  const minContentIndent = indent.length + 1;
+  const codeLines: string[] = [];
+  let lastContentLineNum = lineNum;
+  // The indent of the first non-blank content line. Every subsequent line
+  // gets this exact prefix stripped so deeper indentation (nested code) is
+  // preserved in the captured content.
+  let stripAmount: number | undefined;
+
+  while (contentLineNum < document.lineCount) {
+    const rawText = document.lineAt(contentLineNum).text;
+    const trimmed = rawText.trim();
+
+    if (trimmed === "") {
+      codeLines.push("");
+      contentLineNum++;
+      continue;
+    }
+
+    const leading = rawText.length - rawText.trimStart().length;
+    if (leading < minContentIndent) {
+      break;
+    }
+
+    if (stripAmount === undefined) {
+      stripAmount = leading;
+    }
+    codeLines.push(rawText.slice(Math.min(leading, stripAmount)));
+    lastContentLineNum = contentLineNum;
+    contentLineNum++;
+  }
+
+  // Drop trailing blank lines from the captured content.
+  while (codeLines.length > 0 && codeLines[codeLines.length - 1] === "") {
+    codeLines.pop();
+  }
+
+  const blockEndLine = document.lineAt(lastContentLineNum);
+  return {
+    type: "code-block",
+    range: new vscode.Range(
+      new vscode.Position(lineNum, 0),
+      new vscode.Position(lastContentLineNum, blockEndLine.text.length),
+    ),
+    pathRange,
+    targetPath: "",
+    needsSymlinkResolution: false,
+    language,
+    code: codeLines.join("\n"),
+  };
 }
 
 /**

@@ -21,6 +21,7 @@ import { resolveExtract } from "./extract-resolver";
 import { profile, profileSync } from "@grove/shared";
 import {
   writeHandoff,
+  type CreateFromRstContext,
   type MigrateFromRstContext,
 } from "../handoff/writer";
 
@@ -45,6 +46,35 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   ".cs": "csharp",
   ".sh": "mongosh",
 };
+
+/**
+ * Map RST code-block language identifiers (Pygments lexer names) to the
+ * language value /grove-create expects. Only Grove-supported languages are
+ * listed — code-blocks with other languages (json, yaml, html, etc.) don't
+ * get a Create lens.
+ */
+const CODE_BLOCK_LANG_TO_GROVE: Record<string, string> = {
+  python: "python",
+  py: "python",
+  javascript: "javascript",
+  js: "javascript",
+  typescript: "javascript",
+  ts: "javascript",
+  go: "go",
+  golang: "go",
+  java: "java",
+  csharp: "csharp",
+  cs: "csharp",
+  "c#": "csharp",
+  mongosh: "mongosh",
+  bash: "mongosh",
+  shell: "mongosh",
+  sh: "mongosh",
+};
+
+function mapCodeBlockLanguage(rstLang: string): string | undefined {
+  return CODE_BLOCK_LANG_TO_GROVE[rstLang.toLowerCase()];
+}
 
 function isMigratableCodeFile(absolutePath: string): boolean {
   return CODE_FILE_EXTENSIONS.has(path.extname(absolutePath).toLowerCase());
@@ -429,6 +459,30 @@ export class RstDirectiveCodeLensProvider implements vscode.CodeLensProvider {
         new vscode.Position(directiveLine, 0),
         new vscode.Position(directiveLine, 0),
       );
+
+      // Handle code-block::<lang> — inline code, no file resolution.
+      // Emits a "Create tested example" lens for Grove-supported languages.
+      if (ref.type === "code-block") {
+        const groveLang = ref.language
+          ? mapCodeBlockLanguage(ref.language)
+          : undefined;
+        if (groveLang && ref.code && ref.code.trim().length > 0) {
+          lenses.push(
+            new vscode.CodeLens(lensRange, {
+              title: `$(sparkle) Create tested example`,
+              command: "grove.createFromCodeBlock",
+              arguments: [
+                document.uri,
+                directiveLine,
+                groveLang,
+                ref.code,
+              ],
+              tooltip: `Hand off this ${groveLang} example to /grove-create`,
+            }),
+          );
+        }
+        continue; // code-block has no file target — skip normal resolution
+      }
 
       // Handle extract includes differently - they resolve to YAML refs
       if (ref.isExtract) {
@@ -832,6 +886,77 @@ export function registerLiteralIncludeProviders(
           new vscode.Range(position, position),
           vscode.TextEditorRevealType.InCenter,
         );
+      },
+    ),
+  );
+
+  // Register command for "Create tested example" CodeLens on inline
+  // code-block:: directives. Writes a handoff payload and hands off to
+  // /grove-create.
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "grove.createFromCodeBlock",
+      async (
+        rstUri: vscode.Uri,
+        rstLine: number,
+        language: string,
+        code: string,
+      ) => {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+          vscode.window.showErrorMessage("No workspace folder is open.");
+          return;
+        }
+
+        const rstFileRel = path.relative(
+          workspaceFolder.uri.fsPath,
+          rstUri.fsPath,
+        );
+
+        const context: CreateFromRstContext = {
+          language,
+          code,
+          rstFile: rstFileRel,
+          rstLine,
+        };
+
+        try {
+          const handoffUri = await writeHandoff(
+            "grove-create",
+            "rst-code-block",
+            context,
+          );
+          if (!handoffUri) return;
+
+          let primaryEditorOpened = false;
+          try {
+            await vscode.commands.executeCommand(
+              "claude-vscode.primaryEditor.open",
+              undefined,
+              "/grove-create",
+            );
+            primaryEditorOpened = true;
+          } catch {
+            try {
+              await vscode.commands.executeCommand(
+                "claude-vscode.sidebar.open",
+              );
+            } catch {
+              // Claude Code extension not available — skip focus entirely.
+            }
+          }
+
+          const rstBase = path.basename(rstUri.fsPath);
+          vscode.window.showInformationMessage(
+            primaryEditorOpened
+              ? `Grove handoff ready. Press Enter in Claude Code to create a ${language} example from ${rstBase}.`
+              : `Grove handoff ready. Type /grove-create in Claude Code to create a ${language} example from ${rstBase}.`,
+          );
+        } catch (err) {
+          vscode.window.showErrorMessage(
+            `Failed to write Grove handoff: ${err}`,
+          );
+        }
       },
     ),
   );

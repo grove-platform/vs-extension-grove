@@ -45,6 +45,21 @@ export interface TestFailureContext {
 }
 
 /**
+ * Context for creating a new tested example from an inline `code-block::`
+ * directive in an RST/TXT file.
+ */
+export interface CreateFromRstContext {
+  /** The code-block's language (positional arg of the directive). */
+  language: string;
+  /** The inline code content (with RST indent stripped). */
+  code: string;
+  /** Relative path (from Claude project root) of the RST file. */
+  rstFile: string;
+  /** Zero-indexed line number of the `.. code-block::` line. */
+  rstLine: number;
+}
+
+/**
  * Context for a snippet-level migration triggered from an RST `literalinclude::`
  * (or `input::`/`output::`) directive that resolves to a file outside the
  * Grove-tested tree.
