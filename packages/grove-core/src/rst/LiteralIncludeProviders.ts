@@ -49,9 +49,11 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
 
 /**
  * Map RST code-block language identifiers (Pygments lexer names) to the
- * language value /grove-create expects. Only Grove-supported languages are
- * listed — code-blocks with other languages (json, yaml, html, etc.) don't
- * get a Create lens.
+ * language value /grove-create expects.
+ *
+ * `json` maps to a sentinel value because a JSON code-block could become
+ * either a JavaScript (Node.js driver) example or a mongosh example — the
+ * skill prompts the writer to choose during Step 0.
  */
 const CODE_BLOCK_LANG_TO_GROVE: Record<string, string> = {
   python: "python",
@@ -70,6 +72,8 @@ const CODE_BLOCK_LANG_TO_GROVE: Record<string, string> = {
   bash: "mongosh",
   shell: "mongosh",
   sh: "mongosh",
+  json: "json",
+  jsonl: "json",
 };
 
 function mapCodeBlockLanguage(rstLang: string): string | undefined {
