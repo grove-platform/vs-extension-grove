@@ -20,6 +20,7 @@ import {
   executeTests,
   displayTestResults,
 } from "../test-execution";
+import { writeHandoff, type TestFailureContext } from "../handoff/writer";
 
 // Module-level provider instance for access from runTestBlock
 let codeLensProvider: TestCodeLensProvider;
@@ -81,12 +82,87 @@ export function registerTestCodeLens(context: vscode.ExtensionContext): void {
     ),
   );
 
+  // Register diagnose-with-Claude command
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "grove.diagnoseTestBlock",
+      async (
+        uri: vscode.Uri,
+        testNamePattern: string,
+        testName: string,
+        _blockType: string,
+      ) => {
+        await diagnoseTestBlock(uri, testNamePattern, testName);
+      },
+    ),
+  );
+
   // Refresh lenses on document save
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument(() => {
       codeLensProvider.refresh();
     }),
   );
+
+  // Refresh lenses when test results arrive so the "Diagnose with Claude"
+  // lens appears immediately after a failing run.
+  context.subscriptions.push(
+    testResultStore.onDidChange(() => {
+      codeLensProvider.refresh();
+    }),
+  );
+}
+
+async function diagnoseTestBlock(
+  uri: vscode.Uri,
+  testNamePattern: string,
+  testName: string,
+): Promise<void> {
+  const resolved = await resolveProject(uri.fsPath);
+  if (!resolved) return;
+
+  const result = testResultStore.get(uri, testNamePattern);
+  if (!result) {
+    vscode.window.showWarningMessage(
+      `No test result found for "${testName}". Run the test first.`,
+    );
+    return;
+  }
+
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  if (!workspaceFolder) {
+    vscode.window.showErrorMessage("No workspace folder is open.");
+    return;
+  }
+
+  const testFileRel = path.relative(workspaceFolder.uri.fsPath, uri.fsPath);
+  const projectPathRel = path.relative(
+    workspaceFolder.uri.fsPath,
+    resolved.project.rootPath,
+  );
+
+  const context: TestFailureContext = {
+    testFile: testFileRel,
+    testName,
+    testNamePattern,
+    line: result.line,
+    errorMessage: result.errorMessage,
+    duration: result.duration,
+    projectPath: projectPathRel,
+  };
+
+  try {
+    const handoffUri = await writeHandoff("grove-run", "test-failure", context);
+    if (!handoffUri) return;
+
+    const slashCommand = "/grove-run";
+    await vscode.env.clipboard.writeText(slashCommand);
+    vscode.window.showInformationMessage(
+      `Grove handoff written. Paste ${slashCommand} into Claude Code to diagnose "${testName}".`,
+    );
+  } catch (err) {
+    vscode.window.showErrorMessage(`Failed to write Grove handoff: ${err}`);
+  }
 }
 
 async function runTestBlock(
