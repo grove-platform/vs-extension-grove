@@ -155,10 +155,30 @@ async function diagnoseTestBlock(
     const handoffUri = await writeHandoff("grove-run", "test-failure", context);
     if (!handoffUri) return;
 
-    const slashCommand = "/grove-run";
-    await vscode.env.clipboard.writeText(slashCommand);
+    // Open Claude Code with "/grove-run" pre-filled. The extension's
+    // primaryEditor.open accepts (sessionId?, prompt?) — confirmed from
+    // the URI handler route in its source — so the writer just presses
+    // Enter. Fall back to sidebar.open if the command isn't available.
+    let primaryEditorOpened = false;
+    try {
+      await vscode.commands.executeCommand(
+        "claude-vscode.primaryEditor.open",
+        undefined,
+        "/grove-run",
+      );
+      primaryEditorOpened = true;
+    } catch {
+      try {
+        await vscode.commands.executeCommand("claude-vscode.sidebar.open");
+      } catch {
+        // Claude Code extension not available — skip focus entirely.
+      }
+    }
+
     vscode.window.showInformationMessage(
-      `Grove handoff written. Paste ${slashCommand} into Claude Code to diagnose "${testName}".`,
+      primaryEditorOpened
+        ? `Grove handoff ready. Press Enter in Claude Code to diagnose "${testName}".`
+        : `Grove handoff ready. Type /grove-run in Claude Code to diagnose "${testName}".`,
     );
   } catch (err) {
     vscode.window.showErrorMessage(`Failed to write Grove handoff: ${err}`);
