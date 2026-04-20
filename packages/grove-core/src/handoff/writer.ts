@@ -45,10 +45,13 @@ export interface TestFailureContext {
 }
 
 /**
- * Context for creating a new tested example from an inline `code-block::`
- * directive in an RST/TXT file.
+ * Context for migrating inline code from a `code-block::` directive in an
+ * RST/TXT file into the Grove-tested tree. The code lives directly in the
+ * docs page (no separate file), so /grove-migrate creates the file as part
+ * of the migration. `language` may be `"json"` — an ambiguous marker the
+ * skill resolves by asking the writer to pick JavaScript or mongosh.
  */
-export interface CreateFromRstContext {
+export interface MigrateCodeBlockContext {
   /** The code-block's language (positional arg of the directive). */
   language: string;
   /** The inline code content (with RST indent stripped). */

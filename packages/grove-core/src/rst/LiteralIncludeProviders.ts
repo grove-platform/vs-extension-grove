@@ -21,7 +21,7 @@ import { resolveExtract } from "./extract-resolver";
 import { profile, profileSync } from "@grove/shared";
 import {
   writeHandoff,
-  type CreateFromRstContext,
+  type MigrateCodeBlockContext,
   type MigrateFromRstContext,
 } from "../handoff/writer";
 
@@ -465,7 +465,9 @@ export class RstDirectiveCodeLensProvider implements vscode.CodeLensProvider {
       );
 
       // Handle code-block::<lang> — inline code, no file resolution.
-      // Emits a "Create tested example" lens for Grove-supported languages.
+      // Emits a "Migrate to Grove" lens for Grove-supported languages.
+      // Inline code is existing untested code — same conceptual action as
+      // migrating a literalinclude target.
       if (ref.type === "code-block") {
         const groveLang = ref.language
           ? mapCodeBlockLanguage(ref.language)
@@ -473,15 +475,15 @@ export class RstDirectiveCodeLensProvider implements vscode.CodeLensProvider {
         if (groveLang && ref.code && ref.code.trim().length > 0) {
           lenses.push(
             new vscode.CodeLens(lensRange, {
-              title: `$(sparkle) Create tested example`,
-              command: "grove.createFromCodeBlock",
+              title: `$(sparkle) Migrate to Grove`,
+              command: "grove.migrateCodeBlock",
               arguments: [
                 document.uri,
                 directiveLine,
                 groveLang,
                 ref.code,
               ],
-              tooltip: `Hand off this ${groveLang} example to /grove-create`,
+              tooltip: `Hand off this ${groveLang} code-block to /grove-migrate`,
             }),
           );
         }
@@ -894,12 +896,11 @@ export function registerLiteralIncludeProviders(
     ),
   );
 
-  // Register command for "Create tested example" CodeLens on inline
-  // code-block:: directives. Writes a handoff payload and hands off to
-  // /grove-create.
+  // Register command for "Migrate to Grove" CodeLens on inline code-block::
+  // directives. Writes a handoff payload and hands off to /grove-migrate.
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      "grove.createFromCodeBlock",
+      "grove.migrateCodeBlock",
       async (
         rstUri: vscode.Uri,
         rstLine: number,
@@ -917,7 +918,7 @@ export function registerLiteralIncludeProviders(
           rstUri.fsPath,
         );
 
-        const context: CreateFromRstContext = {
+        const context: MigrateCodeBlockContext = {
           language,
           code,
           rstFile: rstFileRel,
@@ -926,7 +927,7 @@ export function registerLiteralIncludeProviders(
 
         try {
           const handoffUri = await writeHandoff(
-            "grove-create",
+            "grove-migrate",
             "rst-code-block",
             context,
           );
@@ -937,7 +938,7 @@ export function registerLiteralIncludeProviders(
             await vscode.commands.executeCommand(
               "claude-vscode.primaryEditor.open",
               undefined,
-              "/grove-create",
+              "/grove-migrate",
             );
             primaryEditorOpened = true;
           } catch {
@@ -953,8 +954,8 @@ export function registerLiteralIncludeProviders(
           const rstBase = path.basename(rstUri.fsPath);
           vscode.window.showInformationMessage(
             primaryEditorOpened
-              ? `Grove handoff ready. Press Enter in Claude Code to create a ${language} example from ${rstBase}.`
-              : `Grove handoff ready. Type /grove-create in Claude Code to create a ${language} example from ${rstBase}.`,
+              ? `Grove handoff ready. Press Enter in Claude Code to migrate this ${language} code-block from ${rstBase}.`
+              : `Grove handoff ready. Type /grove-migrate in Claude Code to migrate this ${language} code-block from ${rstBase}.`,
           );
         } catch (err) {
           vscode.window.showErrorMessage(
