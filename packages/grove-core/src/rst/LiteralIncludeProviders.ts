@@ -19,6 +19,40 @@ import {
 import { resolveDirectivePath } from "./path-resolver";
 import { resolveExtract } from "./extract-resolver";
 import { profile, profileSync } from "@grove/shared";
+import {
+  writeHandoff,
+  type MigrateFromRstContext,
+} from "../handoff/writer";
+
+/**
+ * File extensions we recognise as code we can migrate into the Grove suite.
+ * RST/YAML/plain-text targets are out of scope.
+ */
+const CODE_FILE_EXTENSIONS = new Set([
+  ".py", ".js", ".ts", ".mjs", ".cjs",
+  ".go", ".java", ".cs", ".sh",
+]);
+
+/** Map file extensions to the language value /grove-migrate expects. */
+const EXT_TO_LANGUAGE: Record<string, string> = {
+  ".py": "python",
+  ".js": "javascript",
+  ".ts": "javascript",
+  ".mjs": "javascript",
+  ".cjs": "javascript",
+  ".go": "go",
+  ".java": "java",
+  ".cs": "csharp",
+  ".sh": "mongosh",
+};
+
+function isMigratableCodeFile(absolutePath: string): boolean {
+  return CODE_FILE_EXTENSIONS.has(path.extname(absolutePath).toLowerCase());
+}
+
+function inferLanguage(absolutePath: string): string | undefined {
+  return EXT_TO_LANGUAGE[path.extname(absolutePath).toLowerCase()];
+}
 
 /**
  * Get the workspace root for the current document.
@@ -453,10 +487,9 @@ export class RstDirectiveCodeLensProvider implements vscode.CodeLensProvider {
             resolved.absolutePath,
             workspaceRoot,
           );
-          if (
-            sourceFileResult &&
-            fs.existsSync(sourceFileResult.sourceFilePath)
-          ) {
+          const hasSourceFile =
+            !!sourceFileResult && fs.existsSync(sourceFileResult.sourceFilePath);
+          if (hasSourceFile && sourceFileResult) {
             lenses.push(
               new vscode.CodeLens(lensRange, {
                 title: `📄 source`,
@@ -471,12 +504,41 @@ export class RstDirectiveCodeLensProvider implements vscode.CodeLensProvider {
             resolved.absolutePath,
             workspaceRoot,
           );
-          if (testFileResult && fs.existsSync(testFileResult.testFilePath)) {
+          const hasTestFile =
+            !!testFileResult && fs.existsSync(testFileResult.testFilePath);
+          if (hasTestFile && testFileResult) {
             lenses.push(
               new vscode.CodeLens(lensRange, {
                 title: `🧪 test`,
                 command: "grove.literalinclude.view",
                 arguments: [testFileResult.testFilePath, ref.snippetName],
+              }),
+            );
+          }
+
+          // "Migrate to Grove" lens - shown when the directive targets a real
+          // code file that isn't yet wired into the Grove-tested tree (no
+          // Bluehawk source, no test). Signals the writer can hand this
+          // example off to /grove-migrate.
+          if (
+            !hasSourceFile &&
+            !hasTestFile &&
+            isMigratableCodeFile(resolved.absolutePath)
+          ) {
+            lenses.push(
+              new vscode.CodeLens(lensRange, {
+                title: `$(sparkle) Migrate to Grove`,
+                command: "grove.migrateDirective",
+                arguments: [
+                  document.uri,
+                  directiveLine,
+                  ref.targetPath,
+                  resolved.absolutePath,
+                  ref.snippetName,
+                  ref.language ?? inferLanguage(resolved.absolutePath),
+                  ref.type,
+                ],
+                tooltip: `Hand off ${path.basename(resolved.absolutePath)} to /grove-migrate`,
               }),
             );
           }
@@ -770,6 +832,82 @@ export function registerLiteralIncludeProviders(
           new vscode.Range(position, position),
           vscode.TextEditorRevealType.InCenter,
         );
+      },
+    ),
+  );
+
+  // Register command for "Migrate to Grove" CodeLens on untested literalinclude
+  // directives. Writes a handoff payload and hands off to /grove-migrate.
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "grove.migrateDirective",
+      async (
+        rstUri: vscode.Uri,
+        rstLine: number,
+        targetPath: string,
+        absolutePath: string,
+        snippetName: string | undefined,
+        language: string | undefined,
+        directiveType: "literalinclude" | "input" | "output",
+      ) => {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+          vscode.window.showErrorMessage("No workspace folder is open.");
+          return;
+        }
+
+        const rstFileRel = path.relative(
+          workspaceFolder.uri.fsPath,
+          rstUri.fsPath,
+        );
+
+        const context: MigrateFromRstContext = {
+          targetPath,
+          absolutePath,
+          snippetName,
+          language,
+          directiveType,
+          rstFile: rstFileRel,
+          rstLine,
+        };
+
+        try {
+          const handoffUri = await writeHandoff(
+            "grove-migrate",
+            "rst-literalinclude",
+            context,
+          );
+          if (!handoffUri) return;
+
+          let primaryEditorOpened = false;
+          try {
+            await vscode.commands.executeCommand(
+              "claude-vscode.primaryEditor.open",
+              undefined,
+              "/grove-migrate",
+            );
+            primaryEditorOpened = true;
+          } catch {
+            try {
+              await vscode.commands.executeCommand(
+                "claude-vscode.sidebar.open",
+              );
+            } catch {
+              // Claude Code extension not available — skip focus entirely.
+            }
+          }
+
+          const fileName = path.basename(absolutePath);
+          vscode.window.showInformationMessage(
+            primaryEditorOpened
+              ? `Grove handoff ready. Press Enter in Claude Code to migrate "${fileName}".`
+              : `Grove handoff ready. Type /grove-migrate in Claude Code to migrate "${fileName}".`,
+          );
+        } catch (err) {
+          vscode.window.showErrorMessage(
+            `Failed to write Grove handoff: ${err}`,
+          );
+        }
       },
     ),
   );

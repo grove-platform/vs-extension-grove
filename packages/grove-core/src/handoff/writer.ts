@@ -45,6 +45,28 @@ export interface TestFailureContext {
 }
 
 /**
+ * Context for a snippet-level migration triggered from an RST `literalinclude::`
+ * (or `input::`/`output::`) directive that resolves to a file outside the
+ * Grove-tested tree.
+ */
+export interface MigrateFromRstContext {
+  /** The path as written in the RST directive. */
+  targetPath: string;
+  /** The resolved absolute path to the referenced code file. */
+  absolutePath: string;
+  /** The `:snippet:` option value if the directive has one. */
+  snippetName?: string;
+  /** The `:language:` option value, or inferred from the file extension. */
+  language?: string;
+  /** Directive type that triggered the migrate request. */
+  directiveType: "literalinclude" | "input" | "output";
+  /** Relative path (from Claude project root) of the RST file containing the directive. */
+  rstFile: string;
+  /** Zero-indexed line number of the directive in the RST file. */
+  rstLine: number;
+}
+
+/**
  * Walk up from `startPath` looking for the first ancestor directory that
  * contains `.claude/skills/` — the unambiguous marker for a Claude Code
  * project root where skill files live.
