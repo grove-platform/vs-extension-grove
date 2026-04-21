@@ -45,6 +45,26 @@ export interface TestFailureContext {
 }
 
 /**
+ * Context for a setup request triggered by a missing `.env` file in a Grove
+ * project. Fires from a banner CodeLens at line 0 of test files when the
+ * owning project has no `.env`. Writers on nodejs/mongosh suites strictly
+ * need `.env` (shell-level export in `npm test` overrides process env);
+ * python/go/java/csharp writers can use either `.env` or the Grove UI
+ * connection, but the skill Step 0 explains the options based on language.
+ */
+export interface SetupFromMissingEnvContext {
+  /** Relative path (from Claude project root) of the Grove project (contains snip.js). */
+  projectPath: string;
+  /** Detected Grove language — routes the skill directly to the right suite. */
+  language: "nodejs" | "python" | "go" | "java" | "csharp" | "mongosh";
+  /** Relative path of the test file the writer was viewing when they clicked. */
+  testFile: string;
+  /** Whether Grove can inject CONNECTION_STRING at test launch for this suite.
+   *  False for nodejs/mongosh — those suites require `.env`. */
+  supportsEnvInjection: boolean;
+}
+
+/**
  * Context for migrating inline code from a `code-block::` directive in an
  * RST/TXT file into the Grove-tested tree. The code lives directly in the
  * docs page (no separate file), so /grove-migrate creates the file as part

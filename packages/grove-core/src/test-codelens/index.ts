@@ -20,7 +20,12 @@ import {
   executeTests,
   displayTestResults,
 } from "../test-execution";
-import { writeHandoff, type TestFailureContext } from "../handoff/writer";
+import {
+  writeHandoff,
+  type SetupFromMissingEnvContext,
+  type TestFailureContext,
+} from "../handoff/writer";
+import type { GroveLanguage } from "@grove/shared";
 
 // Module-level provider instance for access from runTestBlock
 let codeLensProvider: TestCodeLensProvider;
@@ -97,6 +102,27 @@ export function registerTestCodeLens(context: vscode.ExtensionContext): void {
     ),
   );
 
+  // Register setup-from-missing-env command (fires from the file-level
+  // "No .env detected" banner lens at line 0).
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "grove.setupFromMissingEnv",
+      async (
+        testUri: vscode.Uri,
+        projectRoot: string,
+        language: GroveLanguage,
+        supportsEnvInjection: boolean,
+      ) => {
+        await setupFromMissingEnv(
+          testUri,
+          projectRoot,
+          language,
+          supportsEnvInjection,
+        );
+      },
+    ),
+  );
+
   // Refresh lenses on document save
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument(() => {
@@ -111,6 +137,14 @@ export function registerTestCodeLens(context: vscode.ExtensionContext): void {
       codeLensProvider.refresh();
     }),
   );
+
+  // Refresh lenses when an .env file appears or is deleted anywhere in the
+  // workspace, so the banner clears as soon as the writer creates it (and
+  // re-appears if they delete it).
+  const envWatcher = vscode.workspace.createFileSystemWatcher("**/.env");
+  envWatcher.onDidCreate(() => codeLensProvider.refresh());
+  envWatcher.onDidDelete(() => codeLensProvider.refresh());
+  context.subscriptions.push(envWatcher);
 }
 
 async function diagnoseTestBlock(
@@ -179,6 +213,59 @@ async function diagnoseTestBlock(
       primaryEditorOpened
         ? `Grove handoff ready. Press Enter in Claude Code to diagnose "${testName}".`
         : `Grove handoff ready. Type /grove-run in Claude Code to diagnose "${testName}".`,
+    );
+  } catch (err) {
+    vscode.window.showErrorMessage(`Failed to write Grove handoff: ${err}`);
+  }
+}
+
+async function setupFromMissingEnv(
+  testUri: vscode.Uri,
+  projectRoot: string,
+  language: GroveLanguage,
+  supportsEnvInjection: boolean,
+): Promise<void> {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  if (!workspaceFolder) {
+    vscode.window.showErrorMessage("No workspace folder is open.");
+    return;
+  }
+
+  const setupContext: SetupFromMissingEnvContext = {
+    projectPath: path.relative(workspaceFolder.uri.fsPath, projectRoot),
+    language,
+    testFile: path.relative(workspaceFolder.uri.fsPath, testUri.fsPath),
+    supportsEnvInjection,
+  };
+
+  try {
+    const handoffUri = await writeHandoff(
+      "grove-setup",
+      "missing-env",
+      setupContext,
+    );
+    if (!handoffUri) return;
+
+    let primaryEditorOpened = false;
+    try {
+      await vscode.commands.executeCommand(
+        "claude-vscode.primaryEditor.open",
+        undefined,
+        "/grove-setup",
+      );
+      primaryEditorOpened = true;
+    } catch {
+      try {
+        await vscode.commands.executeCommand("claude-vscode.sidebar.open");
+      } catch {
+        // Claude Code extension not available — skip focus entirely.
+      }
+    }
+
+    vscode.window.showInformationMessage(
+      primaryEditorOpened
+        ? `Grove handoff ready. Press Enter in Claude Code to set up .env for ${language}.`
+        : `Grove handoff ready. Type /grove-setup in Claude Code to set up .env for ${language}.`,
     );
   } catch (err) {
     vscode.window.showErrorMessage(`Failed to write Grove handoff: ${err}`);

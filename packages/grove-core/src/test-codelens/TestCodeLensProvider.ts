@@ -6,6 +6,9 @@
  */
 
 import * as vscode from "vscode";
+import * as fs from "fs/promises";
+import * as path from "path";
+import { findProjectForFile } from "@grove/shared";
 import {
   parseTestBlocks,
   isTestFile,
@@ -13,6 +16,16 @@ import {
   type TestBlock,
 } from "./test-parser";
 import { testResultStore } from "./TestResultStore";
+import { getCachedProjects } from "../project-cache";
+
+async function projectHasEnv(projectRoot: string): Promise<boolean> {
+  try {
+    await fs.access(path.join(projectRoot, ".env"));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Tracks the state of a running test */
 interface RunningTest {
@@ -63,6 +76,34 @@ export class TestCodeLensProvider implements vscode.CodeLensProvider {
 
     const blocks = parseTestBlocks(document);
     const lenses: vscode.CodeLens[] = [];
+
+    // File-level banner: "no .env detected" lens at line 0 when the owning
+    // Grove project has no `.env`. Surfaces the setup-env onboarding step at
+    // the moment the writer is trying to run a test.
+    const projects = await getCachedProjects();
+    const project = findProjectForFile(document.uri.fsPath, projects);
+    if (project && project.language) {
+      const hasEnv = await projectHasEnv(project.rootPath);
+      if (!hasEnv) {
+        const bannerRange = new vscode.Range(
+          new vscode.Position(0, 0),
+          new vscode.Position(0, 0),
+        );
+        lenses.push(
+          new vscode.CodeLens(bannerRange, {
+            title: `$(warning) No .env detected — $(sparkle) Set up Grove`,
+            command: "grove.setupFromMissingEnv",
+            arguments: [
+              document.uri,
+              project.rootPath,
+              project.language,
+              project.supportsEnvInjection,
+            ],
+            tooltip: `Hand off to /grove-setup for ${project.displayName}`,
+          }),
+        );
+      }
+    }
 
     for (const block of blocks) {
       const lensRange = new vscode.Range(
