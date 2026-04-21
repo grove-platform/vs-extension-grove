@@ -10,6 +10,7 @@ import {
 } from "./test-execution";
 import { initDiagnostics, refreshAllDiagnostics } from "./diagnostics";
 import { registerEnvBannerCodeLens } from "./env-banner-codelens";
+import { registerTestBannerCodeLens } from "./test-banner-codelens";
 import {
   initLanguageStatus,
   registerLanguageStatusHandlers,
@@ -477,6 +478,11 @@ export async function activate(context: vscode.ExtensionContext) {
   // lazy-loading based on `/tests/` path patterns would miss Java's
   // `src/test/` layout and Go's inline `_test.go` convention.
   registerEnvBannerCodeLens(context);
+
+  // Register the "No test found" banner CodeLens eagerly — fires on source
+  // files under examples/ that have :snippet-start: tags but no matching
+  // test file. Like the env banner, it spans all Grove languages.
+  registerTestBannerCodeLens(context);
 
   // Refresh diagnostics asynchronously — don't block activation
   if (workspaceFolders && status.projects.length > 0) {

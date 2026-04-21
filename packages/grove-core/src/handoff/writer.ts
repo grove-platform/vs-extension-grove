@@ -45,6 +45,23 @@ export interface TestFailureContext {
 }
 
 /**
+ * Context for generating a test for an existing, snippeted-but-untested
+ * source file. Fires from the "No test found" banner CodeLens at line 0 of
+ * a source file under `examples/` that contains `:snippet-start:` tags but
+ * has no matching test file in the project's `tests/` tree.
+ */
+export interface TestFromSourceContext {
+  /** Relative path (from Claude project root) of the source file. */
+  sourceFile: string;
+  /** Relative path of the Grove project root (contains snip.js). */
+  projectPath: string;
+  /** Detected Grove language — routes the skill to the right conventions. */
+  language: "nodejs" | "python" | "go" | "java" | "csharp" | "mongosh";
+  /** Snippet names declared in the source file (from `:snippet-start: <name>` tags). */
+  snippetNames: string[];
+}
+
+/**
  * Context for a setup request triggered by a missing `.env` file in a Grove
  * project. Fires from a banner CodeLens at line 0 of test files when the
  * owning project has no `.env`. Writers on nodejs/mongosh suites strictly
