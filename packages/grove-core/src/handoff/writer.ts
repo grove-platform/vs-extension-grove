@@ -45,25 +45,6 @@ export interface TestFailureContext {
 }
 
 /**
- * Context for a setup request triggered by a Grove diagnostic (missing or
- * broken symlink, and future diagnostics like missing .env). The skill uses
- * `issue` to route directly to the matching remediation step instead of
- * starting from scratch.
- */
-export interface SetupFromDiagnosticContext {
-  /** Machine-readable diagnostic code (matches diagnostic.code). */
-  issue: "missing-symlink" | "broken-symlink";
-  /** Human-readable diagnostic message. */
-  message: string;
-  /** Relative path (from Claude project root) of the snip.js that owns the diagnostic. */
-  snipJsPath: string;
-  /** Grove project root containing the snip.js (relative to Claude project root). */
-  projectRoot: string;
-  /** The expected symlink location (relative to projectRoot). */
-  symlinkPath?: string;
-}
-
-/**
  * Context for migrating inline code from a `code-block::` directive in an
  * RST/TXT file into the Grove-tested tree. The code lives directly in the
  * docs page (no separate file), so /grove-migrate creates the file as part

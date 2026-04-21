@@ -56,14 +56,13 @@ export async function checkSymlinks(
           await fs.access(symlinkPath);
         } catch {
           // Broken symlink
-          const diagnostic = new vscode.Diagnostic(
-            new vscode.Range(0, 0, 0, 0),
-            `Broken symlink: ${symlinkRelPath} points to a non-existent target`,
-            vscode.DiagnosticSeverity.Error,
+          diagnostics.push(
+            new vscode.Diagnostic(
+              new vscode.Range(0, 0, 0, 0),
+              `Broken symlink: ${symlinkRelPath} points to a non-existent target`,
+              vscode.DiagnosticSeverity.Error,
+            ),
           );
-          diagnostic.code = "broken-symlink";
-          diagnostic.source = "grove";
-          diagnostics.push(diagnostic);
         }
       }
     } catch {
@@ -71,14 +70,13 @@ export async function checkSymlinks(
       // Only report if this looks like a docs project
       const isDocsProject = await looksLikeDocsProject(workspacePath);
       if (isDocsProject) {
-        const diagnostic = new vscode.Diagnostic(
-          new vscode.Range(0, 0, 0, 0),
-          `Missing symlink: ${symlinkRelPath}. Run "Grove: Create Symlink" to create it.`,
-          vscode.DiagnosticSeverity.Warning,
+        diagnostics.push(
+          new vscode.Diagnostic(
+            new vscode.Range(0, 0, 0, 0),
+            `Missing symlink: ${symlinkRelPath}. Run "Grove: Create Symlink" to create it.`,
+            vscode.DiagnosticSeverity.Warning,
+          ),
         );
-        diagnostic.code = "missing-symlink";
-        diagnostic.source = "grove";
-        diagnostics.push(diagnostic);
       }
     }
   }
