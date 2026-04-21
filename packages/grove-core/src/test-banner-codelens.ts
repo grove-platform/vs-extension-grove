@@ -2,25 +2,21 @@
  * "No test found" banner CodeLens provider.
  *
  * Emits a single CodeLens at line 0 of a Grove source file when:
- *   - the file lives under the project's `examples/` directory,
- *   - it contains one or more `:snippet-start:` tags (it's snipped into
- *     the Bluehawk output but)
+ *   - the file lives under the project's `examples/` directory, and
  *   - no test file matching the language's naming convention exists
  *     anywhere under the project root.
  *
- * Closes the gap between "snipped" and "tested" by surfacing a direct
- * handoff to /grove-test at the moment the writer is looking at the
- * orphaned source file.
+ * Any code under `examples/` is expected to be referenced by the docs,
+ * so any uncovered source file is a candidate for /grove-test — this
+ * intentionally does NOT require `:snippet-start:` tags, since suites
+ * like mongosh ship untagged examples.
  */
 
 import * as vscode from "vscode";
 import * as path from "path";
 import { findProjectForFile, type GroveLanguage } from "@grove/shared";
 import { getCachedProjects } from "./project-cache";
-import {
-  mightContainSnippets,
-  parseSnippetBlocks,
-} from "./snippet-codelens/snippet-parser";
+import { parseSnippetBlocks } from "./snippet-codelens/snippet-parser";
 import { writeHandoff, type TestFromSourceContext } from "./handoff/writer";
 
 /**
@@ -87,16 +83,12 @@ export class TestBannerCodeLensProvider implements vscode.CodeLensProvider {
     document: vscode.TextDocument,
   ): Promise<vscode.CodeLens[]> {
     if (!isSourceFile(document.uri.fsPath)) return [];
-    if (!mightContainSnippets(document)) return [];
 
     const projects = await getCachedProjects();
     const project = findProjectForFile(document.uri.fsPath, projects);
     if (!project || !project.language) return [];
 
     if (!isInExamplesDir(document.uri.fsPath, project.rootPath)) return [];
-
-    const blocks = parseSnippetBlocks(document);
-    if (blocks.length === 0) return [];
 
     const sourceBasename = path.basename(
       document.uri.fsPath,
@@ -110,6 +102,10 @@ export class TestBannerCodeLensProvider implements vscode.CodeLensProvider {
     );
     if (existingTest) return [];
 
+    // Best-effort snippet-name capture for the handoff — `[]` is fine when
+    // the source has no Bluehawk tags (e.g., mongosh files).
+    const snippetNames = parseSnippetBlocks(document).map((b) => b.name);
+
     const bannerRange = new vscode.Range(
       new vscode.Position(0, 0),
       new vscode.Position(0, 0),
@@ -122,7 +118,7 @@ export class TestBannerCodeLensProvider implements vscode.CodeLensProvider {
           document.uri,
           project.rootPath,
           project.language,
-          blocks.map((b) => b.name),
+          snippetNames,
         ],
         tooltip: `Hand off to /grove-test for ${project.displayName}`,
       }),
