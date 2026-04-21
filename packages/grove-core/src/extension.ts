@@ -9,6 +9,7 @@ import {
   displayTestResults,
 } from "./test-execution";
 import { initDiagnostics, refreshAllDiagnostics } from "./diagnostics";
+import { registerGroveCodeActions } from "./diagnostics-code-actions";
 import {
   initLanguageStatus,
   registerLanguageStatusHandlers,
@@ -470,6 +471,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Initialize diagnostics collection
   initDiagnostics(context);
+
+  // Register Quick Fix actions for grove-sourced diagnostics
+  registerGroveCodeActions(context);
 
   // Refresh diagnostics asynchronously — don't block activation
   if (workspaceFolders && status.projects.length > 0) {
