@@ -89,6 +89,30 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
             await openSkillInClaude(message.skill);
           }
           break;
+        case "openSkillPicker":
+          if (message.picker === "run-or-fix") {
+            const pick = await vscode.window.showQuickPick(
+              [
+                {
+                  label: "Run tests",
+                  description: "/grove-run",
+                  detail: "Run a suite or single test and diagnose any failures",
+                  skill: "grove-run",
+                },
+                {
+                  label: "Fix a test",
+                  description: "/grove-test",
+                  detail: "Update a broken test's logic or expected output",
+                  skill: "grove-test",
+                },
+              ],
+              { placeHolder: "What do you want to do?" },
+            );
+            if (pick) {
+              await openSkillInClaude(pick.skill);
+            }
+          }
+          break;
       }
     });
 
@@ -239,11 +263,11 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
       const skillsSection =
         '<div class="section"><div class="section-title">Grove Skills</div>' +
         '<div class="actions">' +
-        '<button data-skill="grove-create" title="Open Claude Code with /grove-create">Create example</button>' +
-        '<button data-skill="grove-migrate" title="Open Claude Code with /grove-migrate">Migrate example</button>' +
-        '<button data-skill="grove-test" title="Open Claude Code with /grove-test">Create test</button>' +
-        '<button data-skill="grove-test" title="Open Claude Code with /grove-test">Fix test</button>' +
-        '<button data-skill="grove-setup" title="Open Claude Code with /grove-setup">Setup environment</button>' +
+        '<button data-skill="grove-create" title="Open Claude Code with /grove-create">Create Examples</button>' +
+        '<button data-skill="grove-migrate" title="Open Claude Code with /grove-migrate">Migrate Examples</button>' +
+        '<button data-skill="grove-test" title="Open Claude Code with /grove-test">Create Tests</button>' +
+        '<button data-skill-picker="run-or-fix" title="Run tests or fix a broken one">Run/Fix Tests</button>' +
+        '<button data-skill="grove-setup" title="Open Claude Code with /grove-setup">Setup Environment</button>' +
         '</div></div>';
       if (!currentStatus.hasProject) {
         html += '<div class="setup-wizard"><h3>No Grove Project Detected</h3><p>Create a snip.js file to get started, or open a folder containing one.</p></div>';
@@ -306,6 +330,11 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
       const skillBtn = e.target.closest('[data-skill]');
       if (skillBtn) {
         vscode.postMessage({ command: 'openSkill', skill: skillBtn.dataset.skill });
+        return;
+      }
+      const pickerBtn = e.target.closest('[data-skill-picker]');
+      if (pickerBtn) {
+        vscode.postMessage({ command: 'openSkillPicker', picker: pickerBtn.dataset.skillPicker });
         return;
       }
       const btn = e.target.closest('[data-action]');
