@@ -9,6 +9,7 @@ import {
   displayTestResults,
 } from "./test-execution";
 import { initDiagnostics, refreshAllDiagnostics } from "./diagnostics";
+import { registerEnvBannerCodeLens } from "./env-banner-codelens";
 import {
   initLanguageStatus,
   registerLanguageStatusHandlers,
@@ -470,6 +471,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Initialize diagnostics collection
   initDiagnostics(context);
+
+  // Register the "No .env detected" banner CodeLens eagerly so it works
+  // across all Grove languages (Python, Java, C#, Go, Mongosh, JS/TS) —
+  // lazy-loading based on `/tests/` path patterns would miss Java's
+  // `src/test/` layout and Go's inline `_test.go` convention.
+  registerEnvBannerCodeLens(context);
 
   // Refresh diagnostics asynchronously — don't block activation
   if (workspaceFolders && status.projects.length > 0) {
