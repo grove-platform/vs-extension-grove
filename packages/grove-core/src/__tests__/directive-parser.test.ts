@@ -56,7 +56,7 @@ describe("parseDirectives code-block parsing", () => {
         "     }",
         "   }",
         "",
-        "   // trailing blank above should be trimmed",
+        "   // interior blank line is preserved",
         "",
         "Next section",
       ].join("\n"),
@@ -73,7 +73,7 @@ describe("parseDirectives code-block parsing", () => {
         "  }",
         "}",
         "",
-        "// trailing blank above should be trimmed",
+        "// interior blank line is preserved",
       ].join("\n"),
     );
   });
