@@ -61,7 +61,7 @@ export function parseDirectives(document: vscode.TextDocument): DirectiveRef[] {
 
   // Pattern for code-block:: with a language positional arg.
   // Omits code-block directives without a language (rare and not migratable).
-  const codeBlockPattern = /^(\s*)\.\.\s+code-block::\s+([a-zA-Z0-9_+.-]+)\s*$/;
+  const codeBlockPattern = /^(\s*)\.\.\s+code-block::\s+([a-zA-Z0-9_+.#-]+)\s*$/;
 
   for (let lineNum = 0; lineNum < document.lineCount; lineNum++) {
     const line = document.lineAt(lineNum);
