@@ -161,30 +161,46 @@ export async function findClaudeProjectRoot(
 }
 
 /**
- * Write a handoff payload to `<claudeProjectRoot>/.claude/grove-handoff.json`.
+ * Resolve the Claude project root for the current VS Code workspace.
  *
- * Resolution order for the base directory:
- *   1. Nearest ancestor of the VS Code workspace folder that contains
- *      `.claude/skills/` (the Claude Code project root).
- *   2. Fall back to the VS Code workspace folder itself.
+ * Walks up from the first workspace folder looking for `.claude/skills/`
+ * (the Claude Code project root), falling back to the workspace folder
+ * itself if no marker is found.
  *
- * Returns the URI written to, or `undefined` if no workspace is open.
- * The payload overwrites any existing file — handoffs are single-use.
+ * Callers building handoff `context` MUST compute their relative paths
+ * against this root — not against the workspace folder — so paths
+ * remain valid when the writer opens a subdirectory as their workspace
+ * but the handoff file lands at an ancestor directory. Passing the
+ * same root to `writeHandoff` guarantees the envelope's `workspaceRoot`
+ * and the relative paths inside `context` share a base.
+ *
+ * Returns `undefined` if no workspace folder is open.
+ */
+export async function resolveClaudeRoot(): Promise<string | undefined> {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  if (!workspaceFolder) return undefined;
+  const workspacePath = workspaceFolder.uri.fsPath;
+  return (await findClaudeProjectRoot(workspacePath)) ?? workspacePath;
+}
+
+/**
+ * Write a handoff payload to `<claudeRoot>/.claude/grove-handoff.json`.
+ *
+ * `claudeRoot` must be the value returned by `resolveClaudeRoot()` — the
+ * caller is responsible for resolving it and using the same root as the
+ * base for any relative paths inside `context`. This keeps the envelope's
+ * `workspaceRoot` field and the paths inside `context` consistent, so
+ * consuming skills can resolve paths against a single known base.
+ *
+ * Returns the URI written to. The payload overwrites any existing file —
+ * handoffs are single-use.
  */
 export async function writeHandoff<TContext>(
   skill: HandoffSkill,
   trigger: string,
   context: TContext,
-): Promise<vscode.Uri | undefined> {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  if (!workspaceFolder) {
-    return undefined;
-  }
-
-  const workspacePath = workspaceFolder.uri.fsPath;
-  const claudeRoot =
-    (await findClaudeProjectRoot(workspacePath)) ?? workspacePath;
-
+  claudeRoot: string,
+): Promise<vscode.Uri> {
   const envelope: HandoffEnvelope<TContext> = {
     version: 1,
     skill,

@@ -20,7 +20,11 @@ import {
   executeTests,
   displayTestResults,
 } from "../test-execution";
-import { writeHandoff, type TestFailureContext } from "../handoff/writer";
+import {
+  resolveClaudeRoot,
+  writeHandoff,
+  type TestFailureContext,
+} from "../handoff/writer";
 
 // Module-level provider instance for access from runTestBlock
 let codeLensProvider: TestCodeLensProvider;
@@ -129,31 +133,24 @@ async function diagnoseTestBlock(
     return;
   }
 
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  if (!workspaceFolder) {
+  const claudeRoot = await resolveClaudeRoot();
+  if (!claudeRoot) {
     vscode.window.showErrorMessage("No workspace folder is open.");
     return;
   }
 
-  const testFileRel = path.relative(workspaceFolder.uri.fsPath, uri.fsPath);
-  const projectPathRel = path.relative(
-    workspaceFolder.uri.fsPath,
-    resolved.project.rootPath,
-  );
-
   const context: TestFailureContext = {
-    testFile: testFileRel,
+    testFile: path.relative(claudeRoot, uri.fsPath),
     testName,
     testNamePattern,
     line: result.line,
     errorMessage: result.errorMessage,
     duration: result.duration,
-    projectPath: projectPathRel,
+    projectPath: path.relative(claudeRoot, resolved.project.rootPath),
   };
 
   try {
-    const handoffUri = await writeHandoff("grove-run", "test-failure", context);
-    if (!handoffUri) return;
+    await writeHandoff("grove-run", "test-failure", context, claudeRoot);
 
     // Open Claude Code with "/grove-run" pre-filled. The extension's
     // primaryEditor.open accepts (sessionId?, prompt?) — confirmed from

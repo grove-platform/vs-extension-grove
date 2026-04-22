@@ -16,7 +16,11 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { findProjectForFile, type GroveLanguage } from "@grove/shared";
 import { getCachedProjects } from "./project-cache";
-import { writeHandoff, type SetupFromMissingEnvContext } from "./handoff/writer";
+import {
+  resolveClaudeRoot,
+  writeHandoff,
+  type SetupFromMissingEnvContext,
+} from "./handoff/writer";
 
 /**
  * Heuristics to identify test files across every Grove language suite.
@@ -135,26 +139,21 @@ async function setupFromMissingEnv(
   language: GroveLanguage,
   supportsEnvInjection: boolean,
 ): Promise<void> {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  if (!workspaceFolder) {
+  const claudeRoot = await resolveClaudeRoot();
+  if (!claudeRoot) {
     vscode.window.showErrorMessage("No workspace folder is open.");
     return;
   }
 
   const setupContext: SetupFromMissingEnvContext = {
-    projectPath: path.relative(workspaceFolder.uri.fsPath, projectRoot),
+    projectPath: path.relative(claudeRoot, projectRoot),
     language,
-    testFile: path.relative(workspaceFolder.uri.fsPath, testUri.fsPath),
+    testFile: path.relative(claudeRoot, testUri.fsPath),
     supportsEnvInjection,
   };
 
   try {
-    const handoffUri = await writeHandoff(
-      "grove-setup",
-      "missing-env",
-      setupContext,
-    );
-    if (!handoffUri) return;
+    await writeHandoff("grove-setup", "missing-env", setupContext, claudeRoot);
 
     let primaryEditorOpened = false;
     try {

@@ -17,7 +17,11 @@ import * as path from "path";
 import { findProjectForFile, type GroveLanguage } from "@grove/shared";
 import { getCachedProjects } from "./project-cache";
 import { parseSnippetBlocks } from "./snippet-codelens/snippet-parser";
-import { writeHandoff, type TestFromSourceContext } from "./handoff/writer";
+import {
+  resolveClaudeRoot,
+  writeHandoff,
+  type TestFromSourceContext,
+} from "./handoff/writer";
 
 /**
  * Glob patterns to search for a matching test file per language.
@@ -171,26 +175,26 @@ async function testFromSource(
   language: GroveLanguage,
   snippetNames: string[],
 ): Promise<void> {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  if (!workspaceFolder) {
+  const claudeRoot = await resolveClaudeRoot();
+  if (!claudeRoot) {
     vscode.window.showErrorMessage("No workspace folder is open.");
     return;
   }
 
   const context: TestFromSourceContext = {
-    sourceFile: path.relative(workspaceFolder.uri.fsPath, sourceUri.fsPath),
-    projectPath: path.relative(workspaceFolder.uri.fsPath, projectRoot),
+    sourceFile: path.relative(claudeRoot, sourceUri.fsPath),
+    projectPath: path.relative(claudeRoot, projectRoot),
     language,
     snippetNames,
   };
 
   try {
-    const handoffUri = await writeHandoff(
+    await writeHandoff(
       "grove-test",
       "untested-source",
       context,
+      claudeRoot,
     );
-    if (!handoffUri) return;
 
     let primaryEditorOpened = false;
     try {

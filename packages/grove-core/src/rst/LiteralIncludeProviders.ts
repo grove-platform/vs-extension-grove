@@ -20,6 +20,7 @@ import { resolveDirectivePath } from "./path-resolver";
 import { resolveExtract } from "./extract-resolver";
 import { profile, profileSync } from "@grove/shared";
 import {
+  resolveClaudeRoot,
   writeHandoff,
   type MigrateCodeBlockContext,
   type MigrateFromRstContext,
@@ -49,7 +50,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
 
 /**
  * Map RST code-block language identifiers (Pygments lexer names) to the
- * language value /grove-create expects.
+ * language value /grove-migrate expects.
  *
  * `json` maps to a sentinel value because a JSON code-block could become
  * either a JavaScript (Node.js driver) example or a mongosh example — the
@@ -907,31 +908,26 @@ export function registerLiteralIncludeProviders(
         language: string,
         code: string,
       ) => {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
+        const claudeRoot = await resolveClaudeRoot();
+        if (!claudeRoot) {
           vscode.window.showErrorMessage("No workspace folder is open.");
           return;
         }
 
-        const rstFileRel = path.relative(
-          workspaceFolder.uri.fsPath,
-          rstUri.fsPath,
-        );
-
         const context: MigrateCodeBlockContext = {
           language,
           code,
-          rstFile: rstFileRel,
+          rstFile: path.relative(claudeRoot, rstUri.fsPath),
           rstLine,
         };
 
         try {
-          const handoffUri = await writeHandoff(
+          await writeHandoff(
             "grove-migrate",
             "rst-code-block",
             context,
+            claudeRoot,
           );
-          if (!handoffUri) return;
 
           let primaryEditorOpened = false;
           try {
@@ -980,16 +976,11 @@ export function registerLiteralIncludeProviders(
         language: string | undefined,
         directiveType: "literalinclude" | "input" | "output",
       ) => {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
+        const claudeRoot = await resolveClaudeRoot();
+        if (!claudeRoot) {
           vscode.window.showErrorMessage("No workspace folder is open.");
           return;
         }
-
-        const rstFileRel = path.relative(
-          workspaceFolder.uri.fsPath,
-          rstUri.fsPath,
-        );
 
         const context: MigrateFromRstContext = {
           targetPath,
@@ -997,17 +988,17 @@ export function registerLiteralIncludeProviders(
           snippetName,
           language,
           directiveType,
-          rstFile: rstFileRel,
+          rstFile: path.relative(claudeRoot, rstUri.fsPath),
           rstLine,
         };
 
         try {
-          const handoffUri = await writeHandoff(
+          await writeHandoff(
             "grove-migrate",
             "rst-literalinclude",
             context,
+            claudeRoot,
           );
-          if (!handoffUri) return;
 
           let primaryEditorOpened = false;
           try {
