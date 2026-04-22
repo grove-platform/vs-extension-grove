@@ -34,7 +34,7 @@ describe("parseDirectives code-block parsing", () => {
     );
   });
 
-  it("supports c# code-block language identifiers", () => {
+  it("supports C# code-block language identifiers", () => {
     const document = makeDocument(
       [".. code-block:: c#", "", '   Console.WriteLine("hello");'].join("\n"),
     );

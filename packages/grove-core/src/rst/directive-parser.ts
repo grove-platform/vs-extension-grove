@@ -137,7 +137,7 @@ function parseCodeBlockDirective(
 
     const leading = candidate.length - candidate.trimStart().length;
     const isOption =
-      leading > indent.length && /^:[a-zA-Z0-9_-]+:\s*/.test(trimmed);
+      leading > indent.length && /^:[a-zA-Z0-9_-]+:\s*.*$/.test(trimmed);
     if (isOption) {
       contentLineNum++;
       continue;
