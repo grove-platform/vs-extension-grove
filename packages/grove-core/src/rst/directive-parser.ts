@@ -125,23 +125,37 @@ function parseCodeBlockDirective(
     new vscode.Position(lineNum, langStartChar + language.length),
   );
 
-  // Find where content starts (skip blank lines after directive)
+  // Find where content starts (skip directive options and surrounding blanks).
   let contentLineNum = lineNum + 1;
-  while (
-    contentLineNum < document.lineCount &&
-    document.lineAt(contentLineNum).text.trim() === ""
-  ) {
-    contentLineNum++;
+  while (contentLineNum < document.lineCount) {
+    const candidate = document.lineAt(contentLineNum).text;
+    const trimmed = candidate.trim();
+    if (trimmed === "") {
+      contentLineNum++;
+      continue;
+    }
+
+    const leading = candidate.length - candidate.trimStart().length;
+    const isOption =
+      leading > indent.length && /^:[a-zA-Z0-9_-]+:\s*/.test(trimmed);
+    if (isOption) {
+      contentLineNum++;
+      continue;
+    }
+
+    break;
   }
 
-  // Content must be indented deeper than the directive itself.
-  const minContentIndent = indent.length + 1;
   const codeLines: string[] = [];
   let lastContentLineNum = lineNum;
-  // The indent of the first non-blank content line. Every subsequent line
-  // gets this exact prefix stripped so deeper indentation (nested code) is
-  // preserved in the captured content.
   let stripAmount: number | undefined;
+  if (contentLineNum < document.lineCount) {
+    const firstContent = document.lineAt(contentLineNum).text;
+    const firstLeading = firstContent.length - firstContent.trimStart().length;
+    if (firstLeading > indent.length) {
+      stripAmount = firstLeading;
+    }
+  }
 
   while (contentLineNum < document.lineCount) {
     const rawText = document.lineAt(contentLineNum).text;
@@ -154,13 +168,10 @@ function parseCodeBlockDirective(
     }
 
     const leading = rawText.length - rawText.trimStart().length;
-    if (leading < minContentIndent) {
+    if (stripAmount === undefined || leading < stripAmount) {
       break;
     }
 
-    if (stripAmount === undefined) {
-      stripAmount = leading;
-    }
     codeLines.push(rawText.slice(Math.min(leading, stripAmount)));
     lastContentLineNum = contentLineNum;
     contentLineNum++;
