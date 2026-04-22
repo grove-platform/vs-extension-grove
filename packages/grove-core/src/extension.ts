@@ -480,8 +480,8 @@ export async function activate(context: vscode.ExtensionContext) {
   registerEnvBannerCodeLens(context);
 
   // Register the "No test found" banner CodeLens eagerly — fires on source
-  // files under examples/ that have :snippet-start: tags but no matching
-  // test file. Like the env banner, it spans all Grove languages.
+  // files under examples/ that do not have a matching test file.
+  // Like the env banner, it spans all Grove languages.
   registerTestBannerCodeLens(context);
 
   // Refresh diagnostics asynchronously — don't block activation
