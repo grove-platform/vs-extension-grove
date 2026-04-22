@@ -5,7 +5,8 @@ import { getNonce } from "./nonce";
 /**
  * Open Claude Code with the given slash command pre-filled. Best-effort —
  * falls back to opening the sidebar if primaryEditor.open rejects, and
- * silently no-ops if the Claude Code extension isn't available.
+ * shows a warning message with install guidance if the Claude Code
+ * extension isn't available.
  */
 async function openSkillInClaude(skill: string): Promise<void> {
   const slashCommand = `/${skill}`;
