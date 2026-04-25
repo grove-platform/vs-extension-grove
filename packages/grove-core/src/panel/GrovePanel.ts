@@ -264,11 +264,11 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
       const skillsSection =
         '<div class="section"><div class="section-title">Grove Skills</div>' +
         '<div class="actions">' +
-        '<button data-skill="grove-create" title="Open Claude Code with /grove-create">Create Examples</button>' +
-        '<button data-skill="grove-migrate" title="Open Claude Code with /grove-migrate">Migrate Examples</button>' +
-        '<button data-skill="grove-test" title="Open Claude Code with /grove-test">Create Tests</button>' +
-        '<button data-skill-picker="run-or-fix" title="Run tests or fix a broken one">Run/Fix Tests</button>' +
-        '<button data-skill="grove-setup" title="Open Claude Code with /grove-setup">Setup Environment</button>' +
+        '<button data-skill="grove-create" title="Open Claude Code with /grove-create">Create examples</button>' +
+        '<button data-skill="grove-migrate" title="Open Claude Code with /grove-migrate">Migrate examples</button>' +
+        '<button data-skill="grove-test" title="Open Claude Code with /grove-test">Create tests</button>' +
+        '<button data-skill-picker="run-or-fix" title="Run tests or fix a broken one">Run/fix tests</button>' +
+        '<button data-skill="grove-setup" title="Open Claude Code with /grove-setup">Set up environment</button>' +
         '</div></div>';
       if (!currentStatus.hasProject) {
         html += '<div class="setup-wizard"><h3>No Grove Project Detected</h3><p>Create a snip.js file to get started, or open a folder containing one.</p></div>';

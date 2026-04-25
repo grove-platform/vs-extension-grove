@@ -141,7 +141,6 @@ export class TestCodeLensProvider implements vscode.CodeLensProvider {
                   document.uri,
                   testNamePattern,
                   block.name,
-                  block.type,
                 ],
                 tooltip: `Hand off "${block.name}" failure to /grove-run`,
               }),

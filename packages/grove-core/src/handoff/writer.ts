@@ -107,8 +107,8 @@ export interface MigrateCodeBlockContext {
 export interface MigrateFromRstContext {
   /** The path as written in the RST directive. */
   targetPath: string;
-  /** The resolved absolute path to the referenced code file. */
-  absolutePath: string;
+  /** Relative path (from Claude project root) of the referenced code file. */
+  targetFile: string;
   /** The `:snippet:` option value if the directive has one. */
   snippetName?: string;
   /** The `:language:` option value, or inferred from the file extension. */
@@ -176,11 +176,46 @@ export async function findClaudeProjectRoot(
  *
  * Returns `undefined` if no workspace folder is open.
  */
-export async function resolveClaudeRoot(): Promise<string | undefined> {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+export async function resolveClaudeRoot(
+  anchorUri?: vscode.Uri,
+): Promise<string | undefined> {
+  const workspaceFolder = anchorUri
+    ? vscode.workspace.getWorkspaceFolder(anchorUri)
+    : vscode.workspace.workspaceFolders?.[0];
   if (!workspaceFolder) return undefined;
   const workspacePath = workspaceFolder.uri.fsPath;
   return (await findClaudeProjectRoot(workspacePath)) ?? workspacePath;
+}
+
+async function tryCommand(command: string, ...args: unknown[]): Promise<boolean> {
+  try {
+    await vscode.commands.executeCommand(command, ...args);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Open Claude Code with a skill slash command pre-filled.
+ *
+ * Tries the primary editor first, then falls back to opening the sidebar.
+ * Returns `true` only when the primary editor opens successfully.
+ */
+export async function openClaudeWithSkill(skill: HandoffSkill): Promise<boolean> {
+  const slashCommand = `/${skill}`;
+  if (
+    await tryCommand(
+      "claude-vscode.primaryEditor.open",
+      undefined,
+      slashCommand,
+    )
+  ) {
+    return true;
+  }
+
+  await tryCommand("claude-vscode.sidebar.open");
+  return false;
 }
 
 /**

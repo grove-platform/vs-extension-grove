@@ -20,6 +20,7 @@ import { resolveDirectivePath } from "./path-resolver";
 import { resolveExtract } from "./extract-resolver";
 import { profile, profileSync } from "@grove/shared";
 import {
+  openClaudeWithSkill,
   resolveClaudeRoot,
   writeHandoff,
   type MigrateCodeBlockContext,
@@ -908,7 +909,7 @@ export function registerLiteralIncludeProviders(
         language: string,
         code: string,
       ) => {
-        const claudeRoot = await resolveClaudeRoot();
+        const claudeRoot = await resolveClaudeRoot(rstUri);
         if (!claudeRoot) {
           vscode.window.showErrorMessage("No workspace folder is open.");
           return;
@@ -928,24 +929,7 @@ export function registerLiteralIncludeProviders(
             context,
             claudeRoot,
           );
-
-          let primaryEditorOpened = false;
-          try {
-            await vscode.commands.executeCommand(
-              "claude-vscode.primaryEditor.open",
-              undefined,
-              "/grove-migrate",
-            );
-            primaryEditorOpened = true;
-          } catch {
-            try {
-              await vscode.commands.executeCommand(
-                "claude-vscode.sidebar.open",
-              );
-            } catch {
-              // Claude Code extension not available — skip focus entirely.
-            }
-          }
+          const primaryEditorOpened = await openClaudeWithSkill("grove-migrate");
 
           const rstBase = path.basename(rstUri.fsPath);
           vscode.window.showInformationMessage(
@@ -976,7 +960,7 @@ export function registerLiteralIncludeProviders(
         language: string | undefined,
         directiveType: "literalinclude" | "input" | "output",
       ) => {
-        const claudeRoot = await resolveClaudeRoot();
+        const claudeRoot = await resolveClaudeRoot(rstUri);
         if (!claudeRoot) {
           vscode.window.showErrorMessage("No workspace folder is open.");
           return;
@@ -984,7 +968,7 @@ export function registerLiteralIncludeProviders(
 
         const context: MigrateFromRstContext = {
           targetPath,
-          absolutePath,
+          targetFile: path.relative(claudeRoot, absolutePath),
           snippetName,
           language,
           directiveType,
@@ -999,24 +983,7 @@ export function registerLiteralIncludeProviders(
             context,
             claudeRoot,
           );
-
-          let primaryEditorOpened = false;
-          try {
-            await vscode.commands.executeCommand(
-              "claude-vscode.primaryEditor.open",
-              undefined,
-              "/grove-migrate",
-            );
-            primaryEditorOpened = true;
-          } catch {
-            try {
-              await vscode.commands.executeCommand(
-                "claude-vscode.sidebar.open",
-              );
-            } catch {
-              // Claude Code extension not available — skip focus entirely.
-            }
-          }
+          const primaryEditorOpened = await openClaudeWithSkill("grove-migrate");
 
           const fileName = path.basename(absolutePath);
           vscode.window.showInformationMessage(

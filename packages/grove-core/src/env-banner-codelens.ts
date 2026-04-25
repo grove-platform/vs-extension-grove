@@ -17,6 +17,7 @@ import * as path from "path";
 import { findProjectForFile, type GroveLanguage } from "@grove/shared";
 import { getCachedProjects } from "./project-cache";
 import {
+  openClaudeWithSkill,
   resolveClaudeRoot,
   writeHandoff,
   type SetupFromMissingEnvContext,
@@ -76,7 +77,7 @@ export class EnvBannerCodeLensProvider implements vscode.CodeLensProvider {
     );
     return [
       new vscode.CodeLens(bannerRange, {
-        title: `$(warning) No .env detected — $(sparkle) Set up Grove`,
+        title: `$(warning) No .env detected. $(sparkle) Set up Grove`,
         command: "grove.setupFromMissingEnv",
         arguments: [
           document.uri,
@@ -139,7 +140,7 @@ async function setupFromMissingEnv(
   language: GroveLanguage,
   supportsEnvInjection: boolean,
 ): Promise<void> {
-  const claudeRoot = await resolveClaudeRoot();
+  const claudeRoot = await resolveClaudeRoot(testUri);
   if (!claudeRoot) {
     vscode.window.showErrorMessage("No workspace folder is open.");
     return;
@@ -154,22 +155,7 @@ async function setupFromMissingEnv(
 
   try {
     await writeHandoff("grove-setup", "missing-env", setupContext, claudeRoot);
-
-    let primaryEditorOpened = false;
-    try {
-      await vscode.commands.executeCommand(
-        "claude-vscode.primaryEditor.open",
-        undefined,
-        "/grove-setup",
-      );
-      primaryEditorOpened = true;
-    } catch {
-      try {
-        await vscode.commands.executeCommand("claude-vscode.sidebar.open");
-      } catch {
-        // Claude Code extension not available — skip focus entirely.
-      }
-    }
+    const primaryEditorOpened = await openClaudeWithSkill("grove-setup");
 
     vscode.window.showInformationMessage(
       primaryEditorOpened

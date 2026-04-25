@@ -18,6 +18,7 @@ import { findProjectForFile, type GroveLanguage } from "@grove/shared";
 import { getCachedProjects } from "./project-cache";
 import { parseSnippetBlocks } from "./snippet-codelens/snippet-parser";
 import {
+  openClaudeWithSkill,
   resolveClaudeRoot,
   writeHandoff,
   type TestFromSourceContext,
@@ -116,7 +117,7 @@ export class TestBannerCodeLensProvider implements vscode.CodeLensProvider {
     );
     return [
       new vscode.CodeLens(bannerRange, {
-        title: `$(warning) No test found — $(sparkle) Add test`,
+        title: `$(warning) No test found. $(sparkle) Add test`,
         command: "grove.testFromSource",
         arguments: [
           document.uri,
@@ -175,7 +176,7 @@ async function testFromSource(
   language: GroveLanguage,
   snippetNames: string[],
 ): Promise<void> {
-  const claudeRoot = await resolveClaudeRoot();
+  const claudeRoot = await resolveClaudeRoot(sourceUri);
   if (!claudeRoot) {
     vscode.window.showErrorMessage("No workspace folder is open.");
     return;
@@ -195,22 +196,7 @@ async function testFromSource(
       context,
       claudeRoot,
     );
-
-    let primaryEditorOpened = false;
-    try {
-      await vscode.commands.executeCommand(
-        "claude-vscode.primaryEditor.open",
-        undefined,
-        "/grove-test",
-      );
-      primaryEditorOpened = true;
-    } catch {
-      try {
-        await vscode.commands.executeCommand("claude-vscode.sidebar.open");
-      } catch {
-        // Claude Code extension not available — skip focus entirely.
-      }
-    }
+    const primaryEditorOpened = await openClaudeWithSkill("grove-test");
 
     const sourceBase = path.basename(sourceUri.fsPath);
     vscode.window.showInformationMessage(

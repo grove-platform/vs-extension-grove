@@ -21,6 +21,7 @@ import {
   displayTestResults,
 } from "../test-execution";
 import {
+  openClaudeWithSkill,
   resolveClaudeRoot,
   writeHandoff,
   type TestFailureContext,
@@ -94,7 +95,6 @@ export function registerTestCodeLens(context: vscode.ExtensionContext): void {
         uri: vscode.Uri,
         testNamePattern: string,
         testName: string,
-        _blockType: string,
       ) => {
         await diagnoseTestBlock(uri, testNamePattern, testName);
       },
@@ -133,7 +133,7 @@ async function diagnoseTestBlock(
     return;
   }
 
-  const claudeRoot = await resolveClaudeRoot();
+  const claudeRoot = await resolveClaudeRoot(uri);
   if (!claudeRoot) {
     vscode.window.showErrorMessage("No workspace folder is open.");
     return;
@@ -151,26 +151,7 @@ async function diagnoseTestBlock(
 
   try {
     await writeHandoff("grove-run", "test-failure", context, claudeRoot);
-
-    // Open Claude Code with "/grove-run" pre-filled. The extension's
-    // primaryEditor.open accepts (sessionId?, prompt?) — confirmed from
-    // the URI handler route in its source — so the writer just presses
-    // Enter. Fall back to sidebar.open if the command isn't available.
-    let primaryEditorOpened = false;
-    try {
-      await vscode.commands.executeCommand(
-        "claude-vscode.primaryEditor.open",
-        undefined,
-        "/grove-run",
-      );
-      primaryEditorOpened = true;
-    } catch {
-      try {
-        await vscode.commands.executeCommand("claude-vscode.sidebar.open");
-      } catch {
-        // Claude Code extension not available — skip focus entirely.
-      }
-    }
+    const primaryEditorOpened = await openClaudeWithSkill("grove-run");
 
     vscode.window.showInformationMessage(
       primaryEditorOpened
