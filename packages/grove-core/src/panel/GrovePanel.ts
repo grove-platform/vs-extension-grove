@@ -2,6 +2,40 @@ import * as vscode from "vscode";
 import type { GroveStatus } from "@grove/shared";
 import { getNonce } from "./nonce";
 
+/**
+ * Open Claude Code with the given slash command pre-filled. Best-effort —
+ * falls back to opening the sidebar if primaryEditor.open rejects, and
+ * shows a warning message with install guidance if the Claude Code
+ * extension isn't available.
+ */
+async function openSkillInClaude(skill: string): Promise<void> {
+  const slashCommand = `/${skill}`;
+  let opened = false;
+  try {
+    await vscode.commands.executeCommand(
+      "claude-vscode.primaryEditor.open",
+      undefined,
+      slashCommand,
+    );
+    opened = true;
+  } catch {
+    try {
+      await vscode.commands.executeCommand("claude-vscode.sidebar.open");
+    } catch {
+      // Claude Code not installed — show actionable guidance instead
+      vscode.window.showWarningMessage(
+        `Claude Code extension not found. Install it, then type ${slashCommand} in the Claude Code panel.`,
+      );
+      return;
+    }
+  }
+  vscode.window.showInformationMessage(
+    opened
+      ? `Claude Code opened with ${slashCommand}. Press Enter to start.`
+      : `Type ${slashCommand} in the Claude Code panel to start.`,
+  );
+}
+
 export class GrovePanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = "grove.panel";
 
@@ -50,6 +84,35 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
           break;
         case "sendFeedback":
           vscode.commands.executeCommand("grove.sendFeedback");
+          break;
+        case "openSkill":
+          if (typeof message.skill === "string" && /^grove-[a-z]+$/.test(message.skill)) {
+            await openSkillInClaude(message.skill);
+          }
+          break;
+        case "openSkillPicker":
+          if (message.picker === "run-or-fix") {
+            const pick = await vscode.window.showQuickPick(
+              [
+                {
+                  label: "Run tests",
+                  description: "/grove-run",
+                  detail: "Run a suite or single test and diagnose any failures",
+                  skill: "grove-run",
+                },
+                {
+                  label: "Fix a test",
+                  description: "/grove-test",
+                  detail: "Update a broken test's logic or expected output",
+                  skill: "grove-test",
+                },
+              ],
+              { placeHolder: "What do you want to do?" },
+            );
+            if (pick) {
+              await openSkillInClaude(pick.skill);
+            }
+          }
           break;
       }
     });
@@ -198,8 +261,19 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
       loading.classList.add('hidden');
       content.classList.remove('hidden');
       let html = '';
+      const skillsSection =
+        '<div class="section"><div class="section-title">Grove Skills</div>' +
+        '<div class="actions">' +
+        '<button data-skill="grove-create" title="Open Claude Code with /grove-create">Create examples</button>' +
+        '<button data-skill="grove-migrate" title="Open Claude Code with /grove-migrate">Migrate examples</button>' +
+        '<button data-skill="grove-test" title="Open Claude Code with /grove-test">Create tests</button>' +
+        '<button data-skill-picker="run-or-fix" title="Run tests or fix a broken one">Run/fix tests</button>' +
+        '<button data-skill="grove-setup" title="Open Claude Code with /grove-setup">Set up environment</button>' +
+        '</div></div>';
       if (!currentStatus.hasProject) {
         html += '<div class="setup-wizard"><h3>No Grove Project Detected</h3><p>Create a snip.js file to get started, or open a folder containing one.</p></div>';
+        html += skillsSection;
+        html += '<div class="section"><div class="section-title">Help</div><div class="actions" style="grid-template-columns: 1fr;"><button data-action="sendFeedback">📝 Send Feedback</button></div></div>';
       } else {
         html += '<div class="section"><div class="section-title">Projects</div>';
         html += currentStatus.projects.map(p =>
@@ -240,6 +314,8 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
         }
 
         html += '</div>'; // close section
+        // Skills section (always shown when hasProject)
+        html += skillsSection;
         // Feedback section (always shown)
         html += '<div class="section"><div class="section-title">Help</div><div class="actions" style="grid-template-columns: 1fr;"><button data-action="sendFeedback">📝 Send Feedback</button></div></div>';
       }
@@ -250,6 +326,16 @@ export class GrovePanelProvider implements vscode.WebviewViewProvider {
       if (link) {
         e.preventDefault();
         vscode.postMessage({ command: 'openProjectRoot', rootPath: link.dataset.rootPath });
+        return;
+      }
+      const skillBtn = e.target.closest('[data-skill]');
+      if (skillBtn) {
+        vscode.postMessage({ command: 'openSkill', skill: skillBtn.dataset.skill });
+        return;
+      }
+      const pickerBtn = e.target.closest('[data-skill-picker]');
+      if (pickerBtn) {
+        vscode.postMessage({ command: 'openSkillPicker', picker: pickerBtn.dataset.skillPicker });
         return;
       }
       const btn = e.target.closest('[data-action]');

@@ -19,6 +19,76 @@ import {
 import { resolveDirectivePath } from "./path-resolver";
 import { resolveExtract } from "./extract-resolver";
 import { profile, profileSync } from "@grove/shared";
+import {
+  openClaudeWithSkill,
+  resolveClaudeRoot,
+  writeHandoff,
+  type MigrateCodeBlockContext,
+  type MigrateFromRstContext,
+} from "../handoff/writer";
+
+/**
+ * File extensions we recognise as code we can migrate into the Grove suite.
+ * RST/YAML/plain-text targets are out of scope.
+ */
+const CODE_FILE_EXTENSIONS = new Set([
+  ".py", ".js", ".ts", ".mjs", ".cjs",
+  ".go", ".java", ".cs", ".sh",
+]);
+
+/** Map file extensions to the language value /grove-migrate expects. */
+const EXT_TO_LANGUAGE: Record<string, string> = {
+  ".py": "python",
+  ".js": "javascript",
+  ".ts": "javascript",
+  ".mjs": "javascript",
+  ".cjs": "javascript",
+  ".go": "go",
+  ".java": "java",
+  ".cs": "csharp",
+  ".sh": "mongosh",
+};
+
+/**
+ * Map RST code-block language identifiers (Pygments lexer names) to the
+ * language value /grove-migrate expects.
+ *
+ * `json` maps to a sentinel value because a JSON code-block could become
+ * either a JavaScript (Node.js driver) example or a mongosh example — the
+ * skill prompts the writer to choose during Step 0.
+ */
+const CODE_BLOCK_LANG_TO_GROVE: Record<string, string> = {
+  python: "python",
+  py: "python",
+  javascript: "javascript",
+  js: "javascript",
+  typescript: "javascript",
+  ts: "javascript",
+  go: "go",
+  golang: "go",
+  java: "java",
+  csharp: "csharp",
+  cs: "csharp",
+  "c#": "csharp",
+  mongosh: "mongosh",
+  bash: "mongosh",
+  shell: "mongosh",
+  sh: "mongosh",
+  json: "json",
+  jsonl: "json",
+};
+
+function mapCodeBlockLanguage(rstLang: string): string | undefined {
+  return CODE_BLOCK_LANG_TO_GROVE[rstLang.toLowerCase()];
+}
+
+function isMigratableCodeFile(absolutePath: string): boolean {
+  return CODE_FILE_EXTENSIONS.has(path.extname(absolutePath).toLowerCase());
+}
+
+function inferLanguage(absolutePath: string): string | undefined {
+  return EXT_TO_LANGUAGE[path.extname(absolutePath).toLowerCase()];
+}
 
 /**
  * Get the workspace root for the current document.
@@ -396,6 +466,32 @@ export class RstDirectiveCodeLensProvider implements vscode.CodeLensProvider {
         new vscode.Position(directiveLine, 0),
       );
 
+      // Handle code-block::<lang> — inline code, no file resolution.
+      // Emits a "Migrate to Grove" lens for Grove-supported languages.
+      // Inline code is existing untested code — same conceptual action as
+      // migrating a literalinclude target.
+      if (ref.type === "code-block") {
+        const groveLang = ref.language
+          ? mapCodeBlockLanguage(ref.language)
+          : undefined;
+        if (groveLang && ref.code && ref.code.trim().length > 0) {
+          lenses.push(
+            new vscode.CodeLens(lensRange, {
+              title: `$(sparkle) Migrate to Grove`,
+              command: "grove.migrateCodeBlock",
+              arguments: [
+                document.uri,
+                directiveLine,
+                groveLang,
+                ref.code,
+              ],
+              tooltip: `Hand off this ${groveLang} code-block to /grove-migrate`,
+            }),
+          );
+        }
+        continue; // code-block has no file target — skip normal resolution
+      }
+
       // Handle extract includes differently - they resolve to YAML refs
       if (ref.isExtract) {
         const resolution = await profile("RstCodeLens.resolveExtract", () =>
@@ -453,10 +549,9 @@ export class RstDirectiveCodeLensProvider implements vscode.CodeLensProvider {
             resolved.absolutePath,
             workspaceRoot,
           );
-          if (
-            sourceFileResult &&
-            fs.existsSync(sourceFileResult.sourceFilePath)
-          ) {
+          const hasSourceFile =
+            !!sourceFileResult && fs.existsSync(sourceFileResult.sourceFilePath);
+          if (hasSourceFile && sourceFileResult) {
             lenses.push(
               new vscode.CodeLens(lensRange, {
                 title: `📄 source`,
@@ -471,12 +566,41 @@ export class RstDirectiveCodeLensProvider implements vscode.CodeLensProvider {
             resolved.absolutePath,
             workspaceRoot,
           );
-          if (testFileResult && fs.existsSync(testFileResult.testFilePath)) {
+          const hasTestFile =
+            !!testFileResult && fs.existsSync(testFileResult.testFilePath);
+          if (hasTestFile && testFileResult) {
             lenses.push(
               new vscode.CodeLens(lensRange, {
                 title: `🧪 test`,
                 command: "grove.literalinclude.view",
                 arguments: [testFileResult.testFilePath, ref.snippetName],
+              }),
+            );
+          }
+
+          // "Migrate to Grove" lens - shown when the directive targets a real
+          // code file that isn't yet wired into the Grove-tested tree (no
+          // Bluehawk source, no test). Signals the writer can hand this
+          // example off to /grove-migrate.
+          if (
+            !hasSourceFile &&
+            !hasTestFile &&
+            isMigratableCodeFile(resolved.absolutePath)
+          ) {
+            lenses.push(
+              new vscode.CodeLens(lensRange, {
+                title: `$(sparkle) Migrate to Grove`,
+                command: "grove.migrateDirective",
+                arguments: [
+                  document.uri,
+                  directiveLine,
+                  ref.targetPath,
+                  resolved.absolutePath,
+                  ref.snippetName,
+                  ref.language ?? inferLanguage(resolved.absolutePath),
+                  ref.type,
+                ],
+                tooltip: `Hand off ${path.basename(resolved.absolutePath)} to /grove-migrate`,
               }),
             );
           }
@@ -770,6 +894,108 @@ export function registerLiteralIncludeProviders(
           new vscode.Range(position, position),
           vscode.TextEditorRevealType.InCenter,
         );
+      },
+    ),
+  );
+
+  // Register command for "Migrate to Grove" CodeLens on inline code-block::
+  // directives. Writes a handoff payload and hands off to /grove-migrate.
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "grove.migrateCodeBlock",
+      async (
+        rstUri: vscode.Uri,
+        rstLine: number,
+        language: string,
+        code: string,
+      ) => {
+        const claudeRoot = await resolveClaudeRoot(rstUri);
+        if (!claudeRoot) {
+          vscode.window.showErrorMessage("No workspace folder is open.");
+          return;
+        }
+
+        const context: MigrateCodeBlockContext = {
+          language,
+          code,
+          rstFile: path.relative(claudeRoot, rstUri.fsPath),
+          rstLine,
+        };
+
+        try {
+          await writeHandoff(
+            "grove-migrate",
+            "rst-code-block",
+            context,
+            claudeRoot,
+          );
+          const primaryEditorOpened = await openClaudeWithSkill("grove-migrate");
+
+          const rstBase = path.basename(rstUri.fsPath);
+          vscode.window.showInformationMessage(
+            primaryEditorOpened
+              ? `Grove handoff ready. Press Enter in Claude Code to migrate this ${language} code-block from ${rstBase}.`
+              : `Grove handoff ready. Type /grove-migrate in Claude Code to migrate this ${language} code-block from ${rstBase}.`,
+          );
+        } catch (err) {
+          vscode.window.showErrorMessage(
+            `Failed to write Grove handoff: ${err}`,
+          );
+        }
+      },
+    ),
+  );
+
+  // Register command for "Migrate to Grove" CodeLens on untested literalinclude
+  // directives. Writes a handoff payload and hands off to /grove-migrate.
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "grove.migrateDirective",
+      async (
+        rstUri: vscode.Uri,
+        rstLine: number,
+        targetPath: string,
+        absolutePath: string,
+        snippetName: string | undefined,
+        language: string | undefined,
+        directiveType: "literalinclude" | "input" | "output",
+      ) => {
+        const claudeRoot = await resolveClaudeRoot(rstUri);
+        if (!claudeRoot) {
+          vscode.window.showErrorMessage("No workspace folder is open.");
+          return;
+        }
+
+        const context: MigrateFromRstContext = {
+          targetPath,
+          targetFile: path.relative(claudeRoot, absolutePath),
+          snippetName,
+          language,
+          directiveType,
+          rstFile: path.relative(claudeRoot, rstUri.fsPath),
+          rstLine,
+        };
+
+        try {
+          await writeHandoff(
+            "grove-migrate",
+            "rst-literalinclude",
+            context,
+            claudeRoot,
+          );
+          const primaryEditorOpened = await openClaudeWithSkill("grove-migrate");
+
+          const fileName = path.basename(absolutePath);
+          vscode.window.showInformationMessage(
+            primaryEditorOpened
+              ? `Grove handoff ready. Press Enter in Claude Code to migrate "${fileName}".`
+              : `Grove handoff ready. Type /grove-migrate in Claude Code to migrate "${fileName}".`,
+          );
+        } catch (err) {
+          vscode.window.showErrorMessage(
+            `Failed to write Grove handoff: ${err}`,
+          );
+        }
       },
     ),
   );

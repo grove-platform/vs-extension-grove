@@ -20,6 +20,12 @@ import {
   executeTests,
   displayTestResults,
 } from "../test-execution";
+import {
+  openClaudeWithSkill,
+  resolveClaudeRoot,
+  writeHandoff,
+  type TestFailureContext,
+} from "../handoff/writer";
 
 // Module-level provider instance for access from runTestBlock
 let codeLensProvider: TestCodeLensProvider;
@@ -81,13 +87,82 @@ export function registerTestCodeLens(context: vscode.ExtensionContext): void {
     ),
   );
 
+  // Register diagnose-with-Claude command
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "grove.diagnoseTestBlock",
+      async (
+        uri: vscode.Uri,
+        testNamePattern: string,
+        testName: string,
+      ) => {
+        await diagnoseTestBlock(uri, testNamePattern, testName);
+      },
+    ),
+  );
+
   // Refresh lenses on document save
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument(() => {
       codeLensProvider.refresh();
     }),
   );
+
+  // Refresh lenses when test results arrive so the "Diagnose with Claude"
+  // lens appears immediately after a failing run.
+  context.subscriptions.push(
+    testResultStore.onDidChange(() => {
+      codeLensProvider.refresh();
+    }),
+  );
 }
+
+async function diagnoseTestBlock(
+  uri: vscode.Uri,
+  testNamePattern: string,
+  testName: string,
+): Promise<void> {
+  const resolved = await resolveProject(uri.fsPath);
+  if (!resolved) return;
+
+  const result = testResultStore.get(uri, testNamePattern);
+  if (!result) {
+    vscode.window.showWarningMessage(
+      `No test result found for "${testName}". Run the test first.`,
+    );
+    return;
+  }
+
+  const claudeRoot = await resolveClaudeRoot(uri);
+  if (!claudeRoot) {
+    vscode.window.showErrorMessage("No workspace folder is open.");
+    return;
+  }
+
+  const context: TestFailureContext = {
+    testFile: path.relative(claudeRoot, uri.fsPath),
+    testName,
+    testNamePattern,
+    line: result.line,
+    errorMessage: result.errorMessage,
+    duration: result.duration,
+    projectPath: path.relative(claudeRoot, resolved.project.rootPath),
+  };
+
+  try {
+    await writeHandoff("grove-run", "test-failure", context, claudeRoot);
+    const primaryEditorOpened = await openClaudeWithSkill("grove-run");
+
+    vscode.window.showInformationMessage(
+      primaryEditorOpened
+        ? `Grove handoff ready. Press Enter in Claude Code to diagnose "${testName}".`
+        : `Grove handoff ready. Type /grove-run in Claude Code to diagnose "${testName}".`,
+    );
+  } catch (err) {
+    vscode.window.showErrorMessage(`Failed to write Grove handoff: ${err}`);
+  }
+}
+
 
 async function runTestBlock(
   uri: vscode.Uri,

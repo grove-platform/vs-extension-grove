@@ -12,6 +12,7 @@ import {
   buildTestNamePattern,
   type TestBlock,
 } from "./test-parser";
+import { testResultStore } from "./TestResultStore";
 
 /** Tracks the state of a running test */
 interface RunningTest {
@@ -124,6 +125,27 @@ export class TestCodeLensProvider implements vscode.CodeLensProvider {
               tooltip: `Run all tests in "${block.name}"`,
             }),
           );
+        }
+
+        // Diagnose-with-Claude lens — only for failed it/test blocks that
+        // have a stored result from a prior run. Writes a handoff payload
+        // for the /grove-run skill to consume.
+        if (block.type !== "describe") {
+          const result = testResultStore.get(document.uri, testNamePattern);
+          if (result && !result.passed) {
+            lenses.push(
+              new vscode.CodeLens(lensRange, {
+                title: `$(sparkle) Diagnose with Claude`,
+                command: "grove.diagnoseTestBlock",
+                arguments: [
+                  document.uri,
+                  testNamePattern,
+                  block.name,
+                ],
+                tooltip: `Hand off "${block.name}" failure to /grove-run`,
+              }),
+            );
+          }
         }
       }
     }
