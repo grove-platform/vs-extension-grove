@@ -21,14 +21,11 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  packages/grove-platform-core:
+  packages/grove-core:
     dependencies:
       '@grove/shared':
         specifier: workspace:*
         version: link:../shared
-      '@vscode/ripgrep':
-        specifier: ^1.17.1
-        version: 1.17.1
       js-yaml:
         specifier: ^4.1.1
         version: 4.1.1
@@ -55,7 +52,26 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@25.4.0)
 
-  packages/grove-platform-nodejs:
+  packages/grove-nodejs:
+    dependencies:
+      '@grove/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^25.4.0
+        version: 25.4.0
+      '@types/vscode':
+        specifier: ^1.110.0
+        version: 1.110.0
+      esbuild:
+        specifier: ^0.27.0
+        version: 0.27.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@25.4.0)
+
+  packages/grove-python:
     dependencies:
       '@grove/shared':
         specifier: workspace:*
@@ -648,9 +664,6 @@ packages:
 
   '@vitest/utils@4.0.18':
     resolution: {integrity: sha512-msMRKLMVLWygpK3u2Hybgi4MNjcYJvwTb0Ru09+fOyCXIgT5raYP041DRRdiJiI3k/2U6SEbAETB3YtBrUkCFA==}
-
-  '@vscode/ripgrep@1.17.1':
-    resolution: {integrity: sha512-xTs7DGyAO3IsJYOCTBP8LnTvPiYVKEuyv8s0xyJDBXfs8rhBfqnZPvb6xDT+RnwWzcXqW27xLS/aGrkjX7lNWw==}
 
   '@vscode/vsce-sign-alpine-arm64@2.0.6':
     resolution: {integrity: sha512-wKkJBsvKF+f0GfsUuGT0tSW0kZL87QggEiqNqK6/8hvqsXvpx8OsTEc3mnE1kejkh5r+qUyQ7PtF8jZYN0mo8Q==}
@@ -1607,9 +1620,6 @@ packages:
     engines: {node: '>=14'}
     hasBin: true
 
-  proxy-from-env@1.1.0:
-    resolution: {integrity: sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==}
-
   pump@3.0.4:
     resolution: {integrity: sha512-VS7sjc6KR7e1ukRFhQSY5LM2uBWAUPiOPa/A3mkKmiMwSmRFUITt0xuj+/lesgnCv+dPIEYlkzrcyXgquIHMcA==}
 
@@ -2563,14 +2573,6 @@ snapshots:
     dependencies:
       '@vitest/pretty-format': 4.0.18
       tinyrainbow: 3.0.3
-
-  '@vscode/ripgrep@1.17.1':
-    dependencies:
-      https-proxy-agent: 7.0.6
-      proxy-from-env: 1.1.0
-      yauzl: 2.10.0
-    transitivePeerDependencies:
-      - supports-color
 
   '@vscode/vsce-sign-alpine-arm64@2.0.6':
     optional: true
@@ -3567,8 +3569,6 @@ snapshots:
   prelude-ls@1.2.1: {}
 
   prettier@3.8.1: {}
-
-  proxy-from-env@1.1.0: {}
 
   pump@3.0.4:
     dependencies:
