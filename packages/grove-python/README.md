@@ -42,7 +42,7 @@ Grove runs the same unittest command using `venv/bin/python` automatically.
 grove-python/
 ├── src/
 │   ├── extension.ts      # Extension entry point, Grove Core integration
-│   └── test-runner.ts    # pytest execution and output parsing
+│   └── test-runner.ts    # Test subprocess args, spawn, output parsing
 └── package.json          # Extension manifest
 ```
 
@@ -51,13 +51,13 @@ grove-python/
 On activation, the extension:
 
 1. Gets the Grove Core extension API
-2. Registers the pytest test runner via `coreApi.registerTestRunner()`
+2. Registers the Python test runner via `coreApi.registerTestRunner()`
 3. Registers Python-specific commands
 
 ```typescript
 coreApi.registerTestRunner({
   language: "python",
-  name: "pytest",
+  name: "Python",
   run: runPytestTests,
   detect: detectPytestProject,
 });
@@ -70,8 +70,6 @@ The test runner (`test-runner.ts`) provides:
 #### `detectPytestProject(projectPath: string): Promise<boolean>`
 
 Detects Python projects by checking for `pyproject.toml` or `pytest.ini`, matching `@grove/shared` language detection.
-
-#### `runPytestTests(options: TestRunOptions): Promise<TestResult>`
 
 #### `runPytestTests(options: TestRunOptions): Promise<TestResult>`
 
@@ -92,13 +90,17 @@ Interpreter resolution (in order):
 The output channel shows `Using Python: ...` so you can verify which interpreter ran.
 
 Also:
-- Supports `-k` test name filtering via `testNamePattern`
+
+- **pytest:** `-k` test name filtering via `testNamePattern` when provided
+- **unittest discover:** `-k` is passed when `testNamePattern` is set (supported since Python 3.7)
+- **unittest single file:** `testNamePattern` is ignored; `-k` is not passed for a single module path (reliable only on Python 3.12+ if we did pass it)
 - Injects environment variables (including `CONNECTION_STRING` from Grove UI)
 - Enforces timeout limits (default: 60s, max: 300s)
+- If the interpreter cannot be spawned (missing binary, permission), the run fails immediately with a clear error instead of hanging until timeout
 
 ## Integration with Grove Core
 
-Grove for Python is a **companion extension** that extends Grove Core's functionality. When users run `Grove: Run Tests` (the core command), Grove Core automatically delegates to this extension's pytest runner for Python projects.
+Grove for Python is a **companion extension** that extends Grove Core's functionality. When users run `Grove: Run Tests` (the core command), Grove Core automatically delegates to this extension's Python runner for Python projects.
 
 ## Development
 

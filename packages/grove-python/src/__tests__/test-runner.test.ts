@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
+  buildTestArgs,
   detectPytestProject,
   parsePytestOutput,
   parseUnittestOutput,
   resolvePythonBin,
   resolveTestFramework,
   resolveUnittestDiscoverDir,
+  runPytestTests,
   usesPytest,
 } from "../test-runner";
 import * as fs from "fs/promises";
@@ -95,6 +97,49 @@ describe("resolvePythonBin", () => {
   it("should fall back to system python when no venv or fallback exists", async () => {
     const bin = await resolvePythonBin(tempDir);
     expect(bin === "python3" || bin === "python").toBe(true);
+  });
+});
+
+describe("buildTestArgs", () => {
+  const base = { projectPath: "/proj" };
+
+  it("pytest: file then -k when both set", () => {
+    expect(
+      buildTestArgs("pytest", {
+        ...base,
+        testFile: "tests/test_foo.py",
+        testNamePattern: "bar",
+      }),
+    ).toEqual(["-m", "pytest", "--tb=short", "-q", "tests/test_foo.py", "-k", "bar"]);
+  });
+
+  it("pytest: minimal when no file or pattern", () => {
+    expect(buildTestArgs("pytest", { ...base })).toEqual([
+      "-m",
+      "pytest",
+      "--tb=short",
+      "-q",
+    ]);
+  });
+
+  it("unittest discover: includes -k after discover dir", () => {
+    expect(
+      buildTestArgs("unittest", {
+        ...base,
+        unittestDiscoverDir: "tests_package",
+        testNamePattern: "MyTest",
+      }),
+    ).toEqual(["-m", "unittest", "discover", "tests_package", "-k", "MyTest"]);
+  });
+
+  it("unittest single file: omits -k (not reliable before Python 3.12)", () => {
+    expect(
+      buildTestArgs("unittest", {
+        ...base,
+        testFile: "tests_package/foo/test_bar.py",
+        testNamePattern: "should_not_appear",
+      }),
+    ).toEqual(["-m", "unittest", "tests_package/foo/test_bar.py"]);
   });
 });
 
@@ -211,6 +256,36 @@ describe("resolveTestFramework", () => {
     await fs.writeFile(path.join(tempDir, "pytest.ini"), "[pytest]\n");
     await fs.mkdir(path.join(tempDir, "tests_package"));
     expect(await resolveTestFramework(tempDir)).toBe("pytest");
+  });
+});
+
+describe("runPytestTests spawn error", () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "grove-python-spawn-"));
+    await fs.writeFile(
+      path.join(tempDir, "pyproject.toml"),
+      "[project]\nname = 'x'\n",
+    );
+    await fs.mkdir(path.join(tempDir, "tests_package"));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true });
+  });
+
+  it("should fail fast with a clear message when interpreter is missing", async () => {
+    const result = await runPytestTests({
+      projectPath: tempDir,
+      pythonPath: "/nonexistent/grove-python-missing-interpreter",
+      timeout: 5_000,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.output).toMatch(/Failed to launch Python:/);
+    expect(result.output).toMatch(/Interpreter:/);
+    expect(result.duration).toBeLessThan(4_000);
   });
 });
 

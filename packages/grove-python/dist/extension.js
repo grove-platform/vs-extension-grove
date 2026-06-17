@@ -731,11 +731,7 @@ function buildTestArgs(framework, options) {
     return args2;
   }
   if (testFile) {
-    const args2 = ["-m", "unittest", testFile];
-    if (testNamePattern) {
-      args2.push("-k", testNamePattern);
-    }
-    return args2;
+    return ["-m", "unittest", testFile];
   }
   const discoverDir = unittestDiscoverDir ?? "tests";
   const args = ["-m", "unittest", "discover", discoverDir];
@@ -774,6 +770,7 @@ async function runPytestTests(options) {
 
 `;
     let timedOut = false;
+    let settled = false;
     const proc = (0, import_child_process.spawn)(pythonBin, args, {
       cwd: projectPath,
       env: { ...process.env, CI: "true", ...env }
@@ -782,17 +779,41 @@ async function runPytestTests(options) {
       timedOut = true;
       proc.kill("SIGTERM");
     }, effectiveTimeout);
+    const finish = (result) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeoutId);
+      resolve(result);
+    };
     proc.stdout?.on("data", (data) => {
       output += data.toString();
     });
     proc.stderr?.on("data", (data) => {
       output += data.toString();
     });
+    proc.on("error", (err) => {
+      finish({
+        success: false,
+        total: 0,
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+        output: `Failed to launch Python: ${err.message}
+Interpreter: ${pythonBin}
+
+${output}`,
+        duration: Date.now() - startTime
+      });
+    });
     proc.on("close", (code) => {
-      clearTimeout(timeoutId);
+      if (settled) {
+        return;
+      }
       const duration = Date.now() - startTime;
       if (timedOut) {
-        resolve({
+        finish({
           success: false,
           total: 0,
           passed: 0,
@@ -804,7 +825,7 @@ async function runPytestTests(options) {
         return;
       }
       const counts = framework === "unittest" ? parseUnittestOutput(output) : parsePytestOutput(output);
-      resolve({
+      finish({
         success: code === 0,
         total: counts.total,
         passed: counts.passed,

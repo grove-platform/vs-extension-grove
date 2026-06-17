@@ -19,7 +19,7 @@ Grove automatically detects code example projects (identified by `snip.js` files
 | --------------------- | -------------- | ------------------------------------------------------------------------------------------- |
 | **Grove Core**        | `grove-core`   | Core functionality: project detection, Bluehawk preview, RST navigation, MongoDB connection |
 | **Grove for Node.js** | `grove-nodejs` | Jest/Vitest test runner for JavaScript/TypeScript projects                                  |
-| **Grove for Python**  | `grove-python` | pytest test runner for Python projects                                                      |
+| **Grove for Python**  | `grove-python` | pytest and unittest runners for Python projects                                             |
 
 ### Planned Extensions
 - **Grove for Go** - Go test runner
@@ -105,7 +105,7 @@ pnpm package
 # Install extensions locally
 code --install-extension packages/grove-core/grove-core-0.0.2.vsix
 code --install-extension packages/grove-nodejs/grove-nodejs-0.0.15.vsix
-code --install-extension packages/grove-python/grove-platform-python-0.0.1.vsix
+code --install-extension packages/grove-python/grove-platform-python-0.0.3.vsix
 ```
 
 > **Note:** Grove Core alone provides project detection, Bluehawk preview, and RST navigation. To run tests, you also need a language extension (e.g., Grove for Node.js or Grove for Python).
@@ -187,7 +187,7 @@ Grove uses a **core + language extensions** architecture:
 │  ├── MongoDB Connection Manager                          │
 │  └── Diagnostics & Language Status                       │
 ├─────────────────────────────────────────────────────────┤
-│  grove-nodejs              │  grove-python (future)      │
+│  grove-nodejs              │  grove-python               │
 │  └── Jest Test Runner      │  └── pytest Test Runner     │
 ├─────────────────────────────────────────────────────────┤
 │  @grove/shared (workspace package)                       │

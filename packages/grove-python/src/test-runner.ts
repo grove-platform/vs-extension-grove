@@ -146,7 +146,12 @@ export async function resolveTestFramework(
   return "pytest";
 }
 
-function buildTestArgs(
+/**
+ * Build argv for `python` after the interpreter path (e.g. `-m`, `pytest`, paths).
+ * `unittest` + single-file + `-k` only works on Python 3.12+, so we omit `-k`
+ * for that shape and only pass it for `unittest discover` (supported since 3.7).
+ */
+export function buildTestArgs(
   framework: PythonTestFramework,
   options: {
     projectPath: string;
@@ -169,11 +174,7 @@ function buildTestArgs(
   }
 
   if (testFile) {
-    const args = ["-m", "unittest", testFile];
-    if (testNamePattern) {
-      args.push("-k", testNamePattern);
-    }
-    return args;
+    return ["-m", "unittest", testFile];
   }
 
   const discoverDir = unittestDiscoverDir ?? "tests";
@@ -219,6 +220,7 @@ export async function runPytestTests(
     const startTime = Date.now();
     let output = `Using Python: ${pythonBin}\n\n`;
     let timedOut = false;
+    let settled = false;
 
     const proc = spawn(pythonBin, args, {
       cwd: projectPath,
@@ -230,6 +232,15 @@ export async function runPytestTests(
       proc.kill("SIGTERM");
     }, effectiveTimeout);
 
+    const finish = (result: TestResult) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeoutId);
+      resolve(result);
+    };
+
     proc.stdout?.on("data", (data) => {
       output += data.toString();
     });
@@ -238,12 +249,26 @@ export async function runPytestTests(
       output += data.toString();
     });
 
+    proc.on("error", (err: NodeJS.ErrnoException) => {
+      finish({
+        success: false,
+        total: 0,
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+        output: `Failed to launch Python: ${err.message}\nInterpreter: ${pythonBin}\n\n${output}`,
+        duration: Date.now() - startTime,
+      });
+    });
+
     proc.on("close", (code) => {
-      clearTimeout(timeoutId);
+      if (settled) {
+        return;
+      }
       const duration = Date.now() - startTime;
 
       if (timedOut) {
-        resolve({
+        finish({
           success: false,
           total: 0,
           passed: 0,
@@ -260,7 +285,7 @@ export async function runPytestTests(
           ? parseUnittestOutput(output)
           : parsePytestOutput(output);
 
-      resolve({
+      finish({
         success: code === 0,
         total: counts.total,
         passed: counts.passed,
