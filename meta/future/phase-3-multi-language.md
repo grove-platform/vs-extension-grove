@@ -71,7 +71,7 @@ export async function activate(context: vscode.ExtensionContext) {
   if (coreApi?.registerTestRunner) {
     coreApi.registerTestRunner({
       language: "python",
-      name: "pytest",
+      name: "Python",
       run: runPythonTests,
       detect: detectPythonProject,
     });

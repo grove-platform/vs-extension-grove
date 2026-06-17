@@ -655,7 +655,7 @@ async function resolvePythonBin(projectPath, pythonPath, fallbackPythonPath) {
   for (const relative2 of VENV_PYTHON_CANDIDATES) {
     const candidate = path.join(projectPath, relative2);
     try {
-      await fs.access(candidate);
+      await fs.access(candidate, fs.constants.X_OK);
       return candidate;
     } catch {
     }
@@ -709,15 +709,6 @@ async function resolveUnittestDiscoverDir(projectPath) {
   }
   return void 0;
 }
-async function resolveTestFramework(projectPath) {
-  if (await usesPytest(projectPath)) {
-    return "pytest";
-  }
-  if (await resolveUnittestDiscoverDir(projectPath)) {
-    return "unittest";
-  }
-  return "pytest";
-}
 function buildTestArgs(framework, options) {
   const { testFile, testNamePattern, unittestDiscoverDir } = options;
   if (framework === "pytest") {
@@ -756,10 +747,9 @@ async function runPythonTests(options) {
     pythonPath,
     fallbackPythonPath
   );
-  const framework = await resolveTestFramework(projectPath);
   const unittestDiscoverDir = await resolveUnittestDiscoverDir(projectPath);
+  const framework = await usesPytest(projectPath) ? "pytest" : unittestDiscoverDir ? "unittest" : "pytest";
   const args = buildTestArgs(framework, {
-    projectPath,
     testFile,
     testNamePattern,
     unittestDiscoverDir

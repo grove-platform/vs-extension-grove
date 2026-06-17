@@ -107,7 +107,7 @@ pnpm package
 # Install extensions locally
 code --install-extension packages/grove-core/grove-core-0.0.2.vsix
 code --install-extension packages/grove-nodejs/grove-nodejs-0.0.15.vsix
-code --install-extension packages/grove-python/grove-platform-python-0.0.3.vsix
+code --install-extension packages/grove-python/grove-platform-python-0.0.4.vsix
 ```
 
 > **Note:** Grove Core alone provides project detection, Bluehawk preview, and RST navigation. To run tests, you also need a language extension (e.g., Grove for Node.js or Grove for Python).

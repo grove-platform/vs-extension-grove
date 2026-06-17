@@ -2,7 +2,7 @@
   "name": "grove-platform-python",
   "displayName": "Grove UI for Python",
   "description": "Python (pytest and unittest) support for Grove documentation testing",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "GrovePlatform",
   "engines": {
     "vscode": "^1.110.0"

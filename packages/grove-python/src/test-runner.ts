@@ -62,7 +62,7 @@ export async function resolvePythonBin(
   for (const relative of VENV_PYTHON_CANDIDATES) {
     const candidate = path.join(projectPath, relative);
     try {
-      await fs.access(candidate);
+      await fs.access(candidate, fs.constants.X_OK);
       return candidate;
     } catch {
       // try next candidate
@@ -155,7 +155,6 @@ export async function resolveTestFramework(
 export function buildTestArgs(
   framework: PythonTestFramework,
   options: {
-    projectPath: string;
     testFile?: string;
     testNamePattern?: string;
     unittestDiscoverDir?: string;
@@ -208,10 +207,13 @@ export async function runPythonTests(
     pythonPath,
     fallbackPythonPath,
   );
-  const framework = await resolveTestFramework(projectPath);
   const unittestDiscoverDir = await resolveUnittestDiscoverDir(projectPath);
+  const framework: PythonTestFramework = (await usesPytest(projectPath))
+    ? "pytest"
+    : unittestDiscoverDir
+      ? "unittest"
+      : "pytest";
   const args = buildTestArgs(framework, {
-    projectPath,
     testFile,
     testNamePattern,
     unittestDiscoverDir,

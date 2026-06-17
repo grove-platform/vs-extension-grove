@@ -38,7 +38,7 @@ describe("detectPythonProject", () => {
     expect(await detectPythonProject(tempDir)).toBe(true);
   });
 
-  it("should return false when no pytest markers found", async () => {
+  it("should return false when no project markers found", async () => {
     await fs.writeFile(path.join(tempDir, "requirements.txt"), "pytest\n");
     expect(await detectPythonProject(tempDir)).toBe(false);
   });
@@ -69,6 +69,7 @@ describe("resolvePythonBin", () => {
     const venvPython = path.join(tempDir, "venv", "bin", "python");
     await fs.mkdir(path.dirname(venvPython), { recursive: true });
     await fs.writeFile(venvPython, "");
+    await fs.chmod(venvPython, 0o755);
     expect(await resolvePythonBin(tempDir)).toBe(venvPython);
   });
 
@@ -76,6 +77,7 @@ describe("resolvePythonBin", () => {
     const venvPython = path.join(tempDir, ".venv", "bin", "python");
     await fs.mkdir(path.dirname(venvPython), { recursive: true });
     await fs.writeFile(venvPython, "");
+    await fs.chmod(venvPython, 0o755);
     expect(await resolvePythonBin(tempDir)).toBe(venvPython);
   });
 
@@ -83,6 +85,7 @@ describe("resolvePythonBin", () => {
     const venvPython = path.join(tempDir, "venv", "bin", "python");
     await fs.mkdir(path.dirname(venvPython), { recursive: true });
     await fs.writeFile(venvPython, "");
+    await fs.chmod(venvPython, 0o755);
     expect(await resolvePythonBin(tempDir, undefined, "/usr/bin/wrong")).toBe(
       venvPython,
     );
@@ -101,12 +104,9 @@ describe("resolvePythonBin", () => {
 });
 
 describe("buildTestArgs", () => {
-  const base = { projectPath: "/proj" };
-
   it("pytest: file then -k when both set", () => {
     expect(
       buildTestArgs("pytest", {
-        ...base,
         testFile: "tests/test_foo.py",
         testNamePattern: "bar",
       }),
@@ -114,7 +114,7 @@ describe("buildTestArgs", () => {
   });
 
   it("pytest: minimal when no file or pattern", () => {
-    expect(buildTestArgs("pytest", { ...base })).toEqual([
+    expect(buildTestArgs("pytest", {})).toEqual([
       "-m",
       "pytest",
       "--tb=short",
@@ -125,7 +125,6 @@ describe("buildTestArgs", () => {
   it("unittest discover: includes -k after discover dir", () => {
     expect(
       buildTestArgs("unittest", {
-        ...base,
         unittestDiscoverDir: "tests_package",
         testNamePattern: "MyTest",
       }),
@@ -135,7 +134,6 @@ describe("buildTestArgs", () => {
   it("unittest single file: omits -k (not reliable before Python 3.12)", () => {
     expect(
       buildTestArgs("unittest", {
-        ...base,
         testFile: "tests_package/foo/test_bar.py",
         testNamePattern: "should_not_appear",
       }),
@@ -143,7 +141,7 @@ describe("buildTestArgs", () => {
   });
 
   it("unittest discover: defaults discover dir to tests_package when omitted", () => {
-    expect(buildTestArgs("unittest", { ...base })).toEqual([
+    expect(buildTestArgs("unittest", {})).toEqual([
       "-m",
       "unittest",
       "discover",
