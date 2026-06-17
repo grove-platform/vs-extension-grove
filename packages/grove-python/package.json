@@ -1,7 +1,7 @@
 {
   "name": "grove-platform-python",
   "displayName": "Grove UI for Python",
-  "description": "Python/pytest support for Grove documentation testing",
+  "description": "Python (pytest and unittest) support for Grove documentation testing",
   "version": "0.0.3",
   "publisher": "GrovePlatform",
   "engines": {

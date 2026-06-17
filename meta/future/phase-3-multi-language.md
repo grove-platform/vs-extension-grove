@@ -72,14 +72,14 @@ export async function activate(context: vscode.ExtensionContext) {
     coreApi.registerTestRunner({
       language: "python",
       name: "pytest",
-      run: runPytestTests,
-      detect: detectPytestProject,
+      run: runPythonTests,
+      detect: detectPythonProject,
     });
   }
 
   context.subscriptions.push(
     vscode.commands.registerCommand("grove.python.runTests", async () => {
-      const result = await runPytestTests({
+      const result = await runPythonTests({
         projectPath: getActiveProjectPath(),
       });
       showTestResults(result);
@@ -89,7 +89,7 @@ export async function activate(context: vscode.ExtensionContext) {
   vscode.window.showInformationMessage("Grove for Python activated");
 }
 
-async function runPytestTests(options: {
+async function runPythonTests(options: {
   projectPath: string;
   testFile?: string;
 }) {
@@ -124,7 +124,7 @@ async function runPytestTests(options: {
   });
 }
 
-async function detectPytestProject(projectPath: string): Promise<boolean> {
+async function detectPythonProject(projectPath: string): Promise<boolean> {
   const fs = require("fs/promises");
   const path = require("path");
 

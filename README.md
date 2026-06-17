@@ -83,9 +83,9 @@ pnpm test
 ### Package Commands
 
 ```bash
-# Build specific package
-pnpm --filter grove-core build
-pnpm --filter grove-nodejs build
+# Build specific package (use workspace package names from packages/*/package.json)
+pnpm --filter grove-platform-core build
+pnpm --filter grove-platform-nodejs build
 pnpm --filter grove-platform-python build
 pnpm --filter @grove/shared build
 
@@ -93,7 +93,9 @@ pnpm --filter @grove/shared build
 pnpm watch
 
 # Run tests for specific package
-pnpm --filter grove-core test
+pnpm --filter grove-platform-core test
+pnpm --filter grove-platform-nodejs test
+pnpm --filter grove-platform-python test
 ```
 
 ### Building VSIX for Local Installation
@@ -188,7 +190,7 @@ Grove uses a **core + language extensions** architecture:
 │  └── Diagnostics & Language Status                       │
 ├─────────────────────────────────────────────────────────┤
 │  grove-nodejs              │  grove-python               │
-│  └── Jest Test Runner      │  └── pytest Test Runner     │
+│  └── Jest Test Runner      │  └── pytest / unittest      │
 ├─────────────────────────────────────────────────────────┤
 │  @grove/shared (workspace package)                       │
 │  ├── Project Detection                                   │

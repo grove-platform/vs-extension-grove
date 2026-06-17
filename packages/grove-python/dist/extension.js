@@ -643,7 +643,7 @@ var VENV_PYTHON_CANDIDATES = [
   ".venv/Scripts/python.exe",
   "venv/Scripts/python.exe"
 ];
-var UNITTEST_DISCOVER_DIRS = ["tests_package", "tests"];
+var UNITTEST_DISCOVER_DIRS = ["tests_package"];
 function getSystemPythonBin() {
   return process.platform === "win32" ? "python" : "python3";
 }
@@ -666,7 +666,7 @@ async function resolvePythonBin(projectPath, pythonPath, fallbackPythonPath) {
   }
   return getSystemPythonBin();
 }
-async function detectPytestProject(projectPath) {
+async function detectPythonProject(projectPath) {
   try {
     await fs.access(path.join(projectPath, "pyproject.toml"));
     return true;
@@ -733,14 +733,14 @@ function buildTestArgs(framework, options) {
   if (testFile) {
     return ["-m", "unittest", testFile];
   }
-  const discoverDir = unittestDiscoverDir ?? "tests";
+  const discoverDir = unittestDiscoverDir ?? "tests_package";
   const args = ["-m", "unittest", "discover", discoverDir];
   if (testNamePattern) {
     args.push("-k", testNamePattern);
   }
   return args;
 }
-async function runPytestTests(options) {
+async function runPythonTests(options) {
   const {
     projectPath,
     testFile,
@@ -894,8 +894,8 @@ function getConfiguredPythonPath() {
   const fromPythonExt = vscode.workspace.getConfiguration("python").get("defaultInterpreterPath")?.trim();
   return fromPythonExt || void 0;
 }
-function runPytestWithConfiguredPython(options) {
-  return runPytestTests({
+function runPythonWithConfiguredInterpreter(options) {
+  return runPythonTests({
     ...options,
     fallbackPythonPath: options.fallbackPythonPath ?? getConfiguredPythonPath()
   });
@@ -950,8 +950,8 @@ async function activate(context) {
   coreApi.registerTestRunner({
     language: "python",
     name: "Python",
-    run: runPytestWithConfiguredPython,
-    detect: detectPytestProject
+    run: runPythonWithConfiguredInterpreter,
+    detect: detectPythonProject
   });
   const outputChannel = vscode.window.createOutputChannel(
     "Grove Python Tests"
@@ -972,8 +972,8 @@ async function activate(context) {
         },
         async () => {
           const result = await (0, import_shared.profile)(
-            "Python.runPytestTests",
-            () => runPytestWithConfiguredPython({ projectPath })
+            "Python.runPythonTests",
+            () => runPythonWithConfiguredInterpreter({ projectPath })
           );
           showTestResult(result, outputChannel, "=== Python Test Results ===");
         }
@@ -1000,8 +1000,8 @@ async function activate(context) {
         },
         async () => {
           const result = await (0, import_shared.profile)(
-            "Python.runPytestTestFile",
-            () => runPytestWithConfiguredPython({ projectPath, testFile })
+            "Python.runPythonTestFile",
+            () => runPythonWithConfiguredInterpreter({ projectPath, testFile })
           );
           showTestResult(
             result,

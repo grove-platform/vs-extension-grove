@@ -1,20 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   buildTestArgs,
-  detectPytestProject,
+  detectPythonProject,
   parsePytestOutput,
   parseUnittestOutput,
   resolvePythonBin,
   resolveTestFramework,
   resolveUnittestDiscoverDir,
-  runPytestTests,
+  runPythonTests,
   usesPytest,
 } from "../test-runner";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
 
-describe("detectPytestProject", () => {
+describe("detectPythonProject", () => {
   let tempDir: string;
 
   beforeEach(async () => {
@@ -30,21 +30,21 @@ describe("detectPytestProject", () => {
       path.join(tempDir, "pyproject.toml"),
       "[tool.pytest.ini_options]\n",
     );
-    expect(await detectPytestProject(tempDir)).toBe(true);
+    expect(await detectPythonProject(tempDir)).toBe(true);
   });
 
   it("should detect pytest.ini", async () => {
     await fs.writeFile(path.join(tempDir, "pytest.ini"), "[pytest]\n");
-    expect(await detectPytestProject(tempDir)).toBe(true);
+    expect(await detectPythonProject(tempDir)).toBe(true);
   });
 
   it("should return false when no pytest markers found", async () => {
     await fs.writeFile(path.join(tempDir, "requirements.txt"), "pytest\n");
-    expect(await detectPytestProject(tempDir)).toBe(false);
+    expect(await detectPythonProject(tempDir)).toBe(false);
   });
 
   it("should return false for empty directory", async () => {
-    expect(await detectPytestProject(tempDir)).toBe(false);
+    expect(await detectPythonProject(tempDir)).toBe(false);
   });
 });
 
@@ -140,6 +140,15 @@ describe("buildTestArgs", () => {
         testNamePattern: "should_not_appear",
       }),
     ).toEqual(["-m", "unittest", "tests_package/foo/test_bar.py"]);
+  });
+
+  it("unittest discover: defaults discover dir to tests_package when omitted", () => {
+    expect(buildTestArgs("unittest", { ...base })).toEqual([
+      "-m",
+      "unittest",
+      "discover",
+      "tests_package",
+    ]);
   });
 });
 
@@ -252,6 +261,13 @@ describe("resolveTestFramework", () => {
     expect(await resolveUnittestDiscoverDir(tempDir)).toBe("tests_package");
   });
 
+  it("should prefer pytest when only generic tests/ exists (no tests_package)", async () => {
+    await fs.writeFile(path.join(tempDir, "pyproject.toml"), "[project]\nname = 'demo'\n");
+    await fs.mkdir(path.join(tempDir, "tests"));
+    expect(await resolveUnittestDiscoverDir(tempDir)).toBeUndefined();
+    expect(await resolveTestFramework(tempDir)).toBe("pytest");
+  });
+
   it("should prefer pytest when configured", async () => {
     await fs.writeFile(path.join(tempDir, "pytest.ini"), "[pytest]\n");
     await fs.mkdir(path.join(tempDir, "tests_package"));
@@ -259,7 +275,7 @@ describe("resolveTestFramework", () => {
   });
 });
 
-describe("runPytestTests spawn error", () => {
+describe("runPythonTests spawn error", () => {
   let tempDir: string;
 
   beforeEach(async () => {
@@ -276,7 +292,7 @@ describe("runPytestTests spawn error", () => {
   });
 
   it("should fail fast with a clear message when interpreter is missing", async () => {
-    const result = await runPytestTests({
+    const result = await runPythonTests({
       projectPath: tempDir,
       pythonPath: "/nonexistent/grove-python-missing-interpreter",
       timeout: 5_000,

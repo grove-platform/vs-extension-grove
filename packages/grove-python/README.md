@@ -7,7 +7,7 @@ A VS Code extension that adds Python test runner support to Grove (pytest and un
 Grove for Python activates alongside Grove Core when a workspace contains a `snip.js` file. It:
 
 - Registers a Python test runner with Grove Core's test runner API
-- Runs **pytest** or **unittest discover** depending on project layout
+- Runs **pytest** or **`unittest discover tests_package`** depending on project layout (`tests_package/` selects unittest when pytest is not configured)
 - Uses the project **`venv/`** or **`.venv/`** interpreter when present
 - Parses test output to display results in VS Code
 
@@ -58,8 +58,8 @@ On activation, the extension:
 coreApi.registerTestRunner({
   language: "python",
   name: "Python",
-  run: runPytestTests,
-  detect: detectPytestProject,
+  run: runPythonTests,
+  detect: detectPythonProject,
 });
 ```
 
@@ -67,11 +67,11 @@ coreApi.registerTestRunner({
 
 The test runner (`test-runner.ts`) provides:
 
-#### `detectPytestProject(projectPath: string): Promise<boolean>`
+#### `detectPythonProject(projectPath: string): Promise<boolean>`
 
 Detects Python projects by checking for `pyproject.toml` or `pytest.ini`, matching `@grove/shared` language detection.
 
-#### `runPytestTests(options: TestRunOptions): Promise<TestResult>`
+#### `runPythonTests(options: TestRunOptions): Promise<TestResult>`
 
 Runs tests using the project's Python environment:
 

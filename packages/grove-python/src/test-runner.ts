@@ -38,7 +38,8 @@ const VENV_PYTHON_CANDIDATES = [
   "venv/Scripts/python.exe",
 ];
 
-const UNITTEST_DISCOVER_DIRS = ["tests_package", "tests"];
+/** PyMongo-style layout; avoid generic `tests/` so pytest-only repos are not misclassified. */
+const UNITTEST_DISCOVER_DIRS = ["tests_package"];
 
 function getSystemPythonBin(): string {
   return process.platform === "win32" ? "python" : "python3";
@@ -77,10 +78,10 @@ export async function resolvePythonBin(
 }
 
 /**
- * Detect if a project is a Python test project.
- * Matches @grove/shared language detection: pyproject.toml or pytest.ini.
+ * Detect whether the workspace looks like a Python Grove project.
+ * Matches @grove/shared language detection: `pyproject.toml` or `pytest.ini`.
  */
-export async function detectPytestProject(
+export async function detectPythonProject(
   projectPath: string,
 ): Promise<boolean> {
   try {
@@ -177,7 +178,7 @@ export function buildTestArgs(
     return ["-m", "unittest", testFile];
   }
 
-  const discoverDir = unittestDiscoverDir ?? "tests";
+  const discoverDir = unittestDiscoverDir ?? "tests_package";
   const args = ["-m", "unittest", "discover", discoverDir];
   if (testNamePattern) {
     args.push("-k", testNamePattern);
@@ -189,7 +190,7 @@ export function buildTestArgs(
  * Run Python tests via pytest or unittest, depending on project layout.
  * PyMongo suites use: python3 -m unittest discover tests_package
  */
-export async function runPytestTests(
+export async function runPythonTests(
   options: TestRunOptions,
 ): Promise<TestResult> {
   const {

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { runPytestTests, detectPytestProject } from "./test-runner";
+import { runPythonTests, detectPythonProject } from "./test-runner";
 import {
   detectGroveProjects,
   findProjectForFile,
@@ -43,10 +43,10 @@ function getConfiguredPythonPath(): string | undefined {
   return fromPythonExt || undefined;
 }
 
-function runPytestWithConfiguredPython(
-  options: Parameters<typeof runPytestTests>[0],
-): ReturnType<typeof runPytestTests> {
-  return runPytestTests({
+function runPythonWithConfiguredInterpreter(
+  options: Parameters<typeof runPythonTests>[0],
+): ReturnType<typeof runPythonTests> {
+  return runPythonTests({
     ...options,
     fallbackPythonPath:
       options.fallbackPythonPath ?? getConfiguredPythonPath(),
@@ -64,7 +64,7 @@ async function findProjectPathForFile(filePath: string): Promise<string> {
 }
 
 function showTestResult(
-  result: Awaited<ReturnType<typeof runPytestTests>>,
+  result: Awaited<ReturnType<typeof runPythonTests>>,
   outputChannel: vscode.OutputChannel,
   header: string,
 ): void {
@@ -125,8 +125,8 @@ export async function activate(context: vscode.ExtensionContext) {
   coreApi.registerTestRunner({
     language: "python",
     name: "Python",
-    run: runPytestWithConfiguredPython,
-    detect: detectPytestProject,
+    run: runPythonWithConfiguredInterpreter,
+    detect: detectPythonProject,
   });
 
   const outputChannel = vscode.window.createOutputChannel(
@@ -152,8 +152,8 @@ export async function activate(context: vscode.ExtensionContext) {
           cancellable: false,
         },
         async () => {
-          const result = await profile("Python.runPytestTests", () =>
-            runPytestWithConfiguredPython({ projectPath }),
+          const result = await profile("Python.runPythonTests", () =>
+            runPythonWithConfiguredInterpreter({ projectPath }),
           );
           showTestResult(result, outputChannel, "=== Python Test Results ===");
         },
@@ -183,8 +183,8 @@ export async function activate(context: vscode.ExtensionContext) {
           cancellable: false,
         },
         async () => {
-          const result = await profile("Python.runPytestTestFile", () =>
-            runPytestWithConfiguredPython({ projectPath, testFile }),
+          const result = await profile("Python.runPythonTestFile", () =>
+            runPythonWithConfiguredInterpreter({ projectPath, testFile }),
           );
           showTestResult(
             result,
