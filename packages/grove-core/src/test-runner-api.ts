@@ -30,7 +30,7 @@ export interface TestResult {
 export interface TestRunner {
   /** Language identifier (e.g., "nodejs", "python") */
   language: string;
-  /** Display name (e.g., "Jest", "pytest") */
+  /** Display name (e.g., "Jest", "Python") */
   name: string;
   /** Run tests and return results */
   run: (options: TestRunOptions) => Promise<TestResult>;

@@ -253,7 +253,7 @@ interface GroveApi {
 
 interface TestRunner {
   language: string; // e.g., "nodejs", "python"
-  name: string; // e.g., "Jest", "pytest"
+  name: string; // e.g., "Jest", "Python"
   run: (options: TestRunOptions) => Promise<TestResult>;
   detect: (projectPath: string) => Promise<boolean>;
 }

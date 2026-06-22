@@ -19,10 +19,9 @@ Grove automatically detects code example projects (identified by `snip.js` files
 | --------------------- | -------------- | ------------------------------------------------------------------------------------------- |
 | **Grove Core**        | `grove-core`   | Core functionality: project detection, Bluehawk preview, RST navigation, MongoDB connection |
 | **Grove for Node.js** | `grove-nodejs` | Jest/Vitest test runner for JavaScript/TypeScript projects                                  |
+| **Grove for Python**  | `grove-python` | pytest and unittest runners for Python projects                                             |
 
 ### Planned Extensions
-
-- **Grove for Python** - pytest runner for Python projects
 - **Grove for Go** - Go test runner
 - **Grove for Java** - JUnit/Maven test runner
 - **Grove for C#** - NUnit/.NET test runner
@@ -51,7 +50,8 @@ grove-extension/
 ├── packages/
 │   ├── shared/           # @grove/shared - Shared utilities (no VS Code deps)
 │   ├── grove-core/       # Core extension
-│   └── grove-nodejs/     # Node.js language extension
+│   ├── grove-nodejs/     # Node.js language extension
+│   └── grove-python/     # Python language extension
 ├── meta/
 │   ├── features.md       # Feature roadmap and ideas
 │   ├── discovery.md      # Initial project discovery notes
@@ -83,30 +83,34 @@ pnpm test
 ### Package Commands
 
 ```bash
-# Build specific package
-pnpm --filter grove-core build
-pnpm --filter grove-nodejs build
+# Build specific package (use workspace package names from packages/*/package.json)
+pnpm --filter grove-platform-core build
+pnpm --filter grove-platform-nodejs build
+pnpm --filter grove-platform-python build
 pnpm --filter @grove/shared build
 
 # Watch mode (all packages)
 pnpm watch
 
 # Run tests for specific package
-pnpm --filter grove-core test
+pnpm --filter grove-platform-core test
+pnpm --filter grove-platform-nodejs test
+pnpm --filter grove-platform-python test
 ```
 
 ### Building VSIX for Local Installation
 
 ```bash
-# Package all extensions (grove-core + grove-nodejs)
+# Package all extensions (grove-core + grove-nodejs + grove-python)
 pnpm package
 
-# Install both extensions locally
+# Install extensions locally
 code --install-extension packages/grove-core/grove-core-0.0.2.vsix
 code --install-extension packages/grove-nodejs/grove-nodejs-0.0.15.vsix
+code --install-extension packages/grove-python/grove-platform-python-0.0.4.vsix
 ```
 
-> **Note:** Grove Core alone provides project detection, Bluehawk preview, and RST navigation. To run tests, you also need a language extension (e.g., Grove for Node.js).
+> **Note:** Grove Core alone provides project detection, Bluehawk preview, and RST navigation. To run tests, you also need a language extension (e.g., Grove for Node.js or Grove for Python).
 
 ### Running in VS Code
 
@@ -185,8 +189,8 @@ Grove uses a **core + language extensions** architecture:
 │  ├── MongoDB Connection Manager                          │
 │  └── Diagnostics & Language Status                       │
 ├─────────────────────────────────────────────────────────┤
-│  grove-nodejs              │  grove-python (future)      │
-│  └── Jest Test Runner      │  └── pytest Test Runner     │
+│  grove-nodejs              │  grove-python               │
+│  └── Jest Test Runner      │  └── pytest / unittest      │
 ├─────────────────────────────────────────────────────────┤
 │  @grove/shared (workspace package)                       │
 │  ├── Project Detection                                   │
@@ -204,6 +208,7 @@ See individual package READMEs for detailed development information:
 
 - [packages/grove-core/README.md](packages/grove-core/README.md)
 - [packages/grove-nodejs/README.md](packages/grove-nodejs/README.md)
+- [packages/grove-python/README.md](packages/grove-python/README.md)
 - [packages/shared/README.md](packages/shared/README.md)
 
 ## License
