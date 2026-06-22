@@ -104,7 +104,12 @@ Grove for Python is a **companion extension** that extends Grove Core's function
 
 ## Development
 
+From the repository root:
+
 ```bash
+# Install dependencies
+pnpm --filter grove-platform-python install
+
 # Build the extension
 pnpm --filter grove-platform-python build
 

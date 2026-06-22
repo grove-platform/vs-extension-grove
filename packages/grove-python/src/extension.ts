@@ -63,11 +63,11 @@ async function findProjectPathForFile(filePath: string): Promise<string> {
   return project?.rootPath || workspaceRoot;
 }
 
-function showTestResult(
+async function showTestResult(
   result: Awaited<ReturnType<typeof runPythonTests>>,
   outputChannel: vscode.OutputChannel,
   header: string,
-): void {
+): Promise<void> {
   if (result.output) {
     outputChannel.clear();
     outputChannel.appendLine(header);
@@ -89,13 +89,10 @@ function showTestResult(
       ? `Python tests failed to run. Check output for details.`
       : `Tests failed: ${result.failed}/${result.total}`;
 
-  void vscode.window
-    .showErrorMessage(message, "Show Output")
-    .then((action) => {
-      if (action === "Show Output") {
-        outputChannel.show();
-      }
-    });
+  const action = await vscode.window.showErrorMessage(message, "Show Output");
+  if (action === "Show Output") {
+    outputChannel.show();
+  }
 }
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -132,6 +129,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const outputChannel = vscode.window.createOutputChannel(
     "Grove Python Tests",
   );
+  context.subscriptions.push(outputChannel);
 
   context.subscriptions.push(
     vscode.commands.registerCommand("grove.python.runTests", async () => {

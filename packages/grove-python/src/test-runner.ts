@@ -208,11 +208,7 @@ export async function runPythonTests(
     fallbackPythonPath,
   );
   const unittestDiscoverDir = await resolveUnittestDiscoverDir(projectPath);
-  const framework: PythonTestFramework = (await usesPytest(projectPath))
-    ? "pytest"
-    : unittestDiscoverDir
-      ? "unittest"
-      : "pytest";
+  const framework = await resolveTestFramework(projectPath);
   const args = buildTestArgs(framework, {
     testFile,
     testNamePattern,
