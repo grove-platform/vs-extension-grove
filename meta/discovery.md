@@ -32,7 +32,7 @@ All extensions use modern tooling:
 | **Grove for Python**  | `mongodb.grove-python`  | unittest/pytest runner, scaffolding, `@grove-python` agent                                  |
 | **Grove for Go**      | `mongodb.grove-go`      | go test runner, scaffolding, `@grove-go` agent                                              |
 | **Grove for Java**    | `mongodb.grove-java`    | JUnit runner, scaffolding, `@grove-java` agent                                              |
-| **Grove for C#**      | `mongodb.grove-csharp`  | NUnit runner, scaffolding, `@grove-csharp` agent                                            |
+| **Grove for C#**      | `mongodb.grove-csharp`  | `dotnet test` runner, scaffolding, `@grove-csharp` agent                                    |
 | **Grove for mongosh** | `mongodb.grove-mongosh` | Jest runner, shell scaffolding, `@grove-mongosh` agent                                      |
 
 ## Security Considerations

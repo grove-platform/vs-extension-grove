@@ -1,0 +1,48 @@
+{
+  "name": "grove-platform-csharp",
+  "displayName": "Grove UI for C#",
+  "description": "C# (.NET / dotnet test) support for Grove documentation testing",
+  "version": "0.0.1",
+  "publisher": "GrovePlatform",
+  "engines": {
+    "vscode": "^1.110.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/snip.js"
+  ],
+  "main": "./dist/extension.js",
+  "extensionDependencies": [
+    "GrovePlatform.grove-platform-core"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "grove.csharp.runTests",
+        "title": "Grove: Run C# Tests"
+      },
+      {
+        "command": "grove.csharp.runTestFile",
+        "title": "Grove: Run Current C# Test File"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "watch": "npm run build -- --watch",
+    "test": "vitest run",
+    "lint": "eslint src --ext ts",
+    "package": "pnpm run build && vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@grove/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.4.0",
+    "@types/vscode": "^1.110.0",
+    "esbuild": "^0.27.0",
+    "vitest": "^4.0.18"
+  }
+}

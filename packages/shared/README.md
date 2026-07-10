@@ -49,7 +49,7 @@ Detects the project language by checking for:
 | `python` | `pyproject.toml` or `pytest.ini` exists      |
 | `go`     | `go.mod` exists                              |
 | `java`   | `pom.xml` or `build.gradle` exists           |
-| `csharp` | `*.csproj` file exists                       |
+| `csharp` | `*.csproj` or `*.sln` file exists            |
 | `mongosh`| `package.json` with name containing "mongosh"|
 
 #### `findProjectForFile(filePath: string, projects: GroveProject[]): GroveProject | undefined`

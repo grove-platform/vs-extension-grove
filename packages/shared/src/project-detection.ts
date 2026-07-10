@@ -137,10 +137,12 @@ export async function detectLanguage(
     }
   }
 
-  // Check for C# (*.csproj)
+  // Check for C# (*.csproj or *.sln)
   try {
     const entries = await fs.readdir(projectPath);
-    if (entries.some((e) => e.endsWith(".csproj"))) {
+    if (
+      entries.some((e) => e.endsWith(".csproj") || e.endsWith(".sln"))
+    ) {
       return "csharp";
     }
   } catch {

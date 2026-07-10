@@ -24,7 +24,7 @@ Grove is MongoDB's test platform for documentation code examples. The Grove VS C
 | **Grove for Python**  | `mongodb.grove-python`  | unittest and pytest runners, scaffolding, Python-specific AI skills   |
 | **Grove for Go**      | `mongodb.grove-go`      | go test runner, scaffolding, Go-specific AI skills                      |
 | **Grove for Java**    | `mongodb.grove-java`    | JUnit runner, scaffolding, Java-specific AI skills                      |
-| **Grove for C#**      | `mongodb.grove-csharp`  | NUnit runner, scaffolding, C#-specific AI skills                        |
+| **Grove for C#**      | `mongodb.grove-csharp`  | `dotnet test` runner, scaffolding, C#-specific AI skills                |
 | **Grove for mongosh** | `mongodb.grove-mongosh` | Jest runner, scaffolding, mongosh-specific AI skills                    |
 
 All extensions auto-detect Grove projects via `snip.js` presence using `workspaceContains:**/snip.js`.

@@ -133,6 +133,12 @@ describe("detectLanguage", () => {
     expect(lang).toBe("csharp");
   });
 
+  it("should detect csharp from .sln file", async () => {
+    await fs.writeFile(path.join(tempDir, "Driver.sln"), "\n");
+    const lang = await detectLanguage(tempDir);
+    expect(lang).toBe("csharp");
+  });
+
   it("should return null when no language detected", async () => {
     const lang = await detectLanguage(tempDir);
     expect(lang).toBeNull();
