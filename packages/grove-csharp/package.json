@@ -2,7 +2,7 @@
   "name": "grove-platform-csharp",
   "displayName": "Grove UI for C#",
   "description": "C# (.NET / dotnet test) support for Grove documentation testing",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "GrovePlatform",
   "engines": {
     "vscode": "^1.110.0"
@@ -18,6 +18,18 @@
     "GrovePlatform.grove-platform-core"
   ],
   "contributes": {
+    "configuration": {
+      "title": "Grove C#",
+      "properties": {
+        "grove.csharp.testTimeoutSeconds": {
+          "type": "number",
+          "default": 300,
+          "minimum": 30,
+          "maximum": 300,
+          "description": "Maximum time in seconds to wait for dotnet test to finish (includes build time)."
+        }
+      }
+    },
     "commands": [
       {
         "command": "grove.csharp.runTests",

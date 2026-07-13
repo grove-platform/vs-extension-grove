@@ -15,6 +15,12 @@ Grove for C# activates alongside Grove Core when a workspace contains a `snip.js
 - **Grove Core** (`GrovePlatform.grove-platform-core`) must be installed
 - The **.NET SDK** (`dotnet`) available on `PATH`, or configured via the `dotnet.dotnetPath` setting
 
+### Settings
+
+| Setting | Default | Description |
+| ------- | ------- | ----------- |
+| `grove.csharp.testTimeoutSeconds` | `300` | Max seconds to wait for `dotnet test` (includes project build time) |
+
 ## Commands
 
 | Command                    | Title                            | Description                          |
@@ -64,7 +70,7 @@ Runs tests with `dotnet test`:
 | Scope        | Command                                                        |
 | ------------ | -------------------------------------------------------------- |
 | All tests    | `dotnet test --nologo --verbosity normal`                     |
-| Single file  | `dotnet test ... --filter FullyQualifiedName~<ClassName>`     |
+| Single file  | `dotnet test Tests/Tests.csproj ... --filter FullyQualifiedName~<ClassName>` |
 | Name pattern | `dotnet test ... --filter DisplayName~<pattern>`              |
 
 `dotnet test` has no direct "run this file" concept, so a single-file run is
@@ -83,7 +89,7 @@ The output channel shows `Using dotnet: ...` so you can verify which executable 
 Also:
 
 - Injects environment variables (including `CONNECTION_STRING` from Grove UI)
-- Enforces timeout limits (default: 60s, max: 300s)
+- Enforces timeout limits (default: 300s, max: 300s; configure via `grove.csharp.testTimeoutSeconds`)
 - If `dotnet` cannot be spawned (missing binary, permission), the run fails immediately with a clear error instead of hanging until timeout
 - Sums pass/fail/skip counts across multiple test-project summary lines
 

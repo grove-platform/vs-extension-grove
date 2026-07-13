@@ -4,6 +4,7 @@ import {
   detectCSharpProject,
   parseDotnetOutput,
   resolveDotnetBin,
+  resolveTestProjectForFile,
   runCSharpTests,
 } from "../test-runner";
 import * as fs from "fs/promises";
@@ -88,6 +89,23 @@ describe("buildTestArgs", () => {
     ]);
   });
 
+  it("scopes to a test project when provided", () => {
+    expect(
+      buildTestArgs({
+        testFile: "Tests/Aggregation/InsertTests.cs",
+        testProject: "Tests/Tests.csproj",
+      }),
+    ).toEqual([
+      "test",
+      "Tests/Tests.csproj",
+      "--nologo",
+      "--verbosity",
+      "normal",
+      "--filter",
+      "FullyQualifiedName~InsertTests",
+    ]);
+  });
+
   it("filters by test name pattern", () => {
     expect(buildTestArgs({ testNamePattern: "ShouldInsert" })).toEqual([
       "test",
@@ -113,6 +131,38 @@ describe("buildTestArgs", () => {
       "--filter",
       "FullyQualifiedName~InsertTests&DisplayName~ShouldInsert",
     ]);
+  });
+});
+
+describe("resolveTestProjectForFile", () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "grove-csharp-csproj-"));
+    await fs.mkdir(path.join(tempDir, "Tests", "Aggregation"), {
+      recursive: true,
+    });
+    await fs.writeFile(
+      path.join(tempDir, "Tests", "Tests.csproj"),
+      "<Project></Project>\n",
+    );
+    await fs.writeFile(
+      path.join(tempDir, "Tests", "Aggregation", "InsertTests.cs"),
+      "// test\n",
+    );
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true });
+  });
+
+  it("should find the owning csproj for a nested test file", async () => {
+    expect(
+      await resolveTestProjectForFile(
+        tempDir,
+        "Tests/Aggregation/InsertTests.cs",
+      ),
+    ).toBe("Tests/Tests.csproj");
   });
 });
 
@@ -146,6 +196,19 @@ Failed!  - Failed:     1, Passed:     2, Skipped:     0, Total:     3, Duration:
       failed: 0,
       skipped: 0,
     });
+  });
+
+  it("should parse NUnit adapter summary output", () => {
+    const result = parseDotnetOutput(`
+NUnit Adapter 5.2.0.0: Test execution complete
+  Passed TestRunChangeStreamSplitLargeEvent [3 s]
+
+Test Run Successful.
+Total tests: 1
+     Passed: 1
+ Total time: 4.8113 Seconds
+`);
+    expect(result).toEqual({ total: 1, passed: 1, failed: 0, skipped: 0 });
   });
 });
 

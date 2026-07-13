@@ -132,9 +132,9 @@ export function displayTestResults(
 
   if (result.success) {
     const msg =
-      result.total != null
+      result.total != null && result.total > 0
         ? `Tests passed: ${result.passed ?? 0}/${result.total}`
-        : `✓ ${label}`;
+        : `Tests completed successfully`;
     vscode.window.showInformationMessage(msg);
   } else {
     const msg =

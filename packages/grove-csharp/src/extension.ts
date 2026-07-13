@@ -43,11 +43,20 @@ function getConfiguredDotnetPath(): string | undefined {
   return fromDotnetExt || undefined;
 }
 
+function getConfiguredTestTimeoutMs(): number {
+  const seconds = vscode.workspace
+    .getConfiguration("grove")
+    .get<number>("csharp.testTimeoutSeconds", 300);
+  const clamped = Math.min(Math.max(seconds, 30), 300);
+  return clamped * 1000;
+}
+
 function runCSharpWithConfiguredDotnet(
   options: Parameters<typeof runCSharpTests>[0],
 ): ReturnType<typeof runCSharpTests> {
   return runCSharpTests({
     ...options,
+    timeout: options.timeout ?? getConfiguredTestTimeoutMs(),
     fallbackDotnetPath:
       options.fallbackDotnetPath ?? getConfiguredDotnetPath(),
   });
@@ -78,9 +87,11 @@ async function showTestResult(
   }
 
   if (result.success) {
-    vscode.window.showInformationMessage(
-      `Tests passed: ${result.passed}/${result.total}`,
-    );
+    const msg =
+      result.total > 0
+        ? `Tests passed: ${result.passed}/${result.total}`
+        : `Tests completed successfully`;
+    vscode.window.showInformationMessage(msg);
     return;
   }
 

@@ -26,8 +26,9 @@ export interface TestResult {
   duration: number;
 }
 
-const DEFAULT_TIMEOUT = 60_000;
+const DEFAULT_TIMEOUT = 300_000;
 const MAX_TIMEOUT = 300_000;
+export const EXTENSION_VERSION = "0.0.2";
 
 function getSystemDotnetBin(): string {
   return process.platform === "win32" ? "dotnet.exe" : "dotnet";
@@ -72,19 +73,59 @@ export async function detectCSharpProject(
 }
 
 /**
+ * Resolve the .csproj that owns a test source file by walking up from its directory.
+ */
+export async function resolveTestProjectForFile(
+  projectPath: string,
+  testFile: string,
+): Promise<string | undefined> {
+  const root = path.resolve(projectPath);
+  let dir = path.dirname(path.resolve(projectPath, testFile));
+
+  while (dir.startsWith(root)) {
+    try {
+      const entries = await fs.readdir(dir);
+      const csproj = entries.find((e) => e.endsWith(".csproj"));
+      if (csproj) {
+        return path.relative(projectPath, path.join(dir, csproj));
+      }
+    } catch {
+      // try parent directory
+    }
+
+    if (dir === root) {
+      break;
+    }
+    dir = path.dirname(dir);
+  }
+
+  return undefined;
+}
+
+/**
  * Build argv for `dotnet` (e.g. `test`, `--filter`, ...).
  *
  * `dotnet test` has no direct "run this file" concept, so we approximate a
  * single-file run by filtering on the class name derived from the file's base
- * name (test classes conventionally match their file name). Combined with a
- * test name pattern, both are ANDed into one `--filter` expression.
+ * name (test classes conventionally match their file name). When a test file is
+ * provided, pass the containing `.csproj` as a positional argument so
+ * solution-wide runs do not build every test project. Combined with a test name
+ * ANDed into one `--filter` expression.
  */
 export function buildTestArgs(options: {
   testFile?: string;
   testNamePattern?: string;
+  testProject?: string;
 }): string[] {
-  const { testFile, testNamePattern } = options;
-  const args = ["test", "--nologo", "--verbosity", "normal"];
+  const { testFile, testNamePattern, testProject } = options;
+  const args = ["test"];
+
+  // Pass the .csproj as a positional argument (not --project, which MSBuild rejects).
+  if (testProject) {
+    args.push(testProject);
+  }
+
+  args.push("--nologo", "--verbosity", "normal");
 
   const filters: string[] = [];
   if (testFile) {
@@ -120,11 +161,14 @@ export async function runCSharpTests(
   } = options;
   const effectiveTimeout = Math.min(timeout, MAX_TIMEOUT);
   const dotnetBin = resolveDotnetBin(dotnetPath, fallbackDotnetPath);
-  const args = buildTestArgs({ testFile, testNamePattern });
+  const testProject = testFile
+    ? await resolveTestProjectForFile(projectPath, testFile)
+    : undefined;
+  const args = buildTestArgs({ testFile, testNamePattern, testProject });
 
   return new Promise((resolve) => {
     const startTime = Date.now();
-    let output = `Using dotnet: ${dotnetBin}\n\n`;
+    let output = `Grove C# v${EXTENSION_VERSION}\nUsing dotnet: ${dotnetBin}\nTimeout limit: ${effectiveTimeout / 1000}s\nCommand: dotnet ${args.join(" ")}\n\n`;
     let timedOut = false;
     let settled = false;
 
@@ -180,7 +224,7 @@ export async function runCSharpTests(
           passed: 0,
           failed: 0,
           skipped: 0,
-          output: `Test execution timed out after ${effectiveTimeout / 1000} seconds`,
+          output: `Test execution timed out after ${effectiveTimeout / 1000} seconds\n\n${output}`,
           duration,
         });
         return;
@@ -203,10 +247,13 @@ export async function runCSharpTests(
 
 /**
  * Parse `dotnet test` console output to extract test counts.
- * The VSTest summary line looks like:
+ *
+ * Supports VSTest summary lines:
  *   "Passed!  - Failed:     0, Passed:     7, Skipped:     0, Total:     7, Duration: 5 ms"
- *   "Failed!  - Failed:     2, Passed:     5, Skipped:     0, Total:     7, Duration: 8 ms"
- * Multiple test projects each emit a summary line, so counts are summed across all matches.
+ *
+ * And NUnit adapter summaries:
+ *   "Total tests: 1"
+ *   "     Passed: 1"
  */
 export function parseDotnetOutput(output: string): {
   total: number;
@@ -214,12 +261,18 @@ export function parseDotnetOutput(output: string): {
   failed: number;
   skipped: number;
 } {
-  const summary = /Failed:\s*(\d+),\s*Passed:\s*(\d+),\s*Skipped:\s*(\d+),\s*Total:\s*(\d+)/gi;
+  const nunit = parseNunitSummary(output);
+  if (nunit.total > 0 || /Test Run Successful/i.test(output)) {
+    return nunit;
+  }
 
-  let matched = false;
+  const vstestSummary =
+    /Failed:\s*(\d+),\s*Passed:\s*(\d+),\s*Skipped:\s*(\d+),\s*Total:\s*(\d+)/gi;
+
   const totals = { total: 0, passed: 0, failed: 0, skipped: 0 };
+  let matched = false;
 
-  for (const match of output.matchAll(summary)) {
+  for (const match of output.matchAll(vstestSummary)) {
     matched = true;
     totals.failed += parseInt(match[1], 10);
     totals.passed += parseInt(match[2], 10);
@@ -227,5 +280,40 @@ export function parseDotnetOutput(output: string): {
     totals.total += parseInt(match[4], 10);
   }
 
-  return matched ? totals : { total: 0, passed: 0, failed: 0, skipped: 0 };
+  if (matched && totals.total > 0) {
+    return totals;
+  }
+
+  return nunit.total > 0 ? nunit : totals;
+}
+
+function parseNunitSummary(output: string): {
+  total: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+} {
+  const totals = { total: 0, passed: 0, failed: 0, skipped: 0 };
+  let matched = false;
+
+  for (const totalMatch of output.matchAll(/Total tests:\s*(\d+)/gi)) {
+    matched = true;
+    totals.total += parseInt(totalMatch[1], 10);
+  }
+
+  if (!matched) {
+    return totals;
+  }
+
+  for (const match of output.matchAll(/^\s*Passed:\s*(\d+)/gim)) {
+    totals.passed += parseInt(match[1], 10);
+  }
+  for (const match of output.matchAll(/^\s*Failed:\s*(\d+)/gim)) {
+    totals.failed += parseInt(match[1], 10);
+  }
+  for (const match of output.matchAll(/^\s*(?:Skipped|Ignored):\s*(\d+)/gim)) {
+    totals.skipped += parseInt(match[1], 10);
+  }
+
+  return totals;
 }
