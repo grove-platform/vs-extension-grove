@@ -2,7 +2,7 @@
   "name": "grove-platform-csharp",
   "displayName": "Grove UI for C#",
   "description": "C# (.NET / dotnet test) support for Grove documentation testing",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "GrovePlatform",
   "engines": {
     "vscode": "^1.110.0"

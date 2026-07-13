@@ -28,7 +28,7 @@ export interface TestResult {
 
 const DEFAULT_TIMEOUT = 300_000;
 const MAX_TIMEOUT = 300_000;
-export const EXTENSION_VERSION = "0.0.2";
+export const EXTENSION_VERSION = "0.0.3";
 
 function getSystemDotnetBin(): string {
   return process.platform === "win32" ? "dotnet.exe" : "dotnet";
