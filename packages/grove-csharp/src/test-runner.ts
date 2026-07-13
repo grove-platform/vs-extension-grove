@@ -103,6 +103,24 @@ export async function resolveTestProjectForFile(
 }
 
 /**
+ * Default test project for Grove C# driver suites (code-example tests live in Tests/).
+ */
+export async function resolveDefaultTestProject(
+  projectPath: string,
+): Promise<string | undefined> {
+  const candidates = ["Tests/Tests.csproj", "tests/Tests.csproj"];
+  for (const candidate of candidates) {
+    try {
+      await fs.access(path.join(projectPath, candidate));
+      return candidate;
+    } catch {
+      // try next candidate
+    }
+  }
+  return undefined;
+}
+
+/**
  * Build argv for `dotnet` (e.g. `test`, `--filter`, ...).
  *
  * `dotnet test` has no direct "run this file" concept, so we approximate a
@@ -145,7 +163,7 @@ export function buildTestArgs(options: {
 
 /**
  * Run C# tests via `dotnet test`.
- * The C# driver suite runs: dotnet test
+ * Grove driver suites default to `dotnet test Tests/Tests.csproj`.
  */
 export async function runCSharpTests(
   options: TestRunOptions,
@@ -163,7 +181,7 @@ export async function runCSharpTests(
   const dotnetBin = resolveDotnetBin(dotnetPath, fallbackDotnetPath);
   const testProject = testFile
     ? await resolveTestProjectForFile(projectPath, testFile)
-    : undefined;
+    : await resolveDefaultTestProject(projectPath);
   const args = buildTestArgs({ testFile, testNamePattern, testProject });
 
   return new Promise((resolve) => {

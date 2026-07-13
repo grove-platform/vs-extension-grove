@@ -5,6 +5,7 @@ import {
   parseDotnetOutput,
   resolveDotnetBin,
   resolveTestProjectForFile,
+  resolveDefaultTestProject,
   runCSharpTests,
 } from "../test-runner";
 import * as fs from "fs/promises";
@@ -70,8 +71,9 @@ describe("resolveDotnetBin", () => {
 
 describe("buildTestArgs", () => {
   it("minimal when no file or pattern", () => {
-    expect(buildTestArgs({})).toEqual([
+    expect(buildTestArgs({ testProject: "Tests/Tests.csproj" })).toEqual([
       "test",
+      "Tests/Tests.csproj",
       "--nologo",
       "--verbosity",
       "normal",
@@ -163,6 +165,28 @@ describe("resolveTestProjectForFile", () => {
         "Tests/Aggregation/InsertTests.cs",
       ),
     ).toBe("Tests/Tests.csproj");
+  });
+});
+
+describe("resolveDefaultTestProject", () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "grove-csharp-default-"));
+    await fs.mkdir(path.join(tempDir, "Tests"), { recursive: true });
+    await fs.writeFile(
+      path.join(tempDir, "Tests", "Tests.csproj"),
+      "<Project></Project>\n",
+    );
+    await fs.writeFile(path.join(tempDir, "driver.sln"), "\n");
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true });
+  });
+
+  it("should prefer Tests/Tests.csproj for run-all", async () => {
+    expect(await resolveDefaultTestProject(tempDir)).toBe("Tests/Tests.csproj");
   });
 });
 

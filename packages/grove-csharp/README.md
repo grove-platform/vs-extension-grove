@@ -69,7 +69,7 @@ Runs tests with `dotnet test`:
 
 | Scope        | Command                                                        |
 | ------------ | -------------------------------------------------------------- |
-| All tests    | `dotnet test --nologo --verbosity normal`                     |
+| All tests    | `dotnet test Tests/Tests.csproj --nologo --verbosity normal`  |
 | Single file  | `dotnet test Tests/Tests.csproj ... --filter FullyQualifiedName~<ClassName>` |
 | Name pattern | `dotnet test ... --filter DisplayName~<pattern>`              |
 
