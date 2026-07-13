@@ -85,6 +85,7 @@ The extension activates on the `workspaceContains:**/snip.js` event. On activati
 | Command                           | Title                                       | Description                                         |
 | --------------------------------- | ------------------------------------------- | --------------------------------------------------- |
 | `grove.runTests`                  | Grove: Run Tests                            | Run tests using the detected language runner        |
+| `grove.runTestFile`               | Grove: Run Current Test File                | Run tests in the active file using the project runner |
 | `grove.createSymlink`             | Grove: Create Symlink for Documentation     | Create symlink from docs to code-examples           |
 | `grove.connectMongo`              | Grove: Connect to MongoDB                   | Connect with a connection string                    |
 | `grove.disconnectMongo`           | Grove: Disconnect from MongoDB              | Disconnect and clear session                        |

@@ -95,7 +95,7 @@ Also:
 
 ## Integration with Grove Core
 
-Grove for C# is a **companion extension** that extends Grove Core's functionality. When users run `Grove: Run Tests` (the core command), Grove Core automatically delegates to this extension's C# runner for C# projects.
+Grove for C# is a **companion extension** that extends Grove Core's functionality. When users run `Grove: Run Tests` or `Grove: Run Current Test File` (the core commands), Grove Core automatically delegates to this extension's C# runner for C# projects.
 
 ## Development
 

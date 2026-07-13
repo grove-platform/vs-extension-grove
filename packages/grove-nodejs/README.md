@@ -21,7 +21,7 @@ Grove for Node.js activates alongside Grove Core when a workspace contains a `sn
 | Command                    | Title                         | Description                          |
 | -------------------------- | ----------------------------- | ------------------------------------ |
 | `grove.nodejs.runTests`    | Grove: Run Node.js Tests      | Run all tests in the current project |
-| `grove.nodejs.runTestFile` | Grove: Run Current Test File  | Run tests in the active file only    |
+| `grove.nodejs.runTestFile` | Grove: Run Current Node.js Test File | Run tests in the active file only    |
 
 ## Architecture
 

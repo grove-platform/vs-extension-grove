@@ -25,7 +25,7 @@
       },
       {
         "command": "grove.nodejs.runTestFile",
-        "title": "Grove: Run Current Test File"
+        "title": "Grove: Run Current Node.js Test File"
       }
     ]
   },

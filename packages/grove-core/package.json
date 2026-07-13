@@ -69,6 +69,10 @@
         "title": "Grove: Run Tests"
       },
       {
+        "command": "grove.runTestFile",
+        "title": "Grove: Run Current Test File"
+      },
+      {
         "command": "grove.createSymlink",
         "title": "Grove: Create Symlink for Documentation"
       },
