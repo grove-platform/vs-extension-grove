@@ -234,6 +234,21 @@ Total tests: 1
 `);
     expect(result).toEqual({ total: 1, passed: 1, failed: 0, skipped: 0 });
   });
+
+  it("should parse inline NUnit counts on the Total tests line", () => {
+    const result = parseDotnetOutput(
+      "Total tests: 7. Passed: 7. Failed: 0. Skipped: 0.",
+    );
+    expect(result).toEqual({ total: 7, passed: 7, failed: 0, skipped: 0 });
+  });
+
+  it("should parse VSTest summary when Test Run Successful has no NUnit totals", () => {
+    const result = parseDotnetOutput(`
+Test Run Successful.
+Passed!  - Failed:     0, Passed:     7, Skipped:     0, Total:     7, Duration: 5 ms
+`);
+    expect(result).toEqual({ total: 7, passed: 7, failed: 0, skipped: 0 });
+  });
 });
 
 describe("runCSharpTests spawn error", () => {

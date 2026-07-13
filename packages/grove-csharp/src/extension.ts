@@ -162,7 +162,7 @@ export async function activate(context: vscode.ExtensionContext) {
           const result = await profile("CSharp.runCSharpTests", () =>
             runCSharpWithConfiguredDotnet({ projectPath }),
           );
-          showTestResult(result, outputChannel, "=== C# Test Results ===");
+          await showTestResult(result, outputChannel, "=== C# Test Results ===");
         },
       );
     }),
@@ -193,7 +193,7 @@ export async function activate(context: vscode.ExtensionContext) {
           const result = await profile("CSharp.runCSharpTestFile", () =>
             runCSharpWithConfiguredDotnet({ projectPath, testFile }),
           );
-          showTestResult(
+          await showTestResult(
             result,
             outputChannel,
             `=== C# Test Results: ${testFile} ===`,

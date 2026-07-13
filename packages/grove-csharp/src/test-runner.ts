@@ -280,7 +280,7 @@ export function parseDotnetOutput(output: string): {
   skipped: number;
 } {
   const nunit = parseNunitSummary(output);
-  if (nunit.total > 0 || /Test Run Successful/i.test(output)) {
+  if (nunit.total > 0) {
     return nunit;
   }
 
@@ -302,7 +302,7 @@ export function parseDotnetOutput(output: string): {
     return totals;
   }
 
-  return nunit.total > 0 ? nunit : totals;
+  return totals;
 }
 
 function parseNunitSummary(output: string): {
@@ -314,23 +314,52 @@ function parseNunitSummary(output: string): {
   const totals = { total: 0, passed: 0, failed: 0, skipped: 0 };
   let matched = false;
 
-  for (const totalMatch of output.matchAll(/Total tests:\s*(\d+)/gi)) {
+  for (const line of output.split("\n")) {
+    if (!/Total tests:/i.test(line)) {
+      continue;
+    }
+
     matched = true;
-    totals.total += parseInt(totalMatch[1], 10);
+    const totalMatch = line.match(/Total tests:\s*(\d+)/i);
+    if (totalMatch) {
+      totals.total += parseInt(totalMatch[1], 10);
+    }
+
+    const passedMatch = line.match(/Passed:\s*(\d+)/i);
+    const failedMatch = line.match(/Failed:\s*(\d+)/i);
+    const skippedMatch = line.match(/(?:Skipped|Ignored):\s*(\d+)/i);
+    if (passedMatch) {
+      totals.passed += parseInt(passedMatch[1], 10);
+    }
+    if (failedMatch) {
+      totals.failed += parseInt(failedMatch[1], 10);
+    }
+    if (skippedMatch) {
+      totals.skipped += parseInt(skippedMatch[1], 10);
+    }
   }
 
   if (!matched) {
     return totals;
   }
 
-  for (const match of output.matchAll(/^\s*Passed:\s*(\d+)/gim)) {
-    totals.passed += parseInt(match[1], 10);
-  }
-  for (const match of output.matchAll(/^\s*Failed:\s*(\d+)/gim)) {
-    totals.failed += parseInt(match[1], 10);
-  }
-  for (const match of output.matchAll(/^\s*(?:Skipped|Ignored):\s*(\d+)/gim)) {
-    totals.skipped += parseInt(match[1], 10);
+  for (const line of output.split("\n")) {
+    if (/Total tests:/i.test(line)) {
+      continue;
+    }
+
+    const passedMatch = line.match(/^\s*Passed:\s*(\d+)/i);
+    const failedMatch = line.match(/^\s*Failed:\s*(\d+)/i);
+    const skippedMatch = line.match(/^\s*(?:Skipped|Ignored):\s*(\d+)/i);
+    if (passedMatch) {
+      totals.passed += parseInt(passedMatch[1], 10);
+    }
+    if (failedMatch) {
+      totals.failed += parseInt(failedMatch[1], 10);
+    }
+    if (skippedMatch) {
+      totals.skipped += parseInt(skippedMatch[1], 10);
+    }
   }
 
   return totals;
