@@ -78,6 +78,16 @@ export async function detectJavaProject(
 }
 
 /**
+ * True when pom.xml is the java-code-examples aggregator (not a child module).
+ */
+export function isJavaAggregatorPom(pomContent: string): boolean {
+  return (
+    pomContent.includes("<packaging>pom</packaging>") &&
+    pomContent.includes("<module>utilities</module>")
+  );
+}
+
+/**
  * Resolve the Java multi-module root (e.g. code-example-tests/java) that owns
  * the utilities/comparison-library modules. Returns undefined when not found.
  */
@@ -89,11 +99,7 @@ export async function resolveJavaMultiModuleRoot(
   while (true) {
     try {
       const content = await fs.readFile(path.join(dir, "pom.xml"), "utf-8");
-      if (
-        content.includes("<artifactId>java-code-examples</artifactId>") ||
-        (content.includes("<packaging>pom</packaging>") &&
-          content.includes("<module>utilities</module>"))
-      ) {
+      if (isJavaAggregatorPom(content)) {
         return dir;
       }
     } catch {

@@ -3,6 +3,7 @@ import {
   buildMavenTestArgs,
   buildUtilitiesInstallArgs,
   detectJavaProject,
+  isJavaAggregatorPom,
   parseMavenOutput,
   resolveJavaMultiModuleRoot,
   resolveMavenBin,
@@ -78,9 +79,28 @@ describe("resolveJavaMultiModuleRoot", () => {
   <modules><module>utilities</module></modules>
 </project>`,
     );
-    await fs.writeFile(path.join(driverSync, "pom.xml"), "<project></project>\n");
+    await fs.writeFile(
+      path.join(driverSync, "pom.xml"),
+      `<project>
+  <parent>
+    <artifactId>java-code-examples</artifactId>
+  </parent>
+  <artifactId>driver-sync</artifactId>
+</project>`,
+    );
 
     expect(await resolveJavaMultiModuleRoot(driverSync)).toBe(javaRoot);
+  });
+
+  it("should not treat driver-sync pom as the multi-module root", async () => {
+    const pom = `<project>
+  <parent>
+    <groupId>com.mongodb.docs</groupId>
+    <artifactId>java-code-examples</artifactId>
+  </parent>
+  <artifactId>driver-sync</artifactId>
+</project>`;
+    expect(isJavaAggregatorPom(pom)).toBe(false);
   });
 
   it("should return undefined when no multi-module root exists", async () => {
