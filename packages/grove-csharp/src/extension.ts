@@ -5,30 +5,9 @@ import {
   detectGroveProjects,
   findProjectForFile,
   profile,
+  type GroveCoreApi,
+  isPathWithinBoundary,
 } from "@grove/shared";
-
-interface GroveCoreApi {
-  registerTestRunner(runner: {
-    language: string;
-    name: string;
-    run: (options: {
-      projectPath: string;
-      testFile?: string;
-      timeout?: number;
-      testNamePattern?: string;
-      env?: Record<string, string>;
-    }) => Promise<{
-      success: boolean;
-      total?: number;
-      passed?: number;
-      failed?: number;
-      skipped?: number;
-      output?: string;
-      duration: number;
-    }>;
-    detect: (projectPath: string) => Promise<boolean>;
-  }): void;
-}
 
 function getWorkspaceRoot(): string {
   const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -51,25 +30,63 @@ function getConfiguredTestTimeoutMs(): number {
   return clamped * 1000;
 }
 
+function requireTrustedWorkspace(): boolean {
+  if (vscode.workspace.isTrusted) {
+    return true;
+  }
+
+  vscode.window.showErrorMessage(
+    "Grove C# tests cannot run in an untrusted workspace. Trust this workspace first.",
+  );
+  return false;
+}
+
 function runCSharpWithConfiguredDotnet(
+  extensionVersion: string,
   options: Parameters<typeof runCSharpTests>[0],
 ): ReturnType<typeof runCSharpTests> {
   return runCSharpTests({
     ...options,
+    extensionVersion,
     timeout: options.timeout ?? getConfiguredTestTimeoutMs(),
     fallbackDotnetPath:
       options.fallbackDotnetPath ?? getConfiguredDotnetPath(),
   });
 }
 
-async function findProjectPathForFile(filePath: string): Promise<string> {
+async function findProjectPathForFile(
+  filePath: string,
+): Promise<string | undefined> {
   const workspaceRoot = getWorkspaceRoot();
-  if (!workspaceRoot) return "";
+  if (!workspaceRoot) {
+    return undefined;
+  }
 
   const projects = await detectGroveProjects(workspaceRoot);
   const project = findProjectForFile(filePath, projects);
+  return project?.rootPath;
+}
 
-  return project?.rootPath || workspaceRoot;
+async function resolveProjectPathForRunAll(
+  activeFile?: string,
+): Promise<string | undefined> {
+  if (activeFile) {
+    const projectPath = await findProjectPathForFile(activeFile);
+    if (projectPath) {
+      return projectPath;
+    }
+  }
+
+  const workspaceRoot = getWorkspaceRoot();
+  if (workspaceRoot && (await detectCSharpProject(workspaceRoot))) {
+    return workspaceRoot;
+  }
+
+  return undefined;
+}
+
+function isFileInsideProject(projectPath: string, filePath: string): boolean {
+  return isPathWithinBoundary(path.resolve(filePath), path.resolve(projectPath));
 }
 
 async function showTestResult(
@@ -109,6 +126,10 @@ async function showTestResult(
 export async function activate(context: vscode.ExtensionContext) {
   console.log("Grove for C# extension activating...");
 
+  const extensionVersion = context.extension.packageJSON.version ?? "unknown";
+  const runTestsForProject = (options: Parameters<typeof runCSharpTests>[0]) =>
+    runCSharpWithConfiguredDotnet(extensionVersion, options);
+
   const groveCore =
     vscode.extensions.getExtension<GroveCoreApi>(
       "GrovePlatform.grove-platform-core",
@@ -133,7 +154,7 @@ export async function activate(context: vscode.ExtensionContext) {
   coreApi.registerTestRunner({
     language: "csharp",
     name: "C#",
-    run: runCSharpWithConfiguredDotnet,
+    run: runTestsForProject,
     detect: detectCSharpProject,
   });
 
@@ -142,13 +163,17 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("grove.csharp.runTests", async () => {
+      if (!requireTrustedWorkspace()) {
+        return;
+      }
+
       const activeFile = vscode.window.activeTextEditor?.document.uri.fsPath;
-      const projectPath = activeFile
-        ? await findProjectPathForFile(activeFile)
-        : getWorkspaceRoot();
+      const projectPath = await resolveProjectPathForRunAll(activeFile);
 
       if (!projectPath) {
-        vscode.window.showErrorMessage("No workspace folder open");
+        vscode.window.showErrorMessage(
+          "No Grove C# project found. Open a file inside a Grove project and try again.",
+        );
         return;
       }
 
@@ -160,7 +185,7 @@ export async function activate(context: vscode.ExtensionContext) {
         },
         async () => {
           const result = await profile("CSharp.runCSharpTests", () =>
-            runCSharpWithConfiguredDotnet({ projectPath }),
+            runTestsForProject({ projectPath }),
           );
           await showTestResult(result, outputChannel, "=== C# Test Results ===");
         },
@@ -168,6 +193,10 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
 
     vscode.commands.registerCommand("grove.csharp.runTestFile", async () => {
+      if (!requireTrustedWorkspace()) {
+        return;
+      }
+
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         vscode.window.showWarningMessage("No active file");
@@ -177,7 +206,16 @@ export async function activate(context: vscode.ExtensionContext) {
       const filePath = editor.document.uri.fsPath;
       const projectPath = await findProjectPathForFile(filePath);
       if (!projectPath) {
-        vscode.window.showErrorMessage("No workspace folder open");
+        vscode.window.showErrorMessage(
+          "Open a file inside a Grove project to run tests.",
+        );
+        return;
+      }
+
+      if (!isFileInsideProject(projectPath, filePath)) {
+        vscode.window.showErrorMessage(
+          "Test file is outside the Grove project.",
+        );
         return;
       }
 
@@ -191,7 +229,7 @@ export async function activate(context: vscode.ExtensionContext) {
         },
         async () => {
           const result = await profile("CSharp.runCSharpTestFile", () =>
-            runCSharpWithConfiguredDotnet({ projectPath, testFile }),
+            runTestsForProject({ projectPath, testFile }),
           );
           await showTestResult(
             result,

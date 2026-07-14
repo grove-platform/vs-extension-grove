@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   buildTestArgs,
   detectCSharpProject,
+  escapeDotnetTestFilterValue,
   parseDotnetOutput,
   resolveDotnetBin,
   resolveTestProjectForFile,
@@ -134,6 +135,30 @@ describe("buildTestArgs", () => {
       "FullyQualifiedName~InsertTests&DisplayName~ShouldInsert",
     ]);
   });
+
+  it("escapes filter metacharacters in class and display names", () => {
+    expect(
+      buildTestArgs({
+        testFile: "tests/Foo&BarTests.cs",
+        testNamePattern: "A|B",
+      }),
+    ).toEqual([
+      "test",
+      "--nologo",
+      "--verbosity",
+      "normal",
+      "--filter",
+      "FullyQualifiedName~Foo\\&BarTests&DisplayName~A\\|B",
+    ]);
+  });
+});
+
+describe("escapeDotnetTestFilterValue", () => {
+  it("escapes VSTest filter operators", () => {
+    expect(escapeDotnetTestFilterValue("A&B|C=D~!")).toBe(
+      "A\\&B\\|C\\=D\\~\\!",
+    );
+  });
 });
 
 describe("resolveTestProjectForFile", () => {
@@ -165,6 +190,12 @@ describe("resolveTestProjectForFile", () => {
         "Tests/Aggregation/InsertTests.cs",
       ),
     ).toBe("Tests/Tests.csproj");
+  });
+
+  it("should reject test files outside the project root", async () => {
+    expect(
+      await resolveTestProjectForFile(tempDir, "../outside/EvilTests.cs"),
+    ).toBeUndefined();
   });
 });
 

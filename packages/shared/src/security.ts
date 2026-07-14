@@ -8,13 +8,15 @@ export function isPathWithinBoundary(
   resolvedPath: string,
   basePath: string,
 ): boolean {
-  const normalizedResolved = path.normalize(resolvedPath);
-  const normalizedBase = path.normalize(basePath);
+  const resolved = path.resolve(resolvedPath);
+  const base = path.resolve(basePath);
+  const relative = path.relative(base, resolved);
 
-  return (
-    normalizedResolved.startsWith(normalizedBase + path.sep) ||
-    normalizedResolved === normalizedBase
-  );
+  if (relative === "") {
+    return true;
+  }
+
+  return !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
 /**

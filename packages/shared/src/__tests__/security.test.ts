@@ -43,6 +43,10 @@ describe("isPathWithinBoundary", () => {
     ).toBe(false);
   });
 
+  it("should reject sibling workspace paths that share a prefix", () => {
+    expect(isPathWithinBoundary("/workspace-other", "/workspace")).toBe(false);
+  });
+
   it("should handle nested subdirectories", () => {
     expect(
       isPathWithinBoundary(

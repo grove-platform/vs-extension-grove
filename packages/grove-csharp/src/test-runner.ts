@@ -1,6 +1,7 @@
-import { spawn } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 import * as path from "path";
 import * as fs from "fs/promises";
+import { isPathWithinBoundary } from "@grove/shared";
 
 export interface TestRunOptions {
   projectPath: string;
@@ -14,6 +15,8 @@ export interface TestRunOptions {
   dotnetPath?: string;
   /** Fallback dotnet executable when none resolved (e.g. VS Code setting) */
   fallbackDotnetPath?: string;
+  /** Extension version from package.json (for output headers) */
+  extensionVersion?: string;
 }
 
 export interface TestResult {
@@ -28,7 +31,6 @@ export interface TestResult {
 
 const DEFAULT_TIMEOUT = 300_000;
 const MAX_TIMEOUT = 300_000;
-export const EXTENSION_VERSION = "0.0.3";
 
 function getSystemDotnetBin(): string {
   return process.platform === "win32" ? "dotnet.exe" : "dotnet";
@@ -80,9 +82,14 @@ export async function resolveTestProjectForFile(
   testFile: string,
 ): Promise<string | undefined> {
   const root = path.resolve(projectPath);
-  let dir = path.dirname(path.resolve(projectPath, testFile));
+  const resolvedTestFile = path.resolve(projectPath, testFile);
+  if (!isPathWithinBoundary(resolvedTestFile, root)) {
+    return undefined;
+  }
 
-  while (dir.startsWith(root)) {
+  let dir = path.dirname(resolvedTestFile);
+
+  while (isPathWithinBoundary(dir, root)) {
     try {
       const entries = await fs.readdir(dir);
       const csproj = entries.find((e) => e.endsWith(".csproj"));
@@ -100,6 +107,35 @@ export async function resolveTestProjectForFile(
   }
 
   return undefined;
+}
+
+/**
+ * Escape values used in dotnet test --filter expressions.
+ */
+export function escapeDotnetTestFilterValue(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/[&|=!~]/g, "\\$&");
+}
+
+function killProcessTree(proc: ChildProcess): void {
+  const pid = proc.pid;
+  if (!pid) {
+    return;
+  }
+
+  if (process.platform === "win32") {
+    spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+    return;
+  }
+
+  try {
+    process.kill(-pid, "SIGTERM");
+  } catch {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      // process already exited
+    }
+  }
 }
 
 /**
@@ -148,10 +184,12 @@ export function buildTestArgs(options: {
   const filters: string[] = [];
   if (testFile) {
     const className = path.basename(testFile).replace(/\.cs$/i, "");
-    filters.push(`FullyQualifiedName~${className}`);
+    filters.push(
+      `FullyQualifiedName~${escapeDotnetTestFilterValue(className)}`,
+    );
   }
   if (testNamePattern) {
-    filters.push(`DisplayName~${testNamePattern}`);
+    filters.push(`DisplayName~${escapeDotnetTestFilterValue(testNamePattern)}`);
   }
 
   if (filters.length > 0) {
@@ -176,6 +214,7 @@ export async function runCSharpTests(
     testNamePattern,
     dotnetPath,
     fallbackDotnetPath,
+    extensionVersion = "unknown",
   } = options;
   const effectiveTimeout = Math.min(timeout, MAX_TIMEOUT);
   const dotnetBin = resolveDotnetBin(dotnetPath, fallbackDotnetPath);
@@ -186,18 +225,19 @@ export async function runCSharpTests(
 
   return new Promise((resolve) => {
     const startTime = Date.now();
-    let output = `Grove C# v${EXTENSION_VERSION}\nUsing dotnet: ${dotnetBin}\nTimeout limit: ${effectiveTimeout / 1000}s\nCommand: dotnet ${args.join(" ")}\n\n`;
+    let output = `Grove C# v${extensionVersion}\nUsing dotnet: ${dotnetBin}\nTimeout limit: ${effectiveTimeout / 1000}s\nCommand: dotnet ${args.join(" ")}\n\n`;
     let timedOut = false;
     let settled = false;
 
     const proc = spawn(dotnetBin, args, {
       cwd: projectPath,
       env: { ...process.env, CI: "true", ...env },
+      detached: process.platform !== "win32",
     });
 
     const timeoutId = setTimeout(() => {
       timedOut = true;
-      proc.kill("SIGTERM");
+      killProcessTree(proc);
     }, effectiveTimeout);
 
     const finish = (result: TestResult) => {
