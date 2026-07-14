@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import * as path from "path";
 import * as fs from "fs/promises";
+import { resolveJavaTestEnv } from "./env";
 
 export interface TestRunOptions {
   projectPath: string;
@@ -30,7 +31,7 @@ export interface TestResult {
 
 const DEFAULT_TIMEOUT = 300_000;
 const MAX_TIMEOUT = 300_000;
-export const EXTENSION_VERSION = "0.0.1";
+export const EXTENSION_VERSION = "0.0.2";
 
 function getSystemMavenBin(): string {
   return process.platform === "win32" ? "mvn.cmd" : "mvn";
@@ -115,10 +116,17 @@ export async function resolveJavaMultiModuleRoot(
 }
 
 /**
- * Maven args to install utilities (comparison-library, sample-data) locally.
+ * Maven args to install comparison-library and sample-data locally.
  */
 export function buildUtilitiesInstallArgs(): string[] {
-  return ["install", "-DskipTests", "-B", "-pl", "utilities", "-am"];
+  return [
+    "install",
+    "-DskipTests",
+    "-B",
+    "-pl",
+    "utilities/comparison-library,utilities/sample-data",
+    "-am",
+  ];
 }
 
 /**
@@ -132,7 +140,7 @@ export function buildMavenTestArgs(options: {
   const args = ["test", "-B"];
 
   let testFilter: string | undefined;
-  if (testFile) {
+  if (testFile && /\.java$/i.test(testFile)) {
     testFilter = path.basename(testFile).replace(/\.java$/i, "");
   }
   if (testNamePattern) {
@@ -284,7 +292,7 @@ export async function runJavaTests(
     projectPath,
     testFile,
     timeout = DEFAULT_TIMEOUT,
-    env,
+    env: envOverride,
     testNamePattern,
     mavenPath,
     fallbackMavenPath,
@@ -294,7 +302,17 @@ export async function runJavaTests(
   const mavenBin = resolveMavenBin(mavenPath, fallbackMavenPath);
   const startTime = Date.now();
 
-  let output = `Grove Java v${EXTENSION_VERSION}\nTimeout limit: ${effectiveTimeout / 1000}s\n\n`;
+  const envFromFile = await resolveJavaTestEnv(projectPath);
+  const env = { ...envFromFile, ...envOverride };
+
+  let output = `Grove Java v${EXTENSION_VERSION}\nTimeout limit: ${effectiveTimeout / 1000}s\n`;
+  if (env.CONNECTION_STRING) {
+    output += "MongoDB: CONNECTION_STRING is set\n";
+  } else {
+    output +=
+      "Warning: CONNECTION_STRING is not set. Add driver-sync/.env, driver-sync/src/.env, or java/.env, or use Grove: Run Current Test File (Grove Core) with a MongoDB connection in the Grove UI.\n";
+  }
+  output += "\n";
 
   const remainingTimeout = () =>
     Math.max(effectiveTimeout - (Date.now() - startTime), 1);

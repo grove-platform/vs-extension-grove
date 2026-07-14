@@ -25,6 +25,8 @@ mvn install -DskipTests -B -pl utilities -am
 
 from the `java/` multi-module root before `mvn test` in the Grove project directory. This installs `com.mongodb.docs:comparison-library` and `sample-data` into your local Maven repository.
 
+Grove loads `CONNECTION_STRING` from `driver-sync/.env`, `driver-sync/src/.env`, or `java/.env`. Use **Grove: Run Tests** from Grove Core to also inject a connection string from the Grove MongoDB UI.
+
 ## Settings
 
 | Setting | Default | Description |

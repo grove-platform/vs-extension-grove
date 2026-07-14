@@ -2,7 +2,7 @@
   "name": "grove-platform-java",
   "displayName": "Grove UI for Java",
   "description": "Java (JUnit / Maven) support for Grove documentation testing",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "GrovePlatform",
   "engines": {
     "vscode": "^1.110.0"

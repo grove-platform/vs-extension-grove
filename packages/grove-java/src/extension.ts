@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { runJavaTests, detectJavaProject } from "./test-runner";
+import { resolveJavaTestEnv } from "./env";
+import { isRunnableJavaTestFile } from "./test-file";
 import {
   detectGroveProjects,
   findProjectForFile,
@@ -167,8 +169,9 @@ export async function activate(context: vscode.ExtensionContext) {
           cancellable: false,
         },
         async () => {
+          const env = await resolveJavaTestEnv(projectPath);
           const result = await profile("Java.runJavaTests", () =>
-            runJavaWithConfiguredMaven({ projectPath }),
+            runJavaWithConfiguredMaven({ projectPath, env }),
           );
           await showTestResult(result, outputChannel, "=== Java Test Results ===");
         },
@@ -183,6 +186,15 @@ export async function activate(context: vscode.ExtensionContext) {
       }
 
       const filePath = editor.document.uri.fsPath;
+      if (
+        !isRunnableJavaTestFile(filePath, editor.document.uri.scheme)
+      ) {
+        vscode.window.showWarningMessage(
+          "Open a Java test file (for example TutorialTests.java under src/test/java) before running this command.",
+        );
+        return;
+      }
+
       const projectPath = await findProjectPathForFile(filePath);
       if (!projectPath) {
         vscode.window.showErrorMessage("No workspace folder open");
@@ -198,8 +210,9 @@ export async function activate(context: vscode.ExtensionContext) {
           cancellable: false,
         },
         async () => {
+          const env = await resolveJavaTestEnv(projectPath);
           const result = await profile("Java.runJavaTestFile", () =>
-            runJavaWithConfiguredMaven({ projectPath, testFile }),
+            runJavaWithConfiguredMaven({ projectPath, testFile, env }),
           );
           await showTestResult(
             result,

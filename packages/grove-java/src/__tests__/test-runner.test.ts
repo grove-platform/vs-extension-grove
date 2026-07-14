@@ -116,7 +116,7 @@ describe("buildUtilitiesInstallArgs", () => {
       "-DskipTests",
       "-B",
       "-pl",
-      "utilities",
+      "utilities/comparison-library,utilities/sample-data",
       "-am",
     ]);
   });
@@ -150,6 +150,14 @@ describe("buildMavenTestArgs", () => {
       "-B",
       "-Dtest=*TestFilter*",
     ]);
+  });
+
+  it("should ignore non-java testFile paths", () => {
+    expect(
+      buildMavenTestArgs({
+        testFile: "extension-output-GrovePlatform.grove-platform-java",
+      }),
+    ).toEqual(["test", "-B"]);
   });
 });
 
