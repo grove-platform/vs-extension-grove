@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Grove Core + Java (driver-sync)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--new-window",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/grove-core",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/grove-java",
+        "/Users/cbullinger/devdocs/docs-mongodb-internal/code-example-tests/java/driver-sync"
+      ],
+      "outFiles": ["${workspaceFolder}/packages/*/dist/**/*.js"]
+    }
+  ]
+}
