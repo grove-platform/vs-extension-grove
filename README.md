@@ -21,10 +21,10 @@ Grove automatically detects code example projects (identified by `snip.js` files
 | **Grove for Node.js** | `grove-nodejs` | Jest/Vitest test runner for JavaScript/TypeScript projects                                  |
 | **Grove for Python**  | `grove-python` | pytest and unittest runners for Python projects                                             |
 | **Grove for C#**      | `grove-csharp` | `dotnet test` runner for C# / .NET projects                                                 |
+| **Grove for Java**    | `grove-java`   | JUnit / Maven test runner for Java projects (builds comparison-library locally)             |
 
 ### Planned Extensions
 - **Grove for Go** - Go test runner
-- **Grove for Java** - JUnit/Maven test runner
 
 ## Getting Started
 
@@ -52,7 +52,8 @@ grove-extension/
 │   ├── grove-core/       # Core extension
 │   ├── grove-nodejs/     # Node.js language extension
 │   ├── grove-python/     # Python language extension
-│   └── grove-csharp/     # C# language extension
+│   ├── grove-csharp/     # C# language extension
+│   └── grove-java/       # Java language extension
 ├── meta/
 │   ├── features.md       # Feature roadmap and ideas
 │   ├── discovery.md      # Initial project discovery notes
@@ -88,6 +89,8 @@ pnpm test
 pnpm --filter grove-platform-core build
 pnpm --filter grove-platform-nodejs build
 pnpm --filter grove-platform-python build
+pnpm --filter grove-platform-csharp build
+pnpm --filter grove-platform-java build
 pnpm --filter @grove/shared build
 
 # Watch mode (all packages)
@@ -97,6 +100,7 @@ pnpm watch
 pnpm --filter grove-platform-core test
 pnpm --filter grove-platform-nodejs test
 pnpm --filter grove-platform-python test
+pnpm --filter grove-platform-java test
 ```
 
 ### Building VSIX for Local Installation
