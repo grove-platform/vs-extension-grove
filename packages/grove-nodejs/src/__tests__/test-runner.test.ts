@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { detectJestProject } from "../test-runner";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { detectJestProject, runJestTests } from "../test-runner";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
@@ -60,6 +60,18 @@ describe("detectJestProject", () => {
     await fs.writeFile(path.join(tempDir, "package.json"), "not valid json");
     const result = await detectJestProject(tempDir);
     expect(result).toBe(false);
+  });
+});
+
+describe("runJestTests path validation", () => {
+  it("rejects test files outside the project boundary", async () => {
+    const result = await runJestTests({
+      projectPath: "/project",
+      testFile: "../outside.test.js",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.output).toContain("outside the Grove project");
   });
 });
 

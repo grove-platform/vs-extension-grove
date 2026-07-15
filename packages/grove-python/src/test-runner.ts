@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import * as path from "path";
 import * as fs from "fs/promises";
+import { isPathWithinBoundary, killProcessTree } from "@grove/shared";
 
 export interface TestRunOptions {
   projectPath: string;
@@ -14,6 +15,8 @@ export interface TestRunOptions {
   pythonPath?: string;
   /** Fallback interpreter when no project venv exists (e.g. VS Code setting) */
   fallbackPythonPath?: string;
+  /** Extension version from package.json (for output headers) */
+  extensionVersion?: string;
 }
 
 export interface TestResult {
@@ -200,8 +203,25 @@ export async function runPythonTests(
     testNamePattern,
     pythonPath,
     fallbackPythonPath,
+    extensionVersion = "unknown",
   } = options;
   const effectiveTimeout = Math.min(timeout, MAX_TIMEOUT);
+
+  if (testFile) {
+    const resolvedTestFile = path.resolve(projectPath, testFile);
+    if (!isPathWithinBoundary(resolvedTestFile, path.resolve(projectPath))) {
+      return {
+        success: false,
+        total: 0,
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+        output: `Test file is outside the Grove project: ${testFile}`,
+        duration: 0,
+      };
+    }
+  }
+
   const pythonBin = await resolvePythonBin(
     projectPath,
     pythonPath,
@@ -217,18 +237,19 @@ export async function runPythonTests(
 
   return new Promise((resolve) => {
     const startTime = Date.now();
-    let output = `Using Python: ${pythonBin}\n\n`;
+    let output = `Grove Python v${extensionVersion}\nUsing Python: ${pythonBin}\n\n`;
     let timedOut = false;
     let settled = false;
 
     const proc = spawn(pythonBin, args, {
       cwd: projectPath,
       env: { ...process.env, CI: "true", ...env },
+      detached: process.platform !== "win32",
     });
 
     const timeoutId = setTimeout(() => {
       timedOut = true;
-      proc.kill("SIGTERM");
+      killProcessTree(proc);
     }, effectiveTimeout);
 
     const finish = (result: TestResult) => {

@@ -303,6 +303,18 @@ describe("runPythonTests spawn error", () => {
   });
 });
 
+describe("runPythonTests path validation", () => {
+  it("rejects test files outside the project boundary", async () => {
+    const result = await runPythonTests({
+      projectPath: "/project",
+      testFile: "../outside_test.py",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.output).toContain("outside the Grove project");
+  });
+});
+
 describe("parseUnittestOutput", () => {
   it("should parse OK output", () => {
     expect(

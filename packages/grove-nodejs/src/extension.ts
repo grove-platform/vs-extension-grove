@@ -1,59 +1,111 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { runJestTests, detectJestProject } from "./test-runner";
+import { isRunnableNodeTestFile } from "./test-file";
 import {
   detectGroveProjects,
   findProjectForFile,
   profile,
+  type GroveCoreApi,
+  isPathWithinBoundary,
 } from "@grove/shared";
-
-// Type definition for grove-core API
-interface GroveCoreApi {
-  registerTestRunner(runner: {
-    language: string;
-    name: string;
-    run: (options: {
-      projectPath: string;
-      testFile?: string;
-      timeout?: number;
-      testNamePattern?: string;
-    }) => Promise<{
-      success: boolean;
-      total?: number;
-      passed?: number;
-      failed?: number;
-      skipped?: number;
-      output?: string;
-      duration: number;
-    }>;
-    detect: (projectPath: string) => Promise<boolean>;
-  }): void;
-}
 
 function getWorkspaceRoot(): string {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   return workspaceFolders?.[0]?.uri.fsPath || "";
 }
 
-/**
- * Find the Grove project that contains a file, or fall back to workspace root.
- */
-async function findProjectPathForFile(filePath: string): Promise<string> {
+function requireTrustedWorkspace(): boolean {
+  if (vscode.workspace.isTrusted) {
+    return true;
+  }
+
+  vscode.window.showErrorMessage(
+    "Grove Node.js tests cannot run in an untrusted workspace. Trust this workspace first.",
+  );
+  return false;
+}
+
+async function findProjectPathForFile(
+  filePath: string,
+): Promise<string | undefined> {
   const workspaceRoot = getWorkspaceRoot();
-  if (!workspaceRoot) return "";
+  if (!workspaceRoot) {
+    return undefined;
+  }
 
   const projects = await detectGroveProjects(workspaceRoot);
   const project = findProjectForFile(filePath, projects);
+  return project?.rootPath;
+}
 
-  return project?.rootPath || workspaceRoot;
+async function resolveProjectPathForRunAll(
+  activeFile?: string,
+): Promise<string | undefined> {
+  if (activeFile) {
+    const projectPath = await findProjectPathForFile(activeFile);
+    if (projectPath) {
+      return projectPath;
+    }
+  }
+
+  const workspaceRoot = getWorkspaceRoot();
+  if (workspaceRoot && (await detectJestProject(workspaceRoot))) {
+    return workspaceRoot;
+  }
+
+  return undefined;
+}
+
+function isFileInsideProject(projectPath: string, filePath: string): boolean {
+  return isPathWithinBoundary(path.resolve(filePath), path.resolve(projectPath));
+}
+
+async function showTestResult(
+  result: Awaited<ReturnType<typeof runJestTests>>,
+  outputChannel: vscode.OutputChannel,
+  header: string,
+): Promise<void> {
+  if (result.output) {
+    outputChannel.clear();
+    outputChannel.appendLine(header);
+    outputChannel.appendLine(`Duration: ${result.duration}ms`);
+    outputChannel.appendLine(`Success: ${result.success}`);
+    outputChannel.appendLine(``);
+    outputChannel.appendLine(result.output);
+  }
+
+  if (result.success) {
+    const msg =
+      result.total > 0
+        ? `Tests passed: ${result.passed}/${result.total}`
+        : "Tests completed successfully";
+    vscode.window.showInformationMessage(msg);
+    return;
+  }
+
+  const message =
+    result.total === 0
+      ? "Jest failed to run. Check output for details."
+      : `Tests failed: ${result.failed}/${result.total}`;
+
+  const action = await vscode.window.showErrorMessage(message, "Show Output");
+  if (action === "Show Output") {
+    outputChannel.show();
+  }
 }
 
 export async function activate(context: vscode.ExtensionContext) {
   console.log("Grove for Node.js extension activating...");
 
-  // Get grove-core extension
+  const extensionVersion = context.extension.packageJSON.version ?? "unknown";
+  const runTestsForProject = (options: Parameters<typeof runJestTests>[0]) =>
+    runJestTests({ ...options, extensionVersion });
+
   const groveCore =
-    vscode.extensions.getExtension<GroveCoreApi>("GrovePlatform.grove-platform-core");
+    vscode.extensions.getExtension<GroveCoreApi>(
+      "GrovePlatform.grove-platform-core",
+    );
 
   if (!groveCore) {
     vscode.window.showErrorMessage(
@@ -62,7 +114,6 @@ export async function activate(context: vscode.ExtensionContext) {
     return;
   }
 
-  // Ensure grove-core is activated and get its API
   const coreApi = await groveCore.activate();
 
   if (!coreApi?.registerTestRunner) {
@@ -72,30 +123,29 @@ export async function activate(context: vscode.ExtensionContext) {
     return;
   }
 
-  // Register Jest test runner with grove-core
   coreApi.registerTestRunner({
     language: "nodejs",
     name: "Jest",
-    run: runJestTests,
+    run: runTestsForProject,
     detect: detectJestProject,
   });
 
-  // Create output channel for test results
-  const outputChannel = vscode.window.createOutputChannel(
-    "Grove Node.js Tests",
-  );
+  const outputChannel = vscode.window.createOutputChannel("Grove Node.js Tests");
+  context.subscriptions.push(outputChannel);
 
-  // Register language-specific commands
   context.subscriptions.push(
     vscode.commands.registerCommand("grove.nodejs.runTests", async () => {
-      // Determine project path from active file or workspace root
+      if (!requireTrustedWorkspace()) {
+        return;
+      }
+
       const activeFile = vscode.window.activeTextEditor?.document.uri.fsPath;
-      const projectPath = activeFile
-        ? await findProjectPathForFile(activeFile)
-        : getWorkspaceRoot();
+      const projectPath = await resolveProjectPathForRunAll(activeFile);
 
       if (!projectPath) {
-        vscode.window.showErrorMessage("No workspace folder open");
+        vscode.window.showErrorMessage(
+          "No Grove Node.js project found. Open a file inside a Grove project and try again.",
+        );
         return;
       }
 
@@ -107,42 +157,18 @@ export async function activate(context: vscode.ExtensionContext) {
         },
         async () => {
           const result = await profile("NodeJS.runJestTests", () =>
-            runJestTests({ projectPath }),
+            runTestsForProject({ projectPath }),
           );
-
-          // Log output to channel
-          if (result.output) {
-            outputChannel.clear();
-            outputChannel.appendLine(`=== Jest Test Results ===`);
-            outputChannel.appendLine(`Duration: ${result.duration}ms`);
-            outputChannel.appendLine(`Success: ${result.success}`);
-            outputChannel.appendLine(``);
-            outputChannel.appendLine(result.output);
-          }
-
-          if (result.success) {
-            vscode.window.showInformationMessage(
-              `Tests passed: ${result.passed}/${result.total}`,
-            );
-          } else {
-            const message =
-              result.total === 0
-                ? `Jest failed to run. Check output for details.`
-                : `Tests failed: ${result.failed}/${result.total}`;
-
-            const action = await vscode.window.showErrorMessage(
-              message,
-              "Show Output",
-            );
-            if (action === "Show Output") {
-              outputChannel.show();
-            }
-          }
+          await showTestResult(result, outputChannel, "=== Jest Test Results ===");
         },
       );
     }),
 
     vscode.commands.registerCommand("grove.nodejs.runTestFile", async () => {
+      if (!requireTrustedWorkspace()) {
+        return;
+      }
+
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         vscode.window.showWarningMessage("No active file");
@@ -150,15 +176,30 @@ export async function activate(context: vscode.ExtensionContext) {
       }
 
       const filePath = editor.document.uri.fsPath;
-
-      // Find the Grove project containing this file
-      const projectPath = await findProjectPathForFile(filePath);
-      if (!projectPath) {
-        vscode.window.showErrorMessage("No workspace folder open");
+      if (
+        !isRunnableNodeTestFile(filePath, editor.document.uri.scheme)
+      ) {
+        vscode.window.showWarningMessage(
+          "Open a Node.js test file (for example foo.test.js) before running this command.",
+        );
         return;
       }
 
-      // Make test file path relative to the project root (not workspace root)
+      const projectPath = await findProjectPathForFile(filePath);
+      if (!projectPath) {
+        vscode.window.showErrorMessage(
+          "Open a file inside a Grove project to run tests.",
+        );
+        return;
+      }
+
+      if (!isFileInsideProject(projectPath, filePath)) {
+        vscode.window.showErrorMessage(
+          "Test file is outside the Grove project.",
+        );
+        return;
+      }
+
       const testFile = path.relative(projectPath, filePath);
 
       await vscode.window.withProgress(
@@ -169,37 +210,13 @@ export async function activate(context: vscode.ExtensionContext) {
         },
         async () => {
           const result = await profile("NodeJS.runJestTestFile", () =>
-            runJestTests({ projectPath, testFile }),
+            runTestsForProject({ projectPath, testFile }),
           );
-
-          // Log output to channel
-          if (result.output) {
-            outputChannel.clear();
-            outputChannel.appendLine(`=== Jest Test Results: ${testFile} ===`);
-            outputChannel.appendLine(`Duration: ${result.duration}ms`);
-            outputChannel.appendLine(`Success: ${result.success}`);
-            outputChannel.appendLine(``);
-            outputChannel.appendLine(result.output);
-          }
-
-          if (result.success) {
-            vscode.window.showInformationMessage(
-              `Tests passed: ${result.passed}/${result.total}`,
-            );
-          } else {
-            const message =
-              result.total === 0
-                ? `Jest failed to run. Check output for details.`
-                : `Tests failed: ${result.failed}/${result.total}`;
-
-            const action = await vscode.window.showErrorMessage(
-              message,
-              "Show Output",
-            );
-            if (action === "Show Output") {
-              outputChannel.show();
-            }
-          }
+          await showTestResult(
+            result,
+            outputChannel,
+            `=== Jest Test Results: ${testFile} ===`,
+          );
         },
       );
     }),

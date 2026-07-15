@@ -1,34 +1,14 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { runPythonTests, detectPythonProject } from "./test-runner";
+import { isRunnablePythonTestFile } from "./test-file";
 import {
   detectGroveProjects,
   findProjectForFile,
   profile,
+  type GroveCoreApi,
+  isPathWithinBoundary,
 } from "@grove/shared";
-
-interface GroveCoreApi {
-  registerTestRunner(runner: {
-    language: string;
-    name: string;
-    run: (options: {
-      projectPath: string;
-      testFile?: string;
-      timeout?: number;
-      testNamePattern?: string;
-      env?: Record<string, string>;
-    }) => Promise<{
-      success: boolean;
-      total?: number;
-      passed?: number;
-      failed?: number;
-      skipped?: number;
-      output?: string;
-      duration: number;
-    }>;
-    detect: (projectPath: string) => Promise<boolean>;
-  }): void;
-}
 
 function getWorkspaceRoot(): string {
   const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -43,24 +23,62 @@ function getConfiguredPythonPath(): string | undefined {
   return fromPythonExt || undefined;
 }
 
+function requireTrustedWorkspace(): boolean {
+  if (vscode.workspace.isTrusted) {
+    return true;
+  }
+
+  vscode.window.showErrorMessage(
+    "Grove Python tests cannot run in an untrusted workspace. Trust this workspace first.",
+  );
+  return false;
+}
+
 function runPythonWithConfiguredInterpreter(
+  extensionVersion: string,
   options: Parameters<typeof runPythonTests>[0],
 ): ReturnType<typeof runPythonTests> {
   return runPythonTests({
     ...options,
+    extensionVersion,
     fallbackPythonPath:
       options.fallbackPythonPath ?? getConfiguredPythonPath(),
   });
 }
 
-async function findProjectPathForFile(filePath: string): Promise<string> {
+async function findProjectPathForFile(
+  filePath: string,
+): Promise<string | undefined> {
   const workspaceRoot = getWorkspaceRoot();
-  if (!workspaceRoot) return "";
+  if (!workspaceRoot) {
+    return undefined;
+  }
 
   const projects = await detectGroveProjects(workspaceRoot);
   const project = findProjectForFile(filePath, projects);
+  return project?.rootPath;
+}
 
-  return project?.rootPath || workspaceRoot;
+async function resolveProjectPathForRunAll(
+  activeFile?: string,
+): Promise<string | undefined> {
+  if (activeFile) {
+    const projectPath = await findProjectPathForFile(activeFile);
+    if (projectPath) {
+      return projectPath;
+    }
+  }
+
+  const workspaceRoot = getWorkspaceRoot();
+  if (workspaceRoot && (await detectPythonProject(workspaceRoot))) {
+    return workspaceRoot;
+  }
+
+  return undefined;
+}
+
+function isFileInsideProject(projectPath: string, filePath: string): boolean {
+  return isPathWithinBoundary(path.resolve(filePath), path.resolve(projectPath));
 }
 
 async function showTestResult(
@@ -78,15 +96,17 @@ async function showTestResult(
   }
 
   if (result.success) {
-    vscode.window.showInformationMessage(
-      `Tests passed: ${result.passed}/${result.total}`,
-    );
+    const msg =
+      result.total > 0
+        ? `Tests passed: ${result.passed}/${result.total}`
+        : "Tests completed successfully";
+    vscode.window.showInformationMessage(msg);
     return;
   }
 
   const message =
     result.total === 0
-      ? `Python tests failed to run. Check output for details.`
+      ? "Python tests failed to run. Check output for details."
       : `Tests failed: ${result.failed}/${result.total}`;
 
   const action = await vscode.window.showErrorMessage(message, "Show Output");
@@ -97,6 +117,10 @@ async function showTestResult(
 
 export async function activate(context: vscode.ExtensionContext) {
   console.log("Grove for Python extension activating...");
+
+  const extensionVersion = context.extension.packageJSON.version ?? "unknown";
+  const runTestsForProject = (options: Parameters<typeof runPythonTests>[0]) =>
+    runPythonWithConfiguredInterpreter(extensionVersion, options);
 
   const groveCore =
     vscode.extensions.getExtension<GroveCoreApi>(
@@ -122,24 +146,26 @@ export async function activate(context: vscode.ExtensionContext) {
   coreApi.registerTestRunner({
     language: "python",
     name: "Python",
-    run: runPythonWithConfiguredInterpreter,
+    run: runTestsForProject,
     detect: detectPythonProject,
   });
 
-  const outputChannel = vscode.window.createOutputChannel(
-    "Grove Python Tests",
-  );
+  const outputChannel = vscode.window.createOutputChannel("Grove Python Tests");
   context.subscriptions.push(outputChannel);
 
   context.subscriptions.push(
     vscode.commands.registerCommand("grove.python.runTests", async () => {
+      if (!requireTrustedWorkspace()) {
+        return;
+      }
+
       const activeFile = vscode.window.activeTextEditor?.document.uri.fsPath;
-      const projectPath = activeFile
-        ? await findProjectPathForFile(activeFile)
-        : getWorkspaceRoot();
+      const projectPath = await resolveProjectPathForRunAll(activeFile);
 
       if (!projectPath) {
-        vscode.window.showErrorMessage("No workspace folder open");
+        vscode.window.showErrorMessage(
+          "No Grove Python project found. Open a file inside a Grove project and try again.",
+        );
         return;
       }
 
@@ -151,14 +177,18 @@ export async function activate(context: vscode.ExtensionContext) {
         },
         async () => {
           const result = await profile("Python.runPythonTests", () =>
-            runPythonWithConfiguredInterpreter({ projectPath }),
+            runTestsForProject({ projectPath }),
           );
-          showTestResult(result, outputChannel, "=== Python Test Results ===");
+          await showTestResult(result, outputChannel, "=== Python Test Results ===");
         },
       );
     }),
 
     vscode.commands.registerCommand("grove.python.runTestFile", async () => {
+      if (!requireTrustedWorkspace()) {
+        return;
+      }
+
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         vscode.window.showWarningMessage("No active file");
@@ -166,9 +196,27 @@ export async function activate(context: vscode.ExtensionContext) {
       }
 
       const filePath = editor.document.uri.fsPath;
+      if (
+        !isRunnablePythonTestFile(filePath, editor.document.uri.scheme)
+      ) {
+        vscode.window.showWarningMessage(
+          "Open a Python test file (for example test_foo.py) before running this command.",
+        );
+        return;
+      }
+
       const projectPath = await findProjectPathForFile(filePath);
       if (!projectPath) {
-        vscode.window.showErrorMessage("No workspace folder open");
+        vscode.window.showErrorMessage(
+          "Open a file inside a Grove project to run tests.",
+        );
+        return;
+      }
+
+      if (!isFileInsideProject(projectPath, filePath)) {
+        vscode.window.showErrorMessage(
+          "Test file is outside the Grove project.",
+        );
         return;
       }
 
@@ -182,9 +230,9 @@ export async function activate(context: vscode.ExtensionContext) {
         },
         async () => {
           const result = await profile("Python.runPythonTestFile", () =>
-            runPythonWithConfiguredInterpreter({ projectPath, testFile }),
+            runTestsForProject({ projectPath, testFile }),
           );
-          showTestResult(
+          await showTestResult(
             result,
             outputChannel,
             `=== Python Test Results: ${testFile} ===`,

@@ -1,7 +1,7 @@
-import { spawn, type ChildProcess } from "child_process";
+import { spawn } from "child_process";
 import * as path from "path";
 import * as fs from "fs/promises";
-import { isPathWithinBoundary } from "@grove/shared";
+import { isPathWithinBoundary, killProcessTree } from "@grove/shared";
 
 export interface TestRunOptions {
   projectPath: string;
@@ -114,28 +114,6 @@ export async function resolveTestProjectForFile(
  */
 export function escapeDotnetTestFilterValue(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/[&|=!~]/g, "\\$&");
-}
-
-function killProcessTree(proc: ChildProcess): void {
-  const pid = proc.pid;
-  if (!pid) {
-    return;
-  }
-
-  if (process.platform === "win32") {
-    spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
-    return;
-  }
-
-  try {
-    process.kill(-pid, "SIGTERM");
-  } catch {
-    try {
-      process.kill(pid, "SIGTERM");
-    } catch {
-      // process already exited
-    }
-  }
 }
 
 /**

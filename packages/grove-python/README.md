@@ -36,6 +36,8 @@ Grove runs the same unittest command using `venv/bin/python` automatically.
 | `grove.python.runTests`    | Grove: Run Python Tests            | Run all tests in the current project |
 | `grove.python.runTestFile` | Grove: Run Current Python Test File | Run tests in the active file only   |
 
+The language-specific commands above run pytest/unittest directly and use the Grove Python output channel. For Grove's shared test environment behavior (`.env` loading, MongoDB connection injection from the Grove UI, and masked connection strings), prefer the core commands **Grove: Run Tests** and **Grove: Run Current Test File**.
+
 ## Architecture
 
 ```
@@ -100,7 +102,9 @@ Also:
 
 ## Integration with Grove Core
 
-Grove for Python is a **companion extension** that extends Grove Core's functionality. When users run `Grove: Run Tests` (the core command), Grove Core automatically delegates to this extension's Python runner for Python projects.
+Grove for Python is a **companion extension** that extends Grove Core's functionality. When users run `Grove: Run Tests` or `Grove: Run Current Test File` (the core commands), Grove Core automatically delegates to this extension's Python runner for Python projects.
+
+Test commands are disabled in untrusted workspaces. Grove validates that single-file runs stay within the detected Grove project boundary before invoking pytest/unittest.
 
 ## Development
 
