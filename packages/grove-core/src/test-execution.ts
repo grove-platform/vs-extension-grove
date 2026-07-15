@@ -119,8 +119,11 @@ export async function resolveProjectForLanguage(
     return { project: languageProjects[0], allProjects: projects };
   }
 
+  const projectList = languageProjects
+    .map((p) => p.relativePath || "root")
+    .join(", ");
   vscode.window.showErrorMessage(
-    `No Grove ${languageLabel(language)} project found. Open a file inside a Grove project and try again.`,
+    `Multiple Grove ${languageLabel(language)} projects found. Open a file inside the project you want to test. Detected projects: ${projectList}`,
   );
   return undefined;
 }
