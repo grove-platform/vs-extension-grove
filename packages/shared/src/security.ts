@@ -1,4 +1,5 @@
 import * as path from "path";
+import * as fs from "fs/promises";
 
 /**
  * Validate that a resolved path is within the allowed base directory.
@@ -17,6 +18,25 @@ export function isPathWithinBoundary(
   }
 
   return !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+/**
+ * Validate path containment after resolving symlinks on both paths.
+ * Fails closed when either path cannot be resolved.
+ */
+export async function isPathWithinRealBoundary(
+  candidatePath: string,
+  basePath: string,
+): Promise<boolean> {
+  try {
+    const [realCandidate, realBase] = await Promise.all([
+      fs.realpath(path.resolve(candidatePath)),
+      fs.realpath(path.resolve(basePath)),
+    ]);
+    return isPathWithinBoundary(realCandidate, realBase);
+  } catch {
+    return false;
+  }
 }
 
 /**

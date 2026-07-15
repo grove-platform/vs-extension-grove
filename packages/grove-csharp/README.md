@@ -99,7 +99,7 @@ Also:
 
 Grove for C# is a **companion extension** that extends Grove Core's functionality. When users run `Grove: Run Tests` or `Grove: Run Current Test File` (the core commands), Grove Core automatically delegates to this extension's C# runner for C# projects.
 
-Test commands are disabled in untrusted workspaces. Grove validates that single-file runs stay within the detected Grove project boundary before invoking `dotnet test`.
+Test commands are disabled in untrusted workspaces. Grove validates that single-file runs stay within the detected Grove project boundary (including symlink traversal) before invoking `dotnet test`.
 
 ## Development
 

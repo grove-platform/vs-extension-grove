@@ -1,6 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import {
   isPathWithinBoundary,
+  isPathWithinRealBoundary,
   sanitizePath,
   validateWorkspacePath,
 } from "../security";
@@ -55,6 +59,57 @@ describe("isPathWithinBoundary", () => {
       ),
     ).toBe(true);
   });
+});
+
+describe("isPathWithinRealBoundary", () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "grove-realpath-"));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("should allow real paths within the boundary", async () => {
+    const filePath = path.join(tempDir, "src", "foo.test.ts");
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, "");
+
+    expect(await isPathWithinRealBoundary(filePath, tempDir)).toBe(true);
+  });
+
+  it("should reject paths outside the boundary", async () => {
+    const outsideDir = path.join(path.dirname(tempDir), `${path.basename(tempDir)}-outside`);
+    await fs.mkdir(outsideDir, { recursive: true });
+    const outsideFile = path.join(outsideDir, "secret.test.ts");
+    await fs.writeFile(outsideFile, "");
+
+    expect(await isPathWithinRealBoundary(outsideFile, tempDir)).toBe(false);
+
+    await fs.rm(outsideDir, { recursive: true, force: true });
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "should reject a candidate path that escapes via symlink",
+    async () => {
+      const projectRoot = path.join(tempDir, "project");
+      const outsideDir = path.join(tempDir, "outside");
+      const testsLink = path.join(projectRoot, "tests");
+      const outsideFile = path.join(outsideDir, "secret.test.ts");
+
+      await fs.mkdir(projectRoot, { recursive: true });
+      await fs.mkdir(outsideDir, { recursive: true });
+      await fs.writeFile(outsideFile, "");
+      await fs.symlink(outsideDir, testsLink, "dir");
+
+      const candidate = path.join(testsLink, "secret.test.ts");
+
+      expect(isPathWithinBoundary(candidate, projectRoot)).toBe(true);
+      expect(await isPathWithinRealBoundary(candidate, projectRoot)).toBe(false);
+    },
+  );
 });
 
 describe("sanitizePath", () => {

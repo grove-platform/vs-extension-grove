@@ -197,6 +197,25 @@ describe("resolveTestProjectForFile", () => {
       await resolveTestProjectForFile(tempDir, "../outside/EvilTests.cs"),
     ).toBeUndefined();
   });
+
+  it.skipIf(process.platform === "win32")(
+    "should reject test files that escape the project via symlink",
+    async () => {
+      const outsideDir = path.join(path.dirname(tempDir), "grove-csharp-outside");
+      const testsLink = path.join(tempDir, "TestsLink");
+      const outsideTest = path.join(outsideDir, "EvilTests.cs");
+
+      await fs.mkdir(outsideDir, { recursive: true });
+      await fs.writeFile(outsideTest, "// test\n");
+      await fs.symlink(outsideDir, testsLink, "dir");
+
+      expect(
+        await resolveTestProjectForFile(tempDir, "TestsLink/EvilTests.cs"),
+      ).toBeUndefined();
+
+      await fs.rm(outsideDir, { recursive: true, force: true });
+    },
+  );
 });
 
 describe("resolveDefaultTestProject", () => {

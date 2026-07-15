@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import * as path from "path";
 import * as fs from "fs/promises";
-import { isPathWithinBoundary, killProcessTree } from "@grove/shared";
+import { isPathWithinRealBoundary, killProcessTree } from "@grove/shared";
 
 export interface TestRunOptions {
   projectPath: string;
@@ -74,7 +74,7 @@ export async function runJestTests(
 
   if (testFile) {
     const resolvedTestFile = path.resolve(projectPath, testFile);
-    if (!isPathWithinBoundary(resolvedTestFile, path.resolve(projectPath))) {
+    if (!(await isPathWithinRealBoundary(resolvedTestFile, projectPath))) {
       return {
         success: false,
         total: 0,

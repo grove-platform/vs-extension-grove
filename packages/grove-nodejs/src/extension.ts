@@ -7,7 +7,7 @@ import {
   findProjectForFile,
   profile,
   type GroveCoreApi,
-  isPathWithinBoundary,
+  isPathWithinRealBoundary,
 } from "@grove/shared";
 
 function getWorkspaceRoot(): string {
@@ -57,8 +57,11 @@ async function resolveProjectPathForRunAll(
   return undefined;
 }
 
-function isFileInsideProject(projectPath: string, filePath: string): boolean {
-  return isPathWithinBoundary(path.resolve(filePath), path.resolve(projectPath));
+async function isFileInsideProject(
+  projectPath: string,
+  filePath: string,
+): Promise<boolean> {
+  return isPathWithinRealBoundary(filePath, projectPath);
 }
 
 async function showTestResult(
@@ -193,7 +196,7 @@ export async function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      if (!isFileInsideProject(projectPath, filePath)) {
+      if (!(await isFileInsideProject(projectPath, filePath))) {
         vscode.window.showErrorMessage(
           "Test file is outside the Grove project.",
         );

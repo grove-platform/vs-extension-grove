@@ -112,7 +112,7 @@ Grove for Node.js is a **companion extension** that extends Grove Core's functio
 
 When users run `Grove: Run Tests` or `Grove: Run Current Test File` (the core commands), Grove Core automatically delegates to this extension's Jest runner for Node.js projects.
 
-Test commands are disabled in untrusted workspaces. Grove validates that single-file runs stay within the detected Grove project boundary before invoking `npm test`.
+Test commands are disabled in untrusted workspaces. Grove validates that single-file runs stay within the detected Grove project boundary (including symlink traversal) before invoking `npm test`.
 
 ## Development
 

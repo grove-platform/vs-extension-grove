@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import * as path from "path";
 import * as fs from "fs/promises";
-import { isPathWithinBoundary, killProcessTree } from "@grove/shared";
+import { isPathWithinRealBoundary, killProcessTree } from "@grove/shared";
 
 export interface TestRunOptions {
   projectPath: string;
@@ -83,13 +83,13 @@ export async function resolveTestProjectForFile(
 ): Promise<string | undefined> {
   const root = path.resolve(projectPath);
   const resolvedTestFile = path.resolve(projectPath, testFile);
-  if (!isPathWithinBoundary(resolvedTestFile, root)) {
+  if (!(await isPathWithinRealBoundary(resolvedTestFile, root))) {
     return undefined;
   }
 
   let dir = path.dirname(resolvedTestFile);
 
-  while (isPathWithinBoundary(dir, root)) {
+  while (await isPathWithinRealBoundary(dir, root)) {
     try {
       const entries = await fs.readdir(dir);
       const csproj = entries.find((e) => e.endsWith(".csproj"));
@@ -195,6 +195,22 @@ export async function runCSharpTests(
     extensionVersion = "unknown",
   } = options;
   const effectiveTimeout = Math.min(timeout, MAX_TIMEOUT);
+
+  if (testFile) {
+    const resolvedTestFile = path.resolve(projectPath, testFile);
+    if (!(await isPathWithinRealBoundary(resolvedTestFile, projectPath))) {
+      return {
+        success: false,
+        total: 0,
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+        output: `Test file is outside the Grove project: ${testFile}`,
+        duration: 0,
+      };
+    }
+  }
+
   const dotnetBin = resolveDotnetBin(dotnetPath, fallbackDotnetPath);
   const testProject = testFile
     ? await resolveTestProjectForFile(projectPath, testFile)
