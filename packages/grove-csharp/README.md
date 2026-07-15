@@ -28,7 +28,7 @@ Grove for C# activates alongside Grove Core when a workspace contains a `snip.js
 | `grove.csharp.runTests`    | Grove: Run C# Tests              | Run all tests in the current project |
 | `grove.csharp.runTestFile` | Grove: Run Current C# Test File  | Run tests in the active file only    |
 
-The language-specific commands above call `dotnet test` directly and use the Grove C# output channel. For Grove's shared test environment behavior (`.env` loading, MongoDB connection injection from the Grove UI, and masked connection strings), prefer the core commands **Grove: Run Tests** and **Grove: Run Current Test File**.
+The language-specific commands above route through Grove Core's `runGroveTests` API, so they use the same `.env` loading, MongoDB connection injection, connection-string masking, and Grove Tests output channel as **Grove: Run Tests** and **Grove: Run Current Test File**.
 
 ## Architecture
 

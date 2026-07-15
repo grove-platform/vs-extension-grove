@@ -2,26 +2,50 @@
  * Shared Test Execution Module
  *
  * Provides common test execution helpers used by grove.runTests,
- * grove.runTestFile, and the test CodeLens runTestBlock function.
+ * grove.runTestFile, language-specific commands, and CodeLens runs.
  */
 
 import * as vscode from "vscode";
-import { findProjectForFile } from "@grove/shared";
-import type { GroveProject } from "@grove/shared";
-import { resolveRunnerForProject, runTests } from "./test-runner-api";
+import * as path from "path";
+import { findProjectForFile, isPathWithinRealBoundary } from "@grove/shared";
+import type { GroveLanguage, GroveProject } from "@grove/shared";
+import { getTestRunner, resolveRunnerForProject, runTests } from "./test-runner-api";
 import { getTestOutputChannel } from "./logger";
 import { getCachedProjects } from "./project-cache";
 import { maskConnectionString } from "./mongo/credentials";
 
-export function requireTrustedWorkspace(): boolean {
-  if (vscode.workspace.isTrusted) {
-    return true;
-  }
+const RUNNABLE_TEST_FILE_MESSAGES: Partial<Record<GroveLanguage, string>> = {
+  csharp:
+    "Open a C# test file (for example InsertTests.cs) before running this command.",
+  nodejs:
+    "Open a Node.js test file (for example foo.test.js) before running this command.",
+  python:
+    "Open a Python test file (for example test_foo.py) before running this command.",
+};
 
-  vscode.window.showErrorMessage(
-    "Grove tests cannot run in an untrusted workspace. Trust this workspace first.",
-  );
-  return false;
+const LANGUAGE_DISPLAY_NAMES: Partial<Record<GroveLanguage, string>> = {
+  csharp: "C#",
+  nodejs: "Node.js",
+  python: "Python",
+  java: "Java",
+  go: "Go",
+  mongosh: "mongosh",
+};
+
+let getUiConnectionString: (() => string | undefined) | undefined;
+
+export function initTestExecution(options: {
+  getUiConnectionString: () => string | undefined;
+}): void {
+  getUiConnectionString = options.getUiConnectionString;
+}
+
+export interface RunGroveTestsOptions {
+  language?: string;
+  activeFilePath?: string;
+  documentScheme?: string;
+  testFileScope?: boolean;
+  testNamePattern?: string;
 }
 
 export interface TestRunOptions {
@@ -36,6 +60,69 @@ export interface TestRunOptions {
 export interface ResolvedProject {
   project: GroveProject;
   allProjects: GroveProject[];
+}
+
+export function requireTrustedWorkspace(): boolean {
+  if (vscode.workspace.isTrusted) {
+    return true;
+  }
+
+  vscode.window.showErrorMessage(
+    "Grove tests cannot run in an untrusted workspace. Trust this workspace first.",
+  );
+  return false;
+}
+
+function languageLabel(language: string): string {
+  return LANGUAGE_DISPLAY_NAMES[language as GroveLanguage] ?? language;
+}
+
+/**
+ * Resolve a Grove project, optionally filtered to a specific language.
+ */
+export async function resolveProjectForLanguage(
+  language: string,
+  activeFilePath?: string,
+): Promise<ResolvedProject | undefined> {
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders) {
+    vscode.window.showErrorMessage("No workspace folder open");
+    return undefined;
+  }
+
+  const projects = await getCachedProjects();
+  const languageProjects = projects.filter((p) => p.language === language);
+
+  if (languageProjects.length === 0) {
+    vscode.window.showErrorMessage(
+      `No Grove ${languageLabel(language)} project found. Open a file inside a Grove project and try again.`,
+    );
+    return undefined;
+  }
+
+  if (activeFilePath) {
+    const project = findProjectForFile(activeFilePath, languageProjects);
+    if (project) {
+      return { project, allProjects: projects };
+    }
+  }
+
+  const workspaceRoot = workspaceFolders[0].uri.fsPath;
+  const rootProject = languageProjects.find(
+    (p) => path.resolve(p.rootPath) === path.resolve(workspaceRoot),
+  );
+  if (rootProject) {
+    return { project: rootProject, allProjects: projects };
+  }
+
+  if (languageProjects.length === 1) {
+    return { project: languageProjects[0], allProjects: projects };
+  }
+
+  vscode.window.showErrorMessage(
+    `No Grove ${languageLabel(language)} project found. Open a file inside a Grove project and try again.`,
+  );
+  return undefined;
 }
 
 /**
@@ -84,6 +171,130 @@ export async function resolveProject(
   }
 
   return { project, allProjects: projects };
+}
+
+function validateRunnableTestFile(
+  language: string,
+  filePath: string,
+  scheme: string,
+): boolean {
+  const runner = getTestRunner(language);
+  if (!runner?.isRunnableTestFile) {
+    return true;
+  }
+
+  if (runner.isRunnableTestFile(filePath, scheme)) {
+    return true;
+  }
+
+  const message =
+    (language in RUNNABLE_TEST_FILE_MESSAGES
+      ? RUNNABLE_TEST_FILE_MESSAGES[language as GroveLanguage]
+      : undefined) ??
+    "Open a test file before running this command.";
+  vscode.window.showWarningMessage(message);
+  return false;
+}
+
+/**
+ * Shared entry point for Grove Core and language-specific test commands.
+ */
+export async function runGroveTests(
+  options: RunGroveTestsOptions = {},
+): Promise<void> {
+  if (!requireTrustedWorkspace()) {
+    return;
+  }
+
+  const {
+    language,
+    activeFilePath,
+    documentScheme = "file",
+    testFileScope = false,
+    testNamePattern,
+  } = options;
+
+  if (testFileScope) {
+    if (!activeFilePath) {
+      vscode.window.showWarningMessage("No active file");
+      return;
+    }
+
+    if (documentScheme !== "file") {
+      vscode.window.showWarningMessage(
+        "Open a file on disk before running this command.",
+      );
+      return;
+    }
+  }
+
+  const resolved = language
+    ? await resolveProjectForLanguage(
+        language,
+        activeFilePath ?? vscode.window.activeTextEditor?.document.uri.fsPath,
+      )
+    : await resolveProject(activeFilePath);
+  if (!resolved) {
+    return;
+  }
+
+  const projectLanguage = language ?? resolved.project.language ?? undefined;
+  let testFile: string | undefined;
+
+  if (testFileScope) {
+    if (!activeFilePath) {
+      return;
+    }
+
+    if (
+      projectLanguage &&
+      !validateRunnableTestFile(projectLanguage, activeFilePath, documentScheme)
+    ) {
+      return;
+    }
+
+    if (
+      !(await isPathWithinRealBoundary(
+        activeFilePath,
+        resolved.project.rootPath,
+      ))
+    ) {
+      vscode.window.showErrorMessage(
+        "Test file is outside the Grove project.",
+      );
+      return;
+    }
+
+    testFile = path.relative(resolved.project.rootPath, activeFilePath);
+  }
+
+  const uiConnectionString = getUiConnectionString?.();
+  const usingUiConnection =
+    resolved.project.supportsEnvInjection && !!uiConnectionString;
+
+  const progressTitle = testFile
+    ? usingUiConnection
+      ? `Running tests for ${testFile} (using Grove MongoDB connection)...`
+      : `Running tests for ${testFile}...`
+    : usingUiConnection
+      ? "Running tests (using Grove MongoDB connection)..."
+      : "Running tests...";
+
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: progressTitle,
+      cancellable: false,
+    },
+    async () => {
+      await runGroveTestsForResolvedProject(resolved, {
+        testFile,
+        testNamePattern,
+        label: testFile ?? resolved.project.displayName,
+        uiConnectionString,
+      });
+    },
+  );
 }
 
 /**

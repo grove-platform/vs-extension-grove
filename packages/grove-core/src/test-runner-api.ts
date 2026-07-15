@@ -36,6 +36,8 @@ export interface TestRunner {
   run: (options: TestRunOptions) => Promise<TestResult>;
   /** Detect if this runner applies to a project */
   detect: (projectPath: string) => Promise<boolean>;
+  /** Optional guard for single-file test commands */
+  isRunnableTestFile?: (filePath: string, scheme?: string) => boolean;
 }
 
 const registeredRunners: Map<string, TestRunner> = new Map();

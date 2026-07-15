@@ -1,13 +1,11 @@
 import * as vscode from "vscode";
-import * as path from "path";
 import type { GroveStatus, GroveProject } from "@grove/shared";
 import { findProjectForFile } from "@grove/shared";
 import { GrovePanelProvider } from "./panel/GrovePanel";
 import { getApi as getTestRunnerApi } from "./test-runner-api";
 import {
-  resolveProject,
-  runGroveTestsForResolvedProject,
-  requireTrustedWorkspace,
+  initTestExecution,
+  runGroveTests,
 } from "./test-execution";
 import { initDiagnostics, refreshAllDiagnostics } from "./diagnostics";
 import { registerEnvBannerCodeLens } from "./env-banner-codelens";
@@ -98,6 +96,8 @@ export function getApi() {
     // Project detection API
     getDetectedProjects,
     getActiveProject,
+    // Shared test execution (.env, UI connection, Grove Tests output)
+    runGroveTests,
   };
 }
 
@@ -517,6 +517,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Initialize MongoDB connection manager
   mongoConnectionManager = new MongoConnectionManager(context.secrets);
+  initTestExecution({
+    getUiConnectionString: () =>
+      mongoConnectionManager?.status.connected
+        ? mongoConnectionManager.getConnectionStringForTests() ?? undefined
+        : undefined,
+  });
 
   // Register cleanup for MongoDB connection on deactivation
   context.subscriptions.push({
@@ -703,88 +709,20 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register run tests command (delegates to language-specific runner)
   context.subscriptions.push(
-    vscode.commands.registerCommand("grove.runTests", async () => {
-      if (!requireTrustedWorkspace()) {
-        return;
-      }
-
-      const resolved = await resolveProject();
-      if (!resolved) return;
-
-      const uiConnectionString = mongoConnectionManager?.status.connected
-        ? mongoConnectionManager.getConnectionStringForTests() ?? undefined
-        : undefined;
-
-      const usingUiConnection =
-        resolved.project.supportsEnvInjection && !!uiConnectionString;
-
-      const progressTitle = usingUiConnection
-        ? "Running tests (using Grove MongoDB connection)..."
-        : "Running tests...";
-
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: progressTitle,
-          cancellable: false,
-        },
-        async () => {
-          await runGroveTestsForResolvedProject(resolved, {
-            label: resolved.project.displayName,
-            uiConnectionString,
-          });
-        },
-      );
-    }),
+    vscode.commands.registerCommand("grove.runTests", () => runGroveTests()),
 
     vscode.commands.registerCommand("grove.runTestFile", async () => {
-      if (!requireTrustedWorkspace()) {
-        return;
-      }
-
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         vscode.window.showWarningMessage("No active file");
         return;
       }
 
-      if (editor.document.uri.scheme !== "file") {
-        vscode.window.showWarningMessage(
-          "Open a file on disk before running this command.",
-        );
-        return;
-      }
-
-      const filePath = editor.document.uri.fsPath;
-      const resolved = await resolveProject(filePath);
-      if (!resolved) return;
-
-      const testFile = path.relative(resolved.project.rootPath, filePath);
-      const uiConnectionString = mongoConnectionManager?.status.connected
-        ? mongoConnectionManager.getConnectionStringForTests() ?? undefined
-        : undefined;
-
-      const usingUiConnection =
-        resolved.project.supportsEnvInjection && !!uiConnectionString;
-
-      const progressTitle = usingUiConnection
-        ? `Running tests for ${testFile} (using Grove MongoDB connection)...`
-        : `Running tests for ${testFile}...`;
-
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: progressTitle,
-          cancellable: false,
-        },
-        async () => {
-          await runGroveTestsForResolvedProject(resolved, {
-            testFile,
-            label: testFile,
-            uiConnectionString,
-          });
-        },
-      );
+      await runGroveTests({
+        activeFilePath: editor.document.uri.fsPath,
+        documentScheme: editor.document.uri.scheme,
+        testFileScope: true,
+      });
     }),
   );
 
