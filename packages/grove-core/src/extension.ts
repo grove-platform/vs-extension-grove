@@ -7,6 +7,7 @@ import { getApi as getTestRunnerApi } from "./test-runner-api";
 import {
   resolveProject,
   runGroveTestsForResolvedProject,
+  requireTrustedWorkspace,
 } from "./test-execution";
 import { initDiagnostics, refreshAllDiagnostics } from "./diagnostics";
 import { registerEnvBannerCodeLens } from "./env-banner-codelens";
@@ -703,6 +704,10 @@ export async function activate(context: vscode.ExtensionContext) {
   // Register run tests command (delegates to language-specific runner)
   context.subscriptions.push(
     vscode.commands.registerCommand("grove.runTests", async () => {
+      if (!requireTrustedWorkspace()) {
+        return;
+      }
+
       const resolved = await resolveProject();
       if (!resolved) return;
 
@@ -733,9 +738,20 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
 
     vscode.commands.registerCommand("grove.runTestFile", async () => {
+      if (!requireTrustedWorkspace()) {
+        return;
+      }
+
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         vscode.window.showWarningMessage("No active file");
+        return;
+      }
+
+      if (editor.document.uri.scheme !== "file") {
+        vscode.window.showWarningMessage(
+          "Open a file on disk before running this command.",
+        );
         return;
       }
 

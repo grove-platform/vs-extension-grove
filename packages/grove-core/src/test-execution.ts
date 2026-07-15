@@ -13,6 +13,17 @@ import { getTestOutputChannel } from "./logger";
 import { getCachedProjects } from "./project-cache";
 import { maskConnectionString } from "./mongo/credentials";
 
+export function requireTrustedWorkspace(): boolean {
+  if (vscode.workspace.isTrusted) {
+    return true;
+  }
+
+  vscode.window.showErrorMessage(
+    "Grove tests cannot run in an untrusted workspace. Trust this workspace first.",
+  );
+  return false;
+}
+
 export interface TestRunOptions {
   /** Relative path to the specific test file. */
   testFile?: string;
@@ -83,6 +94,10 @@ export async function executeTests(
   projectPath: string,
   opts: TestRunOptions & { language?: string | null } = {},
 ) {
+  if (!requireTrustedWorkspace()) {
+    return undefined;
+  }
+
   const runner = await resolveRunnerForProject({
     projectPath,
     language: opts.language,

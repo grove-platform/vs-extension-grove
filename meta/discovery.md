@@ -25,15 +25,15 @@ All extensions use modern tooling:
 
 ### Extension Pack Structure
 
-| Extension             | ID                      | Purpose                                                                                     |
-| --------------------- | ----------------------- | ------------------------------------------------------------------------------------------- |
-| **Grove Core**        | `mongodb.grove-core`    | Project detection, status bar, Bluehawk preview, `literalinclude` links, symlink management |
-| **Grove for Node.js** | `mongodb.grove-nodejs`  | Jest runner, scaffolding, `@grove-nodejs` agent                                             |
-| **Grove for Python**  | `mongodb.grove-python`  | unittest/pytest runner, scaffolding, `@grove-python` agent                                  |
-| **Grove for Go**      | `mongodb.grove-go`      | go test runner, scaffolding, `@grove-go` agent                                              |
-| **Grove for Java**    | `mongodb.grove-java`    | JUnit runner, scaffolding, `@grove-java` agent                                              |
-| **Grove for C#**      | `mongodb.grove-csharp`  | `dotnet test` runner, scaffolding, `@grove-csharp` agent                                    |
-| **Grove for mongosh** | `mongodb.grove-mongosh` | Jest runner, shell scaffolding, `@grove-mongosh` agent                                      |
+| Extension             | ID                                   | Purpose                                                                                     |
+| --------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------- |
+| **Grove Core**        | `GrovePlatform.grove-platform-core`    | Project detection, status bar, Bluehawk preview, `literalinclude` links, symlink management |
+| **Grove for Node.js** | `GrovePlatform.grove-platform-nodejs`  | Jest runner, scaffolding, `@grove-nodejs` agent                                             |
+| **Grove for Python**  | `GrovePlatform.grove-platform-python`  | unittest/pytest runner, scaffolding, `@grove-python` agent                                  |
+| **Grove for Go**      | `GrovePlatform.grove-platform-go`      | go test runner, scaffolding, `@grove-go` agent                                              |
+| **Grove for Java**    | `GrovePlatform.grove-platform-java`    | JUnit runner, scaffolding, `@grove-java` agent                                              |
+| **Grove for C#**      | `GrovePlatform.grove-platform-csharp`  | `dotnet test` runner, scaffolding, `@grove-csharp` agent                                    |
+| **Grove for mongosh** | `GrovePlatform.grove-platform-mongosh` | Jest runner, shell scaffolding, `@grove-mongosh` agent                                      |
 
 ## Security Considerations
 
@@ -118,7 +118,7 @@ Restrict file access to workspace folders:
 
 1. **Implement project auto-detection in Core**: Use `workspaceContains:**/snip.js` activation event—VS Code handles the file search efficiently. Parse `START_DIRECTORY` and `OUTPUT_DIRECTORY` constants to determine language and project paths. Expose detected projects via `grove.getDetectedProjects()` API for language extensions to consume.
 
-2. **Configure extension dependencies**: Each language extension must declare `extensionDependencies: ["mongodb.grove-core"]` in `package.json` to ensure core activates first. Use activation events:
+2. **Configure extension dependencies**: Each language extension must declare `extensionDependencies: ["GrovePlatform.grove-platform-core"]` in `package.json` to ensure core activates first. Use activation events:
 
    ```json
    "activationEvents": ["onStartupFinished", "workspaceContains:**/snip.js"]

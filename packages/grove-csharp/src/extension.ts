@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { runCSharpTests, detectCSharpProject } from "./test-runner";
+import { isRunnableCSharpTestFile } from "./test-file";
 import {
   detectGroveProjects,
   findProjectForFile,
@@ -207,6 +208,15 @@ export async function activate(context: vscode.ExtensionContext) {
       }
 
       const filePath = editor.document.uri.fsPath;
+      if (
+        !isRunnableCSharpTestFile(filePath, editor.document.uri.scheme)
+      ) {
+        vscode.window.showWarningMessage(
+          "Open a C# test file (for example InsertTests.cs) before running this command.",
+        );
+        return;
+      }
+
       const projectPath = await findProjectPathForFile(filePath);
       if (!projectPath) {
         vscode.window.showErrorMessage(

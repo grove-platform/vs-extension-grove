@@ -17,15 +17,15 @@ Grove is MongoDB's test platform for documentation code examples. The Grove VS C
 
 ### Extension Pack Structure
 
-| Extension             | ID                      | Purpose                                                                 |
-| --------------------- | ----------------------- | ----------------------------------------------------------------------- |
-| **Grove Core**        | `mongodb.grove-core`    | Project detection, Grove Panel UI, Bluehawk preview, symlink management |
-| **Grove for Node.js** | `mongodb.grove-nodejs`  | Jest runner, scaffolding, Node.js-specific AI skills                    |
-| **Grove for Python**  | `mongodb.grove-python`  | unittest and pytest runners, scaffolding, Python-specific AI skills   |
-| **Grove for Go**      | `mongodb.grove-go`      | go test runner, scaffolding, Go-specific AI skills                      |
-| **Grove for Java**    | `mongodb.grove-java`    | JUnit runner, scaffolding, Java-specific AI skills                      |
-| **Grove for C#**      | `mongodb.grove-csharp`  | `dotnet test` runner, scaffolding, C#-specific AI skills                |
-| **Grove for mongosh** | `mongodb.grove-mongosh` | Jest runner, scaffolding, mongosh-specific AI skills                    |
+| Extension             | ID                                   | Purpose                                                                 |
+| --------------------- | ------------------------------------ | ----------------------------------------------------------------------- |
+| **Grove Core**        | `GrovePlatform.grove-platform-core`    | Project detection, Grove Panel UI, Bluehawk preview, symlink management |
+| **Grove for Node.js** | `GrovePlatform.grove-platform-nodejs`  | Jest runner, scaffolding, Node.js-specific AI skills                    |
+| **Grove for Python**  | `GrovePlatform.grove-platform-python`  | unittest and pytest runners, scaffolding, Python-specific AI skills   |
+| **Grove for Go**      | `GrovePlatform.grove-platform-go`      | go test runner, scaffolding, Go-specific AI skills                      |
+| **Grove for Java**    | `GrovePlatform.grove-platform-java`    | JUnit runner, scaffolding, Java-specific AI skills                      |
+| **Grove for C#**      | `GrovePlatform.grove-platform-csharp`  | `dotnet test` runner, scaffolding, C#-specific AI skills                |
+| **Grove for mongosh** | `GrovePlatform.grove-platform-mongosh` | Jest runner, scaffolding, mongosh-specific AI skills                    |
 
 All extensions auto-detect Grove projects via `snip.js` presence using `workspaceContains:**/snip.js`.
 
@@ -78,7 +78,7 @@ Grove uses a **monorepo** with pnpm workspaces:
 ```
 vs-extension-grove/
 ├── packages/
-│   ├── grove-core/                    # VS Code extension (mongodb.grove-core)
+│   ├── grove-core/                    # VS Code extension (GrovePlatform.grove-platform-core)
 │   │   ├── src/
 │   │   │   ├── extension.ts           # Extension entry point
 │   │   │   ├── panel/                 # Grove Panel and Profiler webviews
