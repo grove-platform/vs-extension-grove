@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import * as path from "path";
 import * as fs from "fs/promises";
+import { isPathWithinRealBoundary, killProcessTree } from "@grove/shared";
 
 export interface TestRunOptions {
   projectPath: string;
@@ -10,6 +11,8 @@ export interface TestRunOptions {
   env?: Record<string, string>;
   /** Test name pattern for filtering tests (passed as -t to Jest) */
   testNamePattern?: string;
+  /** Extension version from package.json (for output headers) */
+  extensionVersion?: string;
 }
 
 export interface TestResult {
@@ -65,8 +68,24 @@ export async function runJestTests(
     timeout = DEFAULT_TIMEOUT,
     env,
     testNamePattern,
+    extensionVersion = "unknown",
   } = options;
   const effectiveTimeout = Math.min(timeout, MAX_TIMEOUT);
+
+  if (testFile) {
+    const resolvedTestFile = path.resolve(projectPath, testFile);
+    if (!(await isPathWithinRealBoundary(resolvedTestFile, projectPath))) {
+      return {
+        success: false,
+        total: 0,
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+        output: `Test file is outside the Grove project: ${testFile}`,
+        duration: 0,
+      };
+    }
+  }
 
   // Use the project's npm test script, optionally scoped to a specific file and test name.
   // --testPathPattern restricts which test files Jest runs (avoids running all suites).
@@ -81,8 +100,9 @@ export async function runJestTests(
 
   return new Promise((resolve) => {
     const startTime = Date.now();
-    let output = "";
+    let output = `Grove Node.js v${extensionVersion}\nCommand: npm ${args.join(" ")}\n\n`;
     let timedOut = false;
+    let settled = false;
 
     // Merge injected env vars with process.env
     // Injected vars (like CONNECTION_STRING from Grove UI) take precedence
@@ -92,12 +112,22 @@ export async function runJestTests(
     const proc = spawn(npmBin, args, {
       cwd: projectPath,
       env: { ...process.env, CI: "true", ...env },
+      detached: process.platform !== "win32",
     });
 
     const timeoutId = setTimeout(() => {
       timedOut = true;
-      proc.kill("SIGTERM");
+      killProcessTree(proc);
     }, effectiveTimeout);
+
+    const finish = (result: TestResult) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeoutId);
+      resolve(result);
+    };
 
     proc.stdout?.on("data", (data) => {
       output += data.toString();
@@ -107,18 +137,32 @@ export async function runJestTests(
       output += data.toString();
     });
 
+    proc.on("error", (err: NodeJS.ErrnoException) => {
+      finish({
+        success: false,
+        total: 0,
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+        output: `Failed to launch npm: ${err.message}\nExecutable: ${npmBin}\n\n${output}`,
+        duration: Date.now() - startTime,
+      });
+    });
+
     proc.on("close", (code) => {
-      clearTimeout(timeoutId);
+      if (settled) {
+        return;
+      }
       const duration = Date.now() - startTime;
 
       if (timedOut) {
-        resolve({
+        finish({
           success: false,
           total: 0,
           passed: 0,
           failed: 0,
           skipped: 0,
-          output: `Test execution timed out after ${effectiveTimeout / 1000} seconds`,
+          output: `Test execution timed out after ${effectiveTimeout / 1000} seconds\n\n${output}`,
           duration,
         });
         return;
@@ -127,7 +171,7 @@ export async function runJestTests(
       // Parse test counts from Jest output if possible
       const counts = parseJestOutput(output);
 
-      resolve({
+      finish({
         success: code === 0,
         total: counts.total,
         passed: counts.passed,

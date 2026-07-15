@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { runPythonTests, detectPythonProject } from "./test-runner";
-import { isRunnablePythonTestFile } from "./test-file";
+import { runCSharpTests, detectCSharpProject } from "./test-runner";
+import { isRunnableCSharpTestFile } from "./test-file";
 import {
   detectGroveProjects,
   findProjectForFile,
@@ -15,12 +15,20 @@ function getWorkspaceRoot(): string {
   return workspaceFolders?.[0]?.uri.fsPath || "";
 }
 
-function getConfiguredPythonPath(): string | undefined {
-  const fromPythonExt = vscode.workspace
-    .getConfiguration("python")
-    .get<string>("defaultInterpreterPath")
+function getConfiguredDotnetPath(): string | undefined {
+  const fromDotnetExt = vscode.workspace
+    .getConfiguration("dotnet")
+    .get<string>("dotnetPath")
     ?.trim();
-  return fromPythonExt || undefined;
+  return fromDotnetExt || undefined;
+}
+
+function getConfiguredTestTimeoutMs(): number {
+  const seconds = vscode.workspace
+    .getConfiguration("grove")
+    .get<number>("csharp.testTimeoutSeconds", 300);
+  const clamped = Math.min(Math.max(seconds, 30), 300);
+  return clamped * 1000;
 }
 
 function requireTrustedWorkspace(): boolean {
@@ -29,20 +37,21 @@ function requireTrustedWorkspace(): boolean {
   }
 
   vscode.window.showErrorMessage(
-    "Grove Python tests cannot run in an untrusted workspace. Trust this workspace first.",
+    "Grove C# tests cannot run in an untrusted workspace. Trust this workspace first.",
   );
   return false;
 }
 
-function runPythonWithConfiguredInterpreter(
+function runCSharpWithConfiguredDotnet(
   extensionVersion: string,
-  options: Parameters<typeof runPythonTests>[0],
-): ReturnType<typeof runPythonTests> {
-  return runPythonTests({
+  options: Parameters<typeof runCSharpTests>[0],
+): ReturnType<typeof runCSharpTests> {
+  return runCSharpTests({
     ...options,
     extensionVersion,
-    fallbackPythonPath:
-      options.fallbackPythonPath ?? getConfiguredPythonPath(),
+    timeout: options.timeout ?? getConfiguredTestTimeoutMs(),
+    fallbackDotnetPath:
+      options.fallbackDotnetPath ?? getConfiguredDotnetPath(),
   });
 }
 
@@ -70,7 +79,7 @@ async function resolveProjectPathForRunAll(
   }
 
   const workspaceRoot = getWorkspaceRoot();
-  if (workspaceRoot && (await detectPythonProject(workspaceRoot))) {
+  if (workspaceRoot && (await detectCSharpProject(workspaceRoot))) {
     return workspaceRoot;
   }
 
@@ -85,7 +94,7 @@ async function isFileInsideProject(
 }
 
 async function showTestResult(
-  result: Awaited<ReturnType<typeof runPythonTests>>,
+  result: Awaited<ReturnType<typeof runCSharpTests>>,
   outputChannel: vscode.OutputChannel,
   header: string,
 ): Promise<void> {
@@ -102,14 +111,14 @@ async function showTestResult(
     const msg =
       result.total > 0
         ? `Tests passed: ${result.passed}/${result.total}`
-        : "Tests completed successfully";
+        : `Tests completed successfully`;
     vscode.window.showInformationMessage(msg);
     return;
   }
 
   const message =
     result.total === 0
-      ? "Python tests failed to run. Check output for details."
+      ? `C# tests failed to run. Check output for details.`
       : `Tests failed: ${result.failed}/${result.total}`;
 
   const action = await vscode.window.showErrorMessage(message, "Show Output");
@@ -119,11 +128,11 @@ async function showTestResult(
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-  console.log("Grove for Python extension activating...");
+  console.log("Grove for C# extension activating...");
 
   const extensionVersion = context.extension.packageJSON.version ?? "unknown";
-  const runTestsForProject = (options: Parameters<typeof runPythonTests>[0]) =>
-    runPythonWithConfiguredInterpreter(extensionVersion, options);
+  const runTestsForProject = (options: Parameters<typeof runCSharpTests>[0]) =>
+    runCSharpWithConfiguredDotnet(extensionVersion, options);
 
   const groveCore =
     vscode.extensions.getExtension<GroveCoreApi>(
@@ -147,17 +156,17 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   coreApi.registerTestRunner({
-    language: "python",
-    name: "Python",
+    language: "csharp",
+    name: "C#",
     run: runTestsForProject,
-    detect: detectPythonProject,
+    detect: detectCSharpProject,
   });
 
-  const outputChannel = vscode.window.createOutputChannel("Grove Python Tests");
+  const outputChannel = vscode.window.createOutputChannel("Grove C# Tests");
   context.subscriptions.push(outputChannel);
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("grove.python.runTests", async () => {
+    vscode.commands.registerCommand("grove.csharp.runTests", async () => {
       if (!requireTrustedWorkspace()) {
         return;
       }
@@ -167,7 +176,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
       if (!projectPath) {
         vscode.window.showErrorMessage(
-          "No Grove Python project found. Open a file inside a Grove project and try again.",
+          "No Grove C# project found. Open a file inside a Grove project and try again.",
         );
         return;
       }
@@ -175,19 +184,19 @@ export async function activate(context: vscode.ExtensionContext) {
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: "Running Python tests...",
+          title: "Running C# tests...",
           cancellable: false,
         },
         async () => {
-          const result = await profile("Python.runPythonTests", () =>
+          const result = await profile("CSharp.runCSharpTests", () =>
             runTestsForProject({ projectPath }),
           );
-          await showTestResult(result, outputChannel, "=== Python Test Results ===");
+          await showTestResult(result, outputChannel, "=== C# Test Results ===");
         },
       );
     }),
 
-    vscode.commands.registerCommand("grove.python.runTestFile", async () => {
+    vscode.commands.registerCommand("grove.csharp.runTestFile", async () => {
       if (!requireTrustedWorkspace()) {
         return;
       }
@@ -200,10 +209,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
       const filePath = editor.document.uri.fsPath;
       if (
-        !isRunnablePythonTestFile(filePath, editor.document.uri.scheme)
+        !isRunnableCSharpTestFile(filePath, editor.document.uri.scheme)
       ) {
         vscode.window.showWarningMessage(
-          "Open a Python test file (for example test_foo.py) before running this command.",
+          "Open a C# test file (for example InsertTests.cs) before running this command.",
         );
         return;
       }
@@ -232,20 +241,20 @@ export async function activate(context: vscode.ExtensionContext) {
           cancellable: false,
         },
         async () => {
-          const result = await profile("Python.runPythonTestFile", () =>
+          const result = await profile("CSharp.runCSharpTestFile", () =>
             runTestsForProject({ projectPath, testFile }),
           );
           await showTestResult(
             result,
             outputChannel,
-            `=== Python Test Results: ${testFile} ===`,
+            `=== C# Test Results: ${testFile} ===`,
           );
         },
       );
     }),
   );
 
-  console.log("Grove for Python extension activated");
+  console.log("Grove for C# extension activated");
 }
 
 export function deactivate() {

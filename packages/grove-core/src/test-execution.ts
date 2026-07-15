@@ -1,16 +1,28 @@
 /**
  * Shared Test Execution Module
  *
- * Provides common test execution helpers used by both grove.runTests
- * and the test CodeLens runTestBlock function.
+ * Provides common test execution helpers used by grove.runTests,
+ * grove.runTestFile, and the test CodeLens runTestBlock function.
  */
 
 import * as vscode from "vscode";
 import { findProjectForFile } from "@grove/shared";
 import type { GroveProject } from "@grove/shared";
-import { findTestRunnerForProject, runTests } from "./test-runner-api";
+import { resolveRunnerForProject, runTests } from "./test-runner-api";
 import { getTestOutputChannel } from "./logger";
 import { getCachedProjects } from "./project-cache";
+import { maskConnectionString } from "./mongo/credentials";
+
+export function requireTrustedWorkspace(): boolean {
+  if (vscode.workspace.isTrusted) {
+    return true;
+  }
+
+  vscode.window.showErrorMessage(
+    "Grove tests cannot run in an untrusted workspace. Trust this workspace first.",
+  );
+  return false;
+}
 
 export interface TestRunOptions {
   /** Relative path to the specific test file. */
@@ -80,9 +92,16 @@ export async function resolveProject(
  */
 export async function executeTests(
   projectPath: string,
-  opts: TestRunOptions = {},
+  opts: TestRunOptions & { language?: string | null } = {},
 ) {
-  const runner = await findTestRunnerForProject(projectPath);
+  if (!requireTrustedWorkspace()) {
+    return undefined;
+  }
+
+  const runner = await resolveRunnerForProject({
+    projectPath,
+    language: opts.language,
+  });
   if (!runner) {
     vscode.window.showWarningMessage(
       "No test runner found. Install a Grove language extension (e.g., Grove for Node.js).",
@@ -95,9 +114,60 @@ export async function executeTests(
     testFile: opts.testFile,
     testNamePattern: opts.testNamePattern,
     env: opts.env,
+    language: runner.language,
   });
 
   return { result, runner };
+}
+
+/**
+ * Run tests for a resolved Grove project and show results in the Grove Tests channel.
+ */
+export async function runGroveTestsForResolvedProject(
+  resolved: ResolvedProject,
+  options: {
+    testFile?: string;
+    testNamePattern?: string;
+    label: string;
+    uiConnectionString?: string;
+  },
+): Promise<void> {
+  const { resolveTestEnv } = await import("./test-env");
+  const env = await resolveTestEnv(resolved.project, options.uiConnectionString);
+
+  const usingUiConnection =
+    resolved.project.supportsEnvInjection && !!options.uiConnectionString;
+
+  const outcome = await executeTests(resolved.project.rootPath, {
+    testFile: options.testFile,
+    testNamePattern: options.testNamePattern,
+    env,
+    language: resolved.project.language,
+  });
+  if (!outcome) {
+    return;
+  }
+
+  let sanitizedOutput = outcome.result.output ?? "";
+  const uiConnectionString = options.uiConnectionString;
+  if (uiConnectionString && sanitizedOutput.includes(uiConnectionString)) {
+    const masked = maskConnectionString(uiConnectionString);
+    sanitizedOutput = sanitizedOutput.replaceAll(uiConnectionString, masked);
+    getTestOutputChannel().warn(
+      "Connection string was detected in test output and has been masked.",
+    );
+  }
+
+  const extraLines = usingUiConnection
+    ? ["MongoDB: Using Grove extension connection"]
+    : undefined;
+
+  displayTestResults(
+    sanitizedOutput,
+    outcome.result,
+    options.label,
+    extraLines,
+  );
 }
 
 /**
@@ -110,6 +180,7 @@ export function displayTestResults(
     success: boolean;
     passed?: number;
     failed?: number;
+    skipped?: number;
     total?: number;
     duration: number;
   },
@@ -122,6 +193,11 @@ export function displayTestResults(
   ch.appendLine(`Test: ${label}`);
   ch.appendLine(`Duration: ${result.duration}ms`);
   ch.appendLine(`Success: ${result.success}`);
+  if (result.total != null && result.total > 0) {
+    ch.appendLine(
+      `Summary: ${result.passed ?? 0} passed, ${result.failed ?? 0} failed, ${result.skipped ?? 0} skipped (${result.total} total)`,
+    );
+  }
   if (extraLines) {
     for (const line of extraLines) {
       ch.appendLine(line);
@@ -132,9 +208,9 @@ export function displayTestResults(
 
   if (result.success) {
     const msg =
-      result.total != null
+      result.total != null && result.total > 0
         ? `Tests passed: ${result.passed ?? 0}/${result.total}`
-        : `✓ ${label}`;
+        : `Tests completed successfully`;
     vscode.window.showInformationMessage(msg);
   } else {
     const msg =

@@ -1,8 +1,8 @@
 {
-  "name": "grove-platform-python",
-  "displayName": "Grove UI for Python",
-  "description": "Python (pytest and unittest) support for Grove documentation testing",
-  "version": "0.0.4",
+  "name": "grove-platform-csharp",
+  "displayName": "Grove UI for C#",
+  "description": "C# (.NET / dotnet test) support for Grove documentation testing",
+  "version": "0.0.3",
   "publisher": "GrovePlatform",
   "engines": {
     "vscode": "^1.110.0"
@@ -10,7 +10,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "Grove Python test commands are disabled in untrusted workspaces because pytest/unittest execute project code."
+      "description": "Grove C# test commands are disabled in untrusted workspaces because dotnet test executes project build targets."
     }
   },
   "categories": [
@@ -24,14 +24,26 @@
     "GrovePlatform.grove-platform-core"
   ],
   "contributes": {
+    "configuration": {
+      "title": "Grove C#",
+      "properties": {
+        "grove.csharp.testTimeoutSeconds": {
+          "type": "number",
+          "default": 300,
+          "minimum": 30,
+          "maximum": 300,
+          "description": "Maximum time in seconds to wait for dotnet test to finish (includes build time)."
+        }
+      }
+    },
     "commands": [
       {
-        "command": "grove.python.runTests",
-        "title": "Grove: Run Python Tests"
+        "command": "grove.csharp.runTests",
+        "title": "Grove: Run C# Tests"
       },
       {
-        "command": "grove.python.runTestFile",
-        "title": "Grove: Run Current Python Test File"
+        "command": "grove.csharp.runTestFile",
+        "title": "Grove: Run Current C# Test File"
       }
     ]
   },

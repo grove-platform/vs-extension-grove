@@ -1,6 +1,53 @@
 import * as path from "path";
 import * as fs from "fs/promises";
-import { GroveProject, GroveLanguage, GROVE_PROJECT_DISPLAY_NAMES } from "./types";
+import {
+  GroveProject,
+  GroveLanguage,
+  GROVE_PROJECT_DISPLAY_NAMES,
+} from "./types";
+
+const LANGUAGE_DISPLAY_NAMES: Record<GroveLanguage, string> = {
+  nodejs: "Node.js Driver",
+  python: "PyMongo",
+  go: "Go Driver",
+  java: "Java Sync Driver",
+  csharp: "C# Driver",
+  mongosh: "mongosh",
+};
+
+/**
+ * Resolve a human-readable project name for UI labels.
+ * When the workspace is opened at a Grove project root, relativePath is "." —
+ * match known projects by suffix or fall back to detected language.
+ */
+export function resolveProjectDisplayName(options: {
+  workspacePath: string;
+  projectRoot: string;
+  relativePath: string;
+  language: GroveLanguage | null;
+}): string {
+  const { workspacePath, projectRoot, relativePath, language } = options;
+
+  const mapped = GROVE_PROJECT_DISPLAY_NAMES[relativePath];
+  if (mapped) {
+    return mapped;
+  }
+
+  if (relativePath === ".") {
+    const posixRoot = path.resolve(projectRoot).replace(/\\/g, "/");
+    for (const [key, name] of Object.entries(GROVE_PROJECT_DISPLAY_NAMES)) {
+      if (posixRoot === key || posixRoot.endsWith(`/${key}`)) {
+        return name;
+      }
+    }
+    if (language && LANGUAGE_DISPLAY_NAMES[language]) {
+      return LANGUAGE_DISPLAY_NAMES[language];
+    }
+    return path.basename(projectRoot);
+  }
+
+  return relativePath;
+}
 
 /**
  * Returns whether Grove can inject CONNECTION_STRING for projects of this language.
@@ -30,7 +77,12 @@ export async function detectGroveProjects(
     projects.push({
       rootPath: projectRoot,
       relativePath,
-      displayName: GROVE_PROJECT_DISPLAY_NAMES[relativePath] ?? relativePath,
+      displayName: resolveProjectDisplayName({
+        workspacePath,
+        projectRoot,
+        relativePath,
+        language,
+      }),
       language,
       supportsEnvInjection: supportsEnvInjection(language),
     });
@@ -137,10 +189,12 @@ export async function detectLanguage(
     }
   }
 
-  // Check for C# (*.csproj)
+  // Check for C# (*.csproj or *.sln)
   try {
     const entries = await fs.readdir(projectPath);
-    if (entries.some((e) => e.endsWith(".csproj"))) {
+    if (
+      entries.some((e) => e.endsWith(".csproj") || e.endsWith(".sln"))
+    ) {
       return "csharp";
     }
   } catch {

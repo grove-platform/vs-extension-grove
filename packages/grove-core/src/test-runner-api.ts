@@ -88,6 +88,24 @@ export async function findTestRunnerForProject(
 }
 
 /**
+ * Resolve the test runner for a Grove project.
+ * Prefers the language from snip.js project detection, then falls back to detect().
+ */
+export async function resolveRunnerForProject(options: {
+  projectPath: string;
+  language?: string | null;
+}): Promise<TestRunner | undefined> {
+  const { projectPath, language } = options;
+  if (language) {
+    const runner = getTestRunner(language);
+    if (runner) {
+      return runner;
+    }
+  }
+  return findTestRunnerForProject(projectPath);
+}
+
+/**
  * Run tests for a project using the appropriate runner.
  * Auto-detects the runner if language is not specified.
  */
@@ -130,6 +148,7 @@ export function getApi() {
     getTestRunner,
     listTestRunners,
     findTestRunnerForProject,
+    resolveRunnerForProject,
     runTests,
   };
 }

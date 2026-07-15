@@ -194,6 +194,7 @@ async function runTestBlock(
         const outcome = await executeTests(project.rootPath, {
           testFile: relativeTestFile,
           testNamePattern,
+          language: project.language,
         });
         if (!outcome) return;
 

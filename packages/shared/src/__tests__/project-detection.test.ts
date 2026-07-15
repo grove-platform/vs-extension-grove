@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { detectGroveProjects, detectLanguage } from "../project-detection";
+import { detectGroveProjects, detectLanguage, resolveProjectDisplayName } from "../project-detection";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
@@ -40,6 +40,18 @@ describe("detectGroveProjects", () => {
   it("should return empty array when no snip.js found", async () => {
     const projects = await detectGroveProjects(tempDir);
     expect(projects).toHaveLength(0);
+  });
+
+  it("should use C# Driver display name when workspace is opened at driver root", async () => {
+    const driverRoot = path.join(tempDir, "code-example-tests", "csharp", "driver");
+    await fs.mkdir(driverRoot, { recursive: true });
+    await fs.writeFile(path.join(driverRoot, "snip.js"), "module.exports = {};");
+    await fs.writeFile(path.join(driverRoot, "driver.sln"), "\n");
+
+    const projects = await detectGroveProjects(driverRoot);
+    expect(projects).toHaveLength(1);
+    expect(projects[0].displayName).toBe("C# Driver");
+    expect(projects[0].relativePath).toBe(".");
   });
 
   it("should skip node_modules directories", async () => {
@@ -133,9 +145,50 @@ describe("detectLanguage", () => {
     expect(lang).toBe("csharp");
   });
 
+  it("should detect csharp from .sln file", async () => {
+    await fs.writeFile(path.join(tempDir, "Driver.sln"), "\n");
+    const lang = await detectLanguage(tempDir);
+    expect(lang).toBe("csharp");
+  });
+
   it("should return null when no language detected", async () => {
     const lang = await detectLanguage(tempDir);
     expect(lang).toBeNull();
+  });
+});
+
+describe("resolveProjectDisplayName", () => {
+  it("should prefer canonical mapping by relative path", () => {
+    expect(
+      resolveProjectDisplayName({
+        workspacePath: "/repo",
+        projectRoot: "/repo/code-example-tests/csharp/driver",
+        relativePath: "code-example-tests/csharp/driver",
+        language: "csharp",
+      }),
+    ).toBe("C# Driver");
+  });
+
+  it("should match known projects when workspace is opened at project root", () => {
+    expect(
+      resolveProjectDisplayName({
+        workspacePath: "/repo/code-example-tests/csharp/driver",
+        projectRoot: "/repo/code-example-tests/csharp/driver",
+        relativePath: ".",
+        language: "csharp",
+      }),
+    ).toBe("C# Driver");
+  });
+
+  it("should fall back to language name for unknown project roots", () => {
+    expect(
+      resolveProjectDisplayName({
+        workspacePath: "/repo/my-csharp-tests",
+        projectRoot: "/repo/my-csharp-tests",
+        relativePath: ".",
+        language: "csharp",
+      }),
+    ).toBe("C# Driver");
   });
 });
 

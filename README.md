@@ -20,11 +20,11 @@ Grove automatically detects code example projects (identified by `snip.js` files
 | **Grove Core**        | `grove-core`   | Core functionality: project detection, Bluehawk preview, RST navigation, MongoDB connection |
 | **Grove for Node.js** | `grove-nodejs` | Jest/Vitest test runner for JavaScript/TypeScript projects                                  |
 | **Grove for Python**  | `grove-python` | pytest and unittest runners for Python projects                                             |
+| **Grove for C#**      | `grove-csharp` | `dotnet test` runner for C# / .NET projects                                                 |
 
 ### Planned Extensions
 - **Grove for Go** - Go test runner
 - **Grove for Java** - JUnit/Maven test runner
-- **Grove for C#** - NUnit/.NET test runner
 
 ## Getting Started
 
@@ -51,7 +51,8 @@ grove-extension/
 │   ├── shared/           # @grove/shared - Shared utilities (no VS Code deps)
 │   ├── grove-core/       # Core extension
 │   ├── grove-nodejs/     # Node.js language extension
-│   └── grove-python/     # Python language extension
+│   ├── grove-python/     # Python language extension
+│   └── grove-csharp/     # C# language extension
 ├── meta/
 │   ├── features.md       # Feature roadmap and ideas
 │   ├── discovery.md      # Initial project discovery notes

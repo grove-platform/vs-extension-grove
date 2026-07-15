@@ -12,7 +12,7 @@ Grove for Node.js activates alongside Grove Core when a workspace contains a `sn
 
 ## Requirements
 
-- **Grove Core** (`mongodb.grove-core`) must be installed
+- **Grove Core** (`GrovePlatform.grove-platform-core`) must be installed
 - Node.js >= 22.0.0
 - npm (for running `npm test`)
 
@@ -21,7 +21,9 @@ Grove for Node.js activates alongside Grove Core when a workspace contains a `sn
 | Command                    | Title                         | Description                          |
 | -------------------------- | ----------------------------- | ------------------------------------ |
 | `grove.nodejs.runTests`    | Grove: Run Node.js Tests      | Run all tests in the current project |
-| `grove.nodejs.runTestFile` | Grove: Run Current Test File  | Run tests in the active file only    |
+| `grove.nodejs.runTestFile` | Grove: Run Current Node.js Test File | Run tests in the active file only    |
+
+The language-specific commands above call `npm test` directly and use the Grove Node.js output channel. For Grove's shared test environment behavior (`.env` loading, MongoDB connection injection from the Grove UI, and masked connection strings), prefer the core commands **Grove: Run Tests** and **Grove: Run Current Test File**.
 
 ## Architecture
 
@@ -104,11 +106,13 @@ Grove for Node.js is a **companion extension** that extends Grove Core's functio
 
 ```json
 {
-  "extensionDependencies": ["mongodb.grove-core"]
+  "extensionDependencies": ["GrovePlatform.grove-platform-core"]
 }
 ```
 
-When users run `Grove: Run Tests` (the core command), Grove Core automatically delegates to this extension's Jest runner for Node.js projects.
+When users run `Grove: Run Tests` or `Grove: Run Current Test File` (the core commands), Grove Core automatically delegates to this extension's Jest runner for Node.js projects.
+
+Test commands are disabled in untrusted workspaces. Grove validates that single-file runs stay within the detected Grove project boundary (including symlink traversal) before invoking `npm test`.
 
 ## Development
 

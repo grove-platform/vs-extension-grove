@@ -4,6 +4,7 @@ import {
   getTestRunner,
   listTestRunners,
   findTestRunnerForProject,
+  resolveRunnerForProject,
   runTests,
   TestRunner,
 } from "../test-runner-api";
@@ -112,6 +113,53 @@ describe("Test Runner API", () => {
       // This may or may not be undefined depending on other registered runners
       // Just verify it doesn't throw
       expect(found === undefined || found !== undefined).toBe(true);
+    });
+  });
+
+  describe("resolveRunnerForProject", () => {
+    it("should prefer the Grove project language over detect order", async () => {
+      const uniqueMarker = `lang-prefer-${uniqueId()}`;
+      const csharpLang = `csharp-${uniqueId()}`;
+      const nodeLang = `nodejs-${uniqueId()}`;
+
+      registerTestRunner({
+        language: nodeLang,
+        name: "Node Runner",
+        run: async () => ({ success: true, duration: 1 }),
+        detect: async () => false,
+      });
+      registerTestRunner({
+        language: csharpLang,
+        name: "C# Runner",
+        run: async () => ({ success: true, duration: 1 }),
+        detect: async (projectPath) => projectPath.includes(uniqueMarker),
+      });
+
+      const found = await resolveRunnerForProject({
+        projectPath: `/path/to/${uniqueMarker}/driver`,
+        language: csharpLang,
+      });
+
+      expect(found?.language).toBe(csharpLang);
+    });
+
+    it("should fall back to detect when language is not registered", async () => {
+      const uniqueMarker = `lang-fallback-${uniqueId()}`;
+      const detectLang = `detect-only-${uniqueId()}`;
+
+      registerTestRunner({
+        language: detectLang,
+        name: "Detect Runner",
+        run: async () => ({ success: true, duration: 1 }),
+        detect: async (projectPath) => projectPath.includes(uniqueMarker),
+      });
+
+      const found = await resolveRunnerForProject({
+        projectPath: `/path/to/${uniqueMarker}/driver`,
+        language: `missing-${uniqueId()}`,
+      });
+
+      expect(found?.language).toBe(detectLang);
     });
   });
 

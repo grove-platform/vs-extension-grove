@@ -21,8 +21,8 @@ vi.mock("vscode", () => ({
 vi.mock("../../project-cache", () => ({
   getCachedProjects: vi.fn(() =>
     Promise.resolve([
-      { name: "test-project-1", rootPath: "/path/to/project1" },
-      { name: "test-project-2", rootPath: "/path/to/project2" },
+      { displayName: "test-project-1", rootPath: "/path/to/project1" },
+      { displayName: "test-project-2", rootPath: "/path/to/project2" },
     ]),
   ),
 }));

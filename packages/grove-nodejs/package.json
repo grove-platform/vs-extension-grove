@@ -7,6 +7,12 @@
   "engines": {
     "vscode": "^1.110.0"
   },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Grove Node.js test commands are disabled in untrusted workspaces because npm test executes project scripts."
+    }
+  },
   "categories": [
     "Other"
   ],
@@ -25,7 +31,7 @@
       },
       {
         "command": "grove.nodejs.runTestFile",
-        "title": "Grove: Run Current Test File"
+        "title": "Grove: Run Current Node.js Test File"
       }
     ]
   },
