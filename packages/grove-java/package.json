@@ -27,12 +27,19 @@
     "configuration": {
       "title": "Grove Java",
       "properties": {
+        "grove.java.utilitiesTimeoutSeconds": {
+          "type": "number",
+          "default": 180,
+          "minimum": 30,
+          "maximum": 300,
+          "description": "Maximum time in seconds to wait for the Maven utilities install (comparison-library) before tests run."
+        },
         "grove.java.testTimeoutSeconds": {
           "type": "number",
           "default": 300,
           "minimum": 30,
           "maximum": 300,
-          "description": "Maximum time in seconds to wait for Maven utilities build and test execution."
+          "description": "Maximum time in seconds to wait for the Maven test phase."
         },
         "grove.java.mavenPath": {
           "type": "string",

@@ -2,8 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   buildMavenTestArgs,
   buildUtilitiesInstallArgs,
+  deriveTestClassFromFile,
   detectJavaProject,
+  escapeSurefireTestValue,
+  evaluateMavenTestSuccess,
   isJavaAggregatorPom,
+  isScopedMavenTestRun,
   parseMavenOutput,
   resolveJavaMultiModuleRoot,
   resolveMavenBin,
@@ -29,9 +33,9 @@ describe("detectJavaProject", () => {
     expect(await detectJavaProject(tempDir)).toBe(true);
   });
 
-  it("should detect a build.gradle project", async () => {
+  it("should not treat Gradle-only projects as runnable", async () => {
     await fs.writeFile(path.join(tempDir, "build.gradle"), "\n");
-    expect(await detectJavaProject(tempDir)).toBe(true);
+    expect(await detectJavaProject(tempDir)).toBe(false);
   });
 
   it("should return false when no Java markers found", async () => {
@@ -103,6 +107,15 @@ describe("resolveJavaMultiModuleRoot", () => {
     expect(isJavaAggregatorPom(pom)).toBe(false);
   });
 
+  it("should not match unrelated packaging poms that mention utilities", async () => {
+    const pom = `<project>
+  <artifactId>other-aggregator</artifactId>
+  <packaging>pom</packaging>
+  <modules><module>utilities</module></modules>
+</project>`;
+    expect(isJavaAggregatorPom(pom)).toBe(false);
+  });
+
   it("should return undefined when no multi-module root exists", async () => {
     await fs.writeFile(path.join(tempDir, "pom.xml"), "<project></project>\n");
     expect(await resolveJavaMultiModuleRoot(tempDir)).toBeUndefined();
@@ -122,17 +135,37 @@ describe("buildUtilitiesInstallArgs", () => {
   });
 });
 
+describe("deriveTestClassFromFile", () => {
+  it("should derive an FQCN from src/test/java paths", () => {
+    expect(
+      deriveTestClassFromFile(
+        "src/test/java/aggregation/pipelines/TutorialTests.java",
+      ),
+    ).toBe("aggregation.pipelines.TutorialTests");
+  });
+
+  it("should fall back to the basename outside src/test/java", () => {
+    expect(deriveTestClassFromFile("TutorialTests.java")).toBe("TutorialTests");
+  });
+});
+
+describe("escapeSurefireTestValue", () => {
+  it("should escape Surefire metacharacters", () => {
+    expect(escapeSurefireTestValue("foo,bar#baz!")).toBe("foo\\,bar\\#baz\\!");
+  });
+});
+
 describe("buildMavenTestArgs", () => {
   it("should run all tests with batch mode", () => {
     expect(buildMavenTestArgs({})).toEqual(["test", "-B"]);
   });
 
-  it("should filter by test class from file name", () => {
+  it("should filter by FQCN from nested test paths", () => {
     expect(
       buildMavenTestArgs({
-        testFile: "src/test/java/aggregation/TutorialTests.java",
+        testFile: "src/test/java/aggregation/pipelines/TutorialTests.java",
       }),
-    ).toEqual(["test", "-B", "-Dtest=TutorialTests"]);
+    ).toEqual(["test", "-B", "-Dtest=aggregation.pipelines.TutorialTests"]);
   });
 
   it("should filter by class and method", () => {
@@ -141,7 +174,15 @@ describe("buildMavenTestArgs", () => {
         testFile: "src/test/java/aggregation/TutorialTests.java",
         testNamePattern: "TestFilter",
       }),
-    ).toEqual(["test", "-B", "-Dtest=TutorialTests#TestFilter"]);
+    ).toEqual(["test", "-B", "-Dtest=aggregation.TutorialTests#TestFilter"]);
+  });
+
+  it("should escape method patterns with Surefire metacharacters", () => {
+    expect(buildMavenTestArgs({ testNamePattern: "foo,bar" })).toEqual([
+      "test",
+      "-B",
+      "-Dtest=*foo\\,bar*",
+    ]);
   });
 
   it("should filter by method pattern when no file is provided", () => {
@@ -158,6 +199,34 @@ describe("buildMavenTestArgs", () => {
         testFile: "extension-output-GrovePlatform.grove-platform-java",
       }),
     ).toEqual(["test", "-B"]);
+  });
+});
+
+describe("evaluateMavenTestSuccess", () => {
+  it("should fail scoped runs that match zero tests despite Maven exit 0", () => {
+    expect(
+      evaluateMavenTestSuccess(true, { total: 0 }, true),
+    ).toBe(false);
+  });
+
+  it("should allow full-suite runs with zero executed tests", () => {
+    expect(
+      evaluateMavenTestSuccess(true, { total: 0 }, false),
+    ).toBe(true);
+  });
+
+  it("should fail when Maven exits non-zero", () => {
+    expect(
+      evaluateMavenTestSuccess(false, { total: 3 }, true),
+    ).toBe(false);
+  });
+});
+
+describe("isScopedMavenTestRun", () => {
+  it("should detect file and pattern scoped runs", () => {
+    expect(isScopedMavenTestRun({ testFile: "Foo.java" })).toBe(true);
+    expect(isScopedMavenTestRun({ testNamePattern: "bar" })).toBe(true);
+    expect(isScopedMavenTestRun({})).toBe(false);
   });
 });
 
@@ -220,7 +289,8 @@ describe("runJavaTests spawn error", () => {
       projectPath: tempDir,
       mavenPath: "/nonexistent/grove-java-missing-mvn",
       skipUtilitiesBuild: true,
-      timeout: 5_000,
+      testTimeout: 5_000,
+      utilitiesTimeout: 5_000,
     });
 
     expect(result.success).toBe(false);

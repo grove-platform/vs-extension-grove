@@ -1,14 +1,16 @@
 import { spawn } from "child_process";
 import * as path from "path";
 import * as fs from "fs/promises";
-import { isPathWithinRealBoundary, killProcessTree } from "@grove/shared";
-import { resolveJavaTestEnv } from "./env";
+import { isPathWithinRealBoundary, killProcessTree, loadEnvFile } from "@grove/shared";
 
 export interface TestRunOptions {
   projectPath: string;
   testFile?: string;
-  timeout?: number;
-  /** Additional environment variables to inject into the test process */
+  /** Max milliseconds for the Maven test phase */
+  testTimeout?: number;
+  /** Max milliseconds for the utilities install phase */
+  utilitiesTimeout?: number;
+  /** Environment variables injected by Grove Core (includes .env and UI connection) */
   env?: Record<string, string>;
   /** Test method name for Surefire -Dtest=Class#method filtering */
   testNamePattern?: string;
@@ -32,8 +34,11 @@ export interface TestResult {
   duration: number;
 }
 
-const DEFAULT_TIMEOUT = 300_000;
-const MAX_TIMEOUT = 300_000;
+const DEFAULT_TEST_TIMEOUT = 300_000;
+const MAX_TEST_TIMEOUT = 300_000;
+const DEFAULT_UTILITIES_TIMEOUT = 180_000;
+const MAX_UTILITIES_TIMEOUT = 300_000;
+const TEST_SOURCE_SEGMENT = /(?:^|\/)src\/test\/java\/(.+)\.java$/i;
 
 function getSystemMavenBin(): string {
   return process.platform === "win32" ? "mvn.cmd" : "mvn";
@@ -61,8 +66,8 @@ export function resolveMavenBin(
 }
 
 /**
- * Detect whether the workspace looks like a Java Grove project.
- * Matches @grove/shared language detection: `pom.xml` or `build.gradle`.
+ * Detect whether the workspace looks like a Maven-based Java Grove project.
+ * Gradle-only projects are not supported by this runner.
  */
 export async function detectJavaProject(
   projectPath: string,
@@ -71,12 +76,7 @@ export async function detectJavaProject(
     await fs.access(path.join(projectPath, "pom.xml"));
     return true;
   } catch {
-    try {
-      await fs.access(path.join(projectPath, "build.gradle"));
-      return true;
-    } catch {
-      return false;
-    }
+    return false;
   }
 }
 
@@ -85,6 +85,7 @@ export async function detectJavaProject(
  */
 export function isJavaAggregatorPom(pomContent: string): boolean {
   return (
+    pomContent.includes("<artifactId>java-code-examples</artifactId>") &&
     pomContent.includes("<packaging>pom</packaging>") &&
     pomContent.includes("<module>utilities</module>")
   );
@@ -132,6 +133,27 @@ export function buildUtilitiesInstallArgs(): string[] {
 }
 
 /**
+ * Derive a Surefire class name from a test source path.
+ * Prefers the FQCN from `src/test/java/.../ClassName.java`.
+ */
+export function deriveTestClassFromFile(testFile: string): string {
+  const posix = testFile.replaceAll("\\", "/");
+  const match = posix.match(TEST_SOURCE_SEGMENT);
+  if (match) {
+    return match[1].replaceAll("/", ".");
+  }
+
+  return path.basename(testFile).replace(/\.java$/i, "");
+}
+
+/**
+ * Escape literal characters that Surefire treats specially in -Dtest filters.
+ */
+export function escapeSurefireTestValue(value: string): string {
+  return value.replace(/([,#\\!])/g, "\\$1");
+}
+
+/**
  * Maven args for `mvn test` with optional Surefire class/method filters.
  */
 export function buildMavenTestArgs(options: {
@@ -143,18 +165,44 @@ export function buildMavenTestArgs(options: {
 
   let testFilter: string | undefined;
   if (testFile && /\.java$/i.test(testFile)) {
-    testFilter = path.basename(testFile).replace(/\.java$/i, "");
+    testFilter = deriveTestClassFromFile(testFile);
   }
   if (testNamePattern) {
+    const escapedPattern = escapeSurefireTestValue(testNamePattern);
     testFilter = testFilter
-      ? `${testFilter}#${testNamePattern}`
-      : `*${testNamePattern}*`;
+      ? `${testFilter}#${escapedPattern}`
+      : `*${escapedPattern}*`;
   }
   if (testFilter) {
     args.push(`-Dtest=${testFilter}`);
   }
 
   return args;
+}
+
+export function isScopedMavenTestRun(options: {
+  testFile?: string;
+  testNamePattern?: string;
+}): boolean {
+  return !!(options.testFile || options.testNamePattern);
+}
+
+/**
+ * Combine Maven exit status with parsed Surefire counts.
+ * Scoped runs that match zero tests are treated as failures.
+ */
+export function evaluateMavenTestSuccess(
+  mavenExitSuccess: boolean,
+  counts: { total: number },
+  scoped: boolean,
+): boolean {
+  if (!mavenExitSuccess) {
+    return false;
+  }
+  if (scoped && counts.total === 0) {
+    return false;
+  }
+  return true;
 }
 
 interface MavenRunResult {
@@ -292,7 +340,6 @@ function emptyFailureResult(
     duration,
   };
 }
-
 /**
  * Run Java tests via Maven. Installs utilities/comparison-library locally first
  * when a multi-module Java root is found, then runs `mvn test` in the Grove project.
@@ -303,17 +350,23 @@ export async function runJavaTests(
   const {
     projectPath,
     testFile,
-    timeout = DEFAULT_TIMEOUT,
-    env: envOverride,
+    testTimeout = DEFAULT_TEST_TIMEOUT,
+    utilitiesTimeout = DEFAULT_UTILITIES_TIMEOUT,
+    env: envOverride = {},
     testNamePattern,
     mavenPath,
     fallbackMavenPath,
     skipUtilitiesBuild = false,
     extensionVersion = "unknown",
   } = options;
-  const effectiveTimeout = Math.min(timeout, MAX_TIMEOUT);
+  const effectiveTestTimeout = Math.min(testTimeout, MAX_TEST_TIMEOUT);
+  const effectiveUtilitiesTimeout = Math.min(
+    utilitiesTimeout,
+    MAX_UTILITIES_TIMEOUT,
+  );
   const mavenBin = resolveMavenBin(mavenPath, fallbackMavenPath);
   const startTime = Date.now();
+  const scoped = isScopedMavenTestRun({ testFile, testNamePattern });
 
   if (testFile) {
     const resolvedTestFile = path.resolve(projectPath, testFile);
@@ -330,22 +383,20 @@ export async function runJavaTests(
     }
   }
 
-  const env =
-    envOverride !== undefined
-      ? envOverride
-      : await resolveJavaTestEnv(projectPath);
+  const envFromFile = (await loadEnvFile(projectPath)) ?? {};
+  const env = { ...envFromFile, ...envOverride };
 
-  let output = `Grove Java v${extensionVersion}\nTimeout limit: ${effectiveTimeout / 1000}s\n`;
+  let output =
+    `Grove Java v${extensionVersion}\n` +
+    `Utilities timeout: ${effectiveUtilitiesTimeout / 1000}s\n` +
+    `Test timeout: ${effectiveTestTimeout / 1000}s\n`;
   if (env.CONNECTION_STRING) {
     output += "MongoDB: CONNECTION_STRING is set\n";
   } else {
     output +=
-      "Warning: CONNECTION_STRING is not set. Add driver-sync/.env, driver-sync/src/.env, or java/.env, or use Grove: Run Current Test File (Grove Core) with a MongoDB connection in the Grove UI.\n";
+      "Warning: CONNECTION_STRING is not set. Add driver-sync/.env, driver-sync/src/.env, or java/.env, or use Grove Core test commands with a MongoDB connection in the Grove UI.\n";
   }
   output += "\n";
-
-  const remainingTimeout = () =>
-    Math.max(effectiveTimeout - (Date.now() - startTime), 1);
 
   if (!skipUtilitiesBuild) {
     const multiModuleRoot = await resolveJavaMultiModuleRoot(projectPath);
@@ -356,7 +407,7 @@ export async function runJavaTests(
         args: utilitiesArgs,
         cwd: multiModuleRoot,
         env,
-        timeoutMs: remainingTimeout(),
+        timeoutMs: effectiveUtilitiesTimeout,
         outputPrefix: "=== Installing Java utilities (comparison-library) ===",
       });
 
@@ -367,7 +418,7 @@ export async function runJavaTests(
       }
       if (buildResult.timedOut) {
         return emptyFailureResult(
-          `${output}Utilities build timed out after ${effectiveTimeout / 1000} seconds\n`,
+          `${output}Utilities build timed out after ${effectiveUtilitiesTimeout / 1000} seconds\n`,
           Date.now() - startTime,
         );
       }
@@ -380,7 +431,7 @@ export async function runJavaTests(
     } else {
       output +=
         "Note: No Java multi-module root found; skipping utilities install.\n" +
-        "If tests fail on missing com.mongodb.docs:comparison-library, open the java/ parent folder or run mvn install -DskipTests from that directory.\n\n";
+        "If tests fail on missing com.mongodb.docs:comparison-library, open the java/ parent folder or run mvn install -DskipTests -B -pl utilities/comparison-library,utilities/sample-data -am from that directory.\n\n";
     }
   }
 
@@ -390,7 +441,7 @@ export async function runJavaTests(
     args: testArgs,
     cwd: projectPath,
     env,
-    timeoutMs: remainingTimeout(),
+    timeoutMs: effectiveTestTimeout,
     outputPrefix: "=== Running Maven tests ===",
   });
 
@@ -404,15 +455,21 @@ export async function runJavaTests(
 
   if (testResult.timedOut) {
     return emptyFailureResult(
-      `${output}\nTest execution timed out after ${effectiveTimeout / 1000} seconds\n`,
+      `${output}\nTest execution timed out after ${effectiveTestTimeout / 1000} seconds\n`,
       duration,
     );
   }
 
   const counts = parseMavenOutput(output);
+  const success = evaluateMavenTestSuccess(testResult.success, counts, scoped);
+
+  if (!success && scoped && counts.total === 0 && testResult.success) {
+    output +=
+      "\nNo tests matched the requested file or name pattern. Check the class name under src/test/java and Surefire -Dtest filters.\n";
+  }
 
   return {
-    success: testResult.success,
+    success,
     total: counts.total,
     passed: counts.passed,
     failed: counts.failed,

@@ -16,22 +16,24 @@ Grove for Java activates alongside Grove Core when a workspace contains a `snip.
 - **Grove Core** (`GrovePlatform.grove-platform-core`) must be installed
 - **Apache Maven** (`mvn`) available on `PATH`, or configured via `grove.java.mavenPath`
 - **JDK 21** (matches the Java driver test suite)
+- A **`pom.xml`** in the Grove project (Gradle-only projects are not supported)
 
 For the MongoDB docs Java driver suite (`code-example-tests/java/driver-sync`), Grove automatically runs:
 
 ```bash
-mvn install -DskipTests -B -pl utilities -am
+mvn install -DskipTests -B -pl utilities/comparison-library,utilities/sample-data -am
 ```
 
 from the `java/` multi-module root before `mvn test` in the Grove project directory. This installs `com.mongodb.docs:comparison-library` and `sample-data` into your local Maven repository.
 
-Grove loads `CONNECTION_STRING` from `driver-sync/.env`, `driver-sync/src/.env`, or `java/.env`. Use **Grove: Run Tests** from Grove Core to also inject a connection string from the Grove MongoDB UI.
+Grove Core loads `CONNECTION_STRING` from `driver-sync/.env`, `driver-sync/src/.env`, or `java/.env`. Use **Grove: Run Tests** from Grove Core to also inject a connection string from the Grove MongoDB UI.
 
 ## Settings
 
 | Setting | Default | Description |
 | ------- | ------- | ----------- |
-| `grove.java.testTimeoutSeconds` | `300` | Max seconds for utilities build + test run |
+| `grove.java.utilitiesTimeoutSeconds` | `180` | Max seconds for the utilities install phase |
+| `grove.java.testTimeoutSeconds` | `300` | Max seconds for the Maven test phase |
 | `grove.java.mavenPath` | `""` | Path to `mvn` when not on `PATH` |
 | `grove.java.skipUtilitiesBuild` | `false` | Skip comparison-library install (use when already built) |
 
@@ -41,6 +43,8 @@ Grove loads `CONNECTION_STRING` from `driver-sync/.env`, `driver-sync/src/.env`,
 | ------- | ----- | ----------- |
 | `grove.java.runTests` | Grove: Run Java Tests | Run all tests in the current project |
 | `grove.java.runTestFile` | Grove: Run Current Java Test File | Run tests in the active file only |
+
+The language-specific commands above route through Grove Core's `runGroveTests` API, so they use the same `.env` loading, MongoDB connection injection, connection-string masking, and Grove Tests output channel as **Grove: Run Tests** and **Grove: Run Current Test File**.
 
 ## Architecture
 
@@ -58,27 +62,28 @@ The test runner (`test-runner.ts`) provides:
 
 #### `detectJavaProject(projectPath: string): Promise<boolean>`
 
-Detects Java projects by checking for `pom.xml` or `build.gradle`, matching `@grove/shared` language detection.
+Detects Maven Java projects by checking for `pom.xml`.
 
 #### `runJavaTests(options: TestRunOptions): Promise<TestResult>`
 
 1. Resolves the Java multi-module root (parent `java/` directory when present)
-2. Runs `mvn install -DskipTests -B -pl utilities -am` to build comparison-library locally
+2. Runs `mvn install -DskipTests -B -pl utilities/comparison-library,utilities/sample-data -am` to build comparison-library locally
 3. Runs `mvn test -B` in the Grove project directory (`driver-sync`, etc.)
 
 | Scope | Command |
 | ----- | ------- |
 | All tests | `mvn test -B` |
-| Single file | `mvn test -B -Dtest=TutorialTests` |
-| Single method | `mvn test -B -Dtest=TutorialTests#TestFilter` |
+| Single file | `mvn test -B -Dtest=aggregation.pipelines.TutorialTests` |
+| Single method | `mvn test -B -Dtest=aggregation.pipelines.TutorialTests#TestFilter` |
 
-Single-file runs use the test class name derived from the file basename (e.g. `TutorialTests.java` → `TutorialTests`), matching Maven Surefire conventions.
+Single-file runs derive the Surefire class name from the path under `src/test/java/` (FQCN), not just the file basename.
 
 Also:
 
-- Injects environment variables (including `CONNECTION_STRING` from Grove UI)
-- Enforces timeout limits (default: 300s, max: 300s)
+- Receives environment variables from Grove Core (including `CONNECTION_STRING` from `.env` or the Grove UI)
+- Uses separate timeout budgets for utilities install and test execution
 - Fails fast when `mvn` cannot be spawned
+- Treats scoped runs that match zero tests as failures
 - Sums pass/fail/skip counts across Surefire summary lines
 
 ## Integration with Grove Core
@@ -104,7 +109,7 @@ If you prefer to build utilities yourself:
 
 ```bash
 cd code-example-tests/java
-mvn install -DskipTests
+mvn install -DskipTests -B -pl utilities/comparison-library,utilities/sample-data -am
 ```
 
 Then set `grove.java.skipUtilitiesBuild` to `true` in VS Code settings.

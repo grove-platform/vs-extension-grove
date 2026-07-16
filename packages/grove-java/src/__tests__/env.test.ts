@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { parseEnvFile, resolveJavaTestEnv } from "../env";
+import { loadEnvFile } from "@grove/shared";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
 
-describe("parseEnvFile", () => {
+describe("loadEnvFile for Java projects", () => {
   let tempDir: string;
 
   beforeEach(async () => {
@@ -15,69 +15,16 @@ describe("parseEnvFile", () => {
     await fs.rm(tempDir, { recursive: true });
   });
 
-  it("should parse CONNECTION_STRING from .env", async () => {
-    await fs.writeFile(
-      path.join(tempDir, ".env"),
-      'CONNECTION_STRING="mongodb://localhost:27017"\n',
-    );
-
-    expect(await parseEnvFile(path.join(tempDir, ".env"))).toEqual({
-      CONNECTION_STRING: "mongodb://localhost:27017",
-    });
-  });
-});
-
-describe("resolveJavaTestEnv", () => {
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "grove-java-env-resolve-"));
-  });
-
-  afterEach(async () => {
-    await fs.rm(tempDir, { recursive: true });
-  });
-
-  it("should load driver-sync/.env first", async () => {
-    const driverSync = path.join(tempDir, "driver-sync");
-    await fs.mkdir(driverSync, { recursive: true });
-    await fs.writeFile(
-      path.join(driverSync, ".env"),
-      'CONNECTION_STRING="mongodb://driver-sync"\n',
-    );
-    await fs.writeFile(
-      path.join(tempDir, ".env"),
-      'CONNECTION_STRING="mongodb://parent"\n',
-    );
-
-    expect(await resolveJavaTestEnv(driverSync)).toEqual({
-      CONNECTION_STRING: "mongodb://driver-sync",
-    });
-  });
-
-  it("should fall back to parent java/.env", async () => {
-    const driverSync = path.join(tempDir, "driver-sync");
-    await fs.mkdir(driverSync, { recursive: true });
-    await fs.writeFile(
-      path.join(tempDir, ".env"),
-      'CONNECTION_STRING="mongodb://parent"\n',
-    );
-
-    expect(await resolveJavaTestEnv(driverSync)).toEqual({
-      CONNECTION_STRING: "mongodb://parent",
-    });
-  });
-
-  it("should load project/src/.env", async () => {
+  it("loads driver-sync/src/.env when project root has no .env", async () => {
     const driverSync = path.join(tempDir, "driver-sync");
     await fs.mkdir(path.join(driverSync, "src"), { recursive: true });
     await fs.writeFile(
       path.join(driverSync, "src", ".env"),
-      'CONNECTION_STRING="mongodb://src-env"\n',
+      'CONNECTION_STRING="mongodb://127.0.0.1:27017"\n',
     );
 
-    expect(await resolveJavaTestEnv(driverSync)).toEqual({
-      CONNECTION_STRING: "mongodb://src-env",
+    expect(await loadEnvFile(driverSync)).toEqual({
+      CONNECTION_STRING: "mongodb://127.0.0.1:27017",
     });
   });
 });

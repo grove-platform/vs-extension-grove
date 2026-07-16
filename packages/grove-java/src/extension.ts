@@ -12,11 +12,15 @@ function getConfiguredMavenPath(): string | undefined {
   );
 }
 
-function getConfiguredTestTimeoutMs(): number {
+function getConfiguredTimeoutMs(
+  setting: "java.testTimeoutSeconds" | "java.utilitiesTimeoutSeconds",
+  defaultSeconds: number,
+  maxSeconds: number,
+): number {
   const seconds = vscode.workspace
     .getConfiguration("grove")
-    .get<number>("java.testTimeoutSeconds", 300);
-  const clamped = Math.min(Math.max(seconds, 30), 300);
+    .get<number>(setting, defaultSeconds);
+  const clamped = Math.min(Math.max(seconds, 30), maxSeconds);
   return clamped * 1000;
 }
 
@@ -33,7 +37,12 @@ function runJavaWithConfiguredMaven(
   return runJavaTests({
     ...options,
     extensionVersion,
-    timeout: options.timeout ?? getConfiguredTestTimeoutMs(),
+    testTimeout:
+      options.testTimeout ??
+      getConfiguredTimeoutMs("java.testTimeoutSeconds", 300, 300),
+    utilitiesTimeout:
+      options.utilitiesTimeout ??
+      getConfiguredTimeoutMs("java.utilitiesTimeoutSeconds", 180, 300),
     fallbackMavenPath: options.fallbackMavenPath ?? getConfiguredMavenPath(),
     skipUtilitiesBuild:
       options.skipUtilitiesBuild ?? shouldSkipUtilitiesBuild(),
