@@ -30,6 +30,10 @@ function shouldSkipUtilitiesBuild(): boolean {
     .get<boolean>("java.skipUtilitiesBuild", false);
 }
 
+function getWorkspaceRoots(): string[] | undefined {
+  return vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath);
+}
+
 function runJavaWithConfiguredMaven(
   extensionVersion: string,
   options: Parameters<typeof runJavaTests>[0],
@@ -37,6 +41,7 @@ function runJavaWithConfiguredMaven(
   return runJavaTests({
     ...options,
     extensionVersion,
+    workspaceRoots: options.workspaceRoots ?? getWorkspaceRoots(),
     testTimeout:
       options.testTimeout ??
       getConfiguredTimeoutMs("java.testTimeoutSeconds", 300, 300),
@@ -79,10 +84,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
   coreApi.registerTestRunner({
     language: "java",
-    name: "JUnit (Maven)",
+    name: "Java",
     run: runTestsForProject,
     detect: detectJavaProject,
     isRunnableTestFile: isRunnableJavaTestFile,
+    runnableTestFileMessage:
+      "Open a Java test file (for example TutorialTests.java under src/test/java) before running this command.",
   });
 
   context.subscriptions.push(

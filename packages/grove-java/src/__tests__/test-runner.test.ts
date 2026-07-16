@@ -120,6 +120,25 @@ describe("resolveJavaMultiModuleRoot", () => {
     await fs.writeFile(path.join(tempDir, "pom.xml"), "<project></project>\n");
     expect(await resolveJavaMultiModuleRoot(tempDir)).toBeUndefined();
   });
+
+  it("should not climb outside workspace roots to unrelated aggregators", async () => {
+    const aggregatorPom = `<project>
+  <artifactId>java-code-examples</artifactId>
+  <packaging>pom</packaging>
+  <modules><module>utilities</module></modules>
+</project>`;
+    const fakeAggregator = path.join(tempDir, "fake-aggregator");
+    const workspaceRoot = path.join(tempDir, "workspace");
+    const projectDir = path.join(workspaceRoot, "my-project");
+    await fs.mkdir(fakeAggregator, { recursive: true });
+    await fs.mkdir(projectDir, { recursive: true });
+    await fs.writeFile(path.join(fakeAggregator, "pom.xml"), aggregatorPom);
+    await fs.writeFile(path.join(projectDir, "pom.xml"), "<project></project>\n");
+
+    expect(
+      await resolveJavaMultiModuleRoot(projectDir, [workspaceRoot]),
+    ).toBeUndefined();
+  });
 });
 
 describe("buildUtilitiesInstallArgs", () => {

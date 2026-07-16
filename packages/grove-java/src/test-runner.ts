@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import * as path from "path";
 import * as fs from "fs/promises";
-import { isPathWithinRealBoundary, killProcessTree, loadEnvFile } from "@grove/shared";
+import { isPathWithinBoundary, isPathWithinRealBoundary, killProcessTree } from "@grove/shared";
 
 export interface TestRunOptions {
   projectPath: string;
@@ -22,6 +22,8 @@ export interface TestRunOptions {
   skipUtilitiesBuild?: boolean;
   /** Extension version from package.json (for output headers) */
   extensionVersion?: string;
+  /** VS Code workspace folder roots used to bound parent-directory searches */
+  workspaceRoots?: string[];
 }
 
 export interface TestResult {
@@ -94,9 +96,11 @@ export function isJavaAggregatorPom(pomContent: string): boolean {
 /**
  * Resolve the Java multi-module root (e.g. code-example-tests/java) that owns
  * the utilities/comparison-library modules. Returns undefined when not found.
+ * Parent-directory walks stop at the filesystem root or outside workspace roots.
  */
 export async function resolveJavaMultiModuleRoot(
   projectPath: string,
+  workspaceRoots?: string[],
 ): Promise<string | undefined> {
   let dir = path.resolve(projectPath);
 
@@ -114,8 +118,24 @@ export async function resolveJavaMultiModuleRoot(
     if (parent === dir) {
       return undefined;
     }
+    if (
+      workspaceRoots?.length &&
+      !isWithinAnyWorkspaceRoot(parent, workspaceRoots)
+    ) {
+      return undefined;
+    }
     dir = parent;
   }
+}
+
+function isWithinAnyWorkspaceRoot(
+  candidatePath: string,
+  workspaceRoots: string[],
+): boolean {
+  const resolved = path.resolve(candidatePath);
+  return workspaceRoots.some((root) =>
+    isPathWithinBoundary(resolved, path.resolve(root)),
+  );
 }
 
 /**
@@ -358,6 +378,7 @@ export async function runJavaTests(
     fallbackMavenPath,
     skipUtilitiesBuild = false,
     extensionVersion = "unknown",
+    workspaceRoots,
   } = options;
   const effectiveTestTimeout = Math.min(testTimeout, MAX_TEST_TIMEOUT);
   const effectiveUtilitiesTimeout = Math.min(
@@ -383,8 +404,7 @@ export async function runJavaTests(
     }
   }
 
-  const envFromFile = (await loadEnvFile(projectPath)) ?? {};
-  const env = { ...envFromFile, ...envOverride };
+  const env = { ...envOverride };
 
   let output =
     `Grove Java v${extensionVersion}\n` +
@@ -394,12 +414,15 @@ export async function runJavaTests(
     output += "MongoDB: CONNECTION_STRING is set\n";
   } else {
     output +=
-      "Warning: CONNECTION_STRING is not set. Add driver-sync/.env, driver-sync/src/.env, or java/.env, or use Grove Core test commands with a MongoDB connection in the Grove UI.\n";
+      "Warning: CONNECTION_STRING is not set. Grove Core loads .env and can inject a MongoDB connection from the Grove UI when you run tests through Grove commands.\n";
   }
   output += "\n";
 
   if (!skipUtilitiesBuild) {
-    const multiModuleRoot = await resolveJavaMultiModuleRoot(projectPath);
+    const multiModuleRoot = await resolveJavaMultiModuleRoot(
+      projectPath,
+      workspaceRoots,
+    );
     if (multiModuleRoot) {
       const utilitiesArgs = buildUtilitiesInstallArgs();
       const buildResult = await runMavenCommand({
