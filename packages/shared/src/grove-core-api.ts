@@ -27,6 +27,8 @@ export interface GroveTestRunnerRegistration {
   detect: (projectPath: string) => Promise<boolean>;
   /** When set, Grove Core validates the active file before runTestFile commands. */
   isRunnableTestFile?: (filePath: string, scheme?: string) => boolean;
+  /** Shown when isRunnableTestFile rejects the active file. */
+  runnableTestFileMessage?: string;
 }
 
 export interface GroveRunTestsOptions {

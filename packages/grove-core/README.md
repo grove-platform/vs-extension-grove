@@ -261,6 +261,7 @@ interface TestRunner {
   run: (options: TestRunOptions) => Promise<TestResult>;
   detect: (projectPath: string) => Promise<boolean>;
   isRunnableTestFile?: (filePath: string, scheme?: string) => boolean;
+  runnableTestFileMessage?: string;
 }
 
 interface RunGroveTestsOptions {

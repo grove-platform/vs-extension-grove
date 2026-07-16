@@ -1,4 +1,9 @@
 import type { GroveProject } from "@grove/shared";
+import * as vscode from "vscode";
+
+function getWorkspaceRoots(): string[] | undefined {
+  return vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath);
+}
 
 /**
  * Builds the environment variables for a test run by reading the project's
@@ -10,7 +15,10 @@ export async function resolveTestEnv(
   uiConnectionString?: string,
 ): Promise<Record<string, string>> {
   const { loadEnvFile } = await import("./env-file");
-  const envFromFile = (await loadEnvFile(project.rootPath)) ?? {};
+  const envFromFile =
+    (await loadEnvFile(project.rootPath, {
+      workspaceRoots: getWorkspaceRoots(),
+    })) ?? {};
 
   if (project.supportsEnvInjection && uiConnectionString) {
     return { ...envFromFile, CONNECTION_STRING: uiConnectionString };

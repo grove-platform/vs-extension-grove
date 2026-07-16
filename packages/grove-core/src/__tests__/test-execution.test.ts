@@ -92,6 +92,12 @@ describe("resolveProjectForLanguage", () => {
     mockWorkspaceFolders.mockReturnValue([
       { uri: { fsPath: "/workspace" } },
     ]);
+    mockGetTestRunner.mockImplementation((language: string) => ({
+      language,
+      name: language === "csharp" ? "C#" : language,
+      run: vi.fn(),
+      detect: vi.fn(),
+    }));
   });
 
   it("returns the project containing the active file", async () => {
@@ -216,6 +222,8 @@ describe("runGroveTests", () => {
       run: vi.fn(),
       detect: vi.fn(),
       isRunnableTestFile: () => false,
+      runnableTestFileMessage:
+        "Open a C# test file (for example InsertTests.cs) before running this command.",
     });
 
     await testExecution.runGroveTests({

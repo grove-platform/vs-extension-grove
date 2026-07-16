@@ -107,7 +107,7 @@ describe("loadEnvFile", () => {
     expect(result).toEqual({ CONNECTION_STRING: "mongodb://src-env" });
   });
 
-  it("falls through empty project/.env to parent/.env", async () => {
+  it("falls through empty project/.env to parent/.env within workspace", async () => {
     mockReadFile.mockImplementation(async (filePath) => {
       const file = String(filePath);
       if (file.endsWith("/project/.env") || file.endsWith("/project/src/.env")) {
@@ -119,8 +119,28 @@ describe("loadEnvFile", () => {
       throw new Error(`unexpected path: ${file}`);
     });
 
-    const result = await loadEnvFile("/parent/project");
+    const result = await loadEnvFile("/parent/project", {
+      workspaceRoots: ["/parent"],
+    });
     expect(result).toEqual({ CONNECTION_STRING: "mongodb://parent" });
+  });
+
+  it("skips parent/.env outside workspace roots", async () => {
+    mockReadFile.mockImplementation(async (filePath) => {
+      const file = String(filePath);
+      if (file.endsWith("/project/.env") || file.endsWith("/project/src/.env")) {
+        return "";
+      }
+      if (file.endsWith("/parent/.env")) {
+        return 'CONNECTION_STRING="mongodb://parent"\n';
+      }
+      throw new Error(`unexpected path: ${file}`);
+    });
+
+    const result = await loadEnvFile("/parent/project", {
+      workspaceRoots: ["/parent/project"],
+    });
+    expect(result).toBeNull();
   });
 });
 

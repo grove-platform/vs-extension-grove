@@ -8,29 +8,11 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { findProjectForFile, isPathWithinRealBoundary } from "@grove/shared";
-import type { GroveLanguage, GroveProject } from "@grove/shared";
+import type { GroveProject } from "@grove/shared";
 import { getTestRunner, resolveRunnerForProject, runTests } from "./test-runner-api";
 import { getTestOutputChannel } from "./logger";
 import { getCachedProjects } from "./project-cache";
 import { maskConnectionString } from "./mongo/credentials";
-
-const RUNNABLE_TEST_FILE_MESSAGES: Partial<Record<GroveLanguage, string>> = {
-  csharp:
-    "Open a C# test file (for example InsertTests.cs) before running this command.",
-  nodejs:
-    "Open a Node.js test file (for example foo.test.js) before running this command.",
-  python:
-    "Open a Python test file (for example test_foo.py) before running this command.",
-};
-
-const LANGUAGE_DISPLAY_NAMES: Partial<Record<GroveLanguage, string>> = {
-  csharp: "C#",
-  nodejs: "Node.js",
-  python: "Python",
-  java: "Java",
-  go: "Go",
-  mongosh: "mongosh",
-};
 
 let getUiConnectionString: (() => string | undefined) | undefined;
 
@@ -74,66 +56,18 @@ export function requireTrustedWorkspace(): boolean {
 }
 
 function languageLabel(language: string): string {
-  return LANGUAGE_DISPLAY_NAMES[language as GroveLanguage] ?? language;
-}
-
-/**
- * Resolve a Grove project, optionally filtered to a specific language.
- */
-export async function resolveProjectForLanguage(
-  language: string,
-  activeFilePath?: string,
-): Promise<ResolvedProject | undefined> {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders) {
-    vscode.window.showErrorMessage("No workspace folder open");
-    return undefined;
-  }
-
-  const projects = await getCachedProjects();
-  const languageProjects = projects.filter((p) => p.language === language);
-
-  if (languageProjects.length === 0) {
-    vscode.window.showErrorMessage(
-      `No Grove ${languageLabel(language)} project found. Open a file inside a Grove project and try again.`,
-    );
-    return undefined;
-  }
-
-  if (activeFilePath) {
-    const project = findProjectForFile(activeFilePath, languageProjects);
-    if (project) {
-      return { project, allProjects: projects };
-    }
-  }
-
-  const workspaceRoot = workspaceFolders[0].uri.fsPath;
-  const rootProject = languageProjects.find(
-    (p) => path.resolve(p.rootPath) === path.resolve(workspaceRoot),
-  );
-  if (rootProject) {
-    return { project: rootProject, allProjects: projects };
-  }
-
-  if (languageProjects.length === 1) {
-    return { project: languageProjects[0], allProjects: projects };
-  }
-
-  const projectList = languageProjects
-    .map((p) => p.relativePath || "root")
-    .join(", ");
-  vscode.window.showErrorMessage(
-    `Multiple Grove ${languageLabel(language)} projects found. Open a file inside the project you want to test. Detected projects: ${projectList}`,
-  );
-  return undefined;
+  return getTestRunner(language)?.name ?? language;
 }
 
 /**
  * Resolve the Grove project for the current context.
+ * When `language` is set, filters to projects of that language and applies
+ * workspace-root / single-project fallbacks when no active file is available.
  * Returns undefined if no project can be determined.
  */
 export async function resolveProject(
   activeFilePath?: string,
+  language?: string,
 ): Promise<ResolvedProject | undefined> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (!workspaceFolders) {
@@ -142,38 +76,81 @@ export async function resolveProject(
   }
 
   const projects = await getCachedProjects();
+  const candidateProjects = language
+    ? projects.filter((p) => p.language === language)
+    : projects;
 
-  if (projects.length === 0) {
-    vscode.window.showErrorMessage(
-      "No Grove project detected. Create a snip.js file to define a Grove project.",
-    );
+  if (candidateProjects.length === 0) {
+    if (language) {
+      vscode.window.showErrorMessage(
+        `No Grove ${languageLabel(language)} project found. Open a file inside a Grove project and try again.`,
+      );
+    } else {
+      vscode.window.showErrorMessage(
+        "No Grove project detected. Create a snip.js file to define a Grove project.",
+      );
+    }
     return undefined;
   }
 
   const filePath =
     activeFilePath ?? vscode.window.activeTextEditor?.document.uri.fsPath;
+
+  if (filePath) {
+    const project = findProjectForFile(filePath, candidateProjects);
+    if (project) {
+      return { project, allProjects: projects };
+    }
+  }
+
+  if (language) {
+    const workspaceRoot = workspaceFolders[0].uri.fsPath;
+    const rootProject = candidateProjects.find(
+      (p) => path.resolve(p.rootPath) === path.resolve(workspaceRoot),
+    );
+    if (rootProject) {
+      return { project: rootProject, allProjects: projects };
+    }
+
+    if (candidateProjects.length === 1) {
+      return { project: candidateProjects[0], allProjects: projects };
+    }
+
+    const projectList = candidateProjects
+      .map((p) => p.relativePath || "root")
+      .join(", ");
+    vscode.window.showErrorMessage(
+      `Multiple Grove ${languageLabel(language)} projects found. Open a file inside the project you want to test. Detected projects: ${projectList}`,
+    );
+    return undefined;
+  }
+
+  const projectList = candidateProjects
+    .map((p) => p.relativePath || "root")
+    .join(", ");
+
   if (!filePath) {
-    const projectList = projects
-      .map((p) => p.relativePath || "root")
-      .join(", ");
     vscode.window.showErrorMessage(
       `Cannot determine which Grove project to test. Open a file within a Grove project and try again. Detected projects: ${projectList}`,
     );
     return undefined;
   }
 
-  const project = findProjectForFile(filePath, projects);
-  if (!project) {
-    const projectList = projects
-      .map((p) => p.relativePath || "root")
-      .join(", ");
-    vscode.window.showErrorMessage(
-      `Cannot determine which Grove project to test. Open a file within a Grove project and try again. Detected projects: ${projectList}`,
-    );
-    return undefined;
-  }
+  vscode.window.showErrorMessage(
+    `Cannot determine which Grove project to test. Open a file within a Grove project and try again. Detected projects: ${projectList}`,
+  );
+  return undefined;
+}
 
-  return { project, allProjects: projects };
+/**
+ * Resolve a Grove project filtered to a specific language.
+ * @deprecated Use `resolveProject(activeFilePath, language)` instead.
+ */
+export async function resolveProjectForLanguage(
+  language: string,
+  activeFilePath?: string,
+): Promise<ResolvedProject | undefined> {
+  return resolveProject(activeFilePath, language);
 }
 
 function validateRunnableTestFile(
@@ -191,9 +168,7 @@ function validateRunnableTestFile(
   }
 
   const message =
-    (language in RUNNABLE_TEST_FILE_MESSAGES
-      ? RUNNABLE_TEST_FILE_MESSAGES[language as GroveLanguage]
-      : undefined) ??
+    runner.runnableTestFileMessage ??
     "Open a test file before running this command.";
   vscode.window.showWarningMessage(message);
   return false;
@@ -231,12 +206,10 @@ export async function runGroveTests(
     }
   }
 
-  const resolved = language
-    ? await resolveProjectForLanguage(
-        language,
-        activeFilePath ?? vscode.window.activeTextEditor?.document.uri.fsPath,
-      )
-    : await resolveProject(activeFilePath);
+  const resolved = await resolveProject(
+    activeFilePath ?? vscode.window.activeTextEditor?.document.uri.fsPath,
+    language,
+  );
   if (!resolved) {
     return;
   }
@@ -245,20 +218,16 @@ export async function runGroveTests(
   let testFile: string | undefined;
 
   if (testFileScope) {
-    if (!activeFilePath) {
-      return;
-    }
-
     if (
       projectLanguage &&
-      !validateRunnableTestFile(projectLanguage, activeFilePath, documentScheme)
+      !validateRunnableTestFile(projectLanguage, activeFilePath!, documentScheme)
     ) {
       return;
     }
 
     if (
       !(await isPathWithinRealBoundary(
-        activeFilePath,
+        activeFilePath!,
         resolved.project.rootPath,
       ))
     ) {
@@ -268,7 +237,7 @@ export async function runGroveTests(
       return;
     }
 
-    testFile = path.relative(resolved.project.rootPath, activeFilePath);
+    testFile = path.relative(resolved.project.rootPath, activeFilePath!);
   }
 
   const uiConnectionString = getUiConnectionString?.();

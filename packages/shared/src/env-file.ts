@@ -1,5 +1,15 @@
 import { readFile } from "fs/promises";
 import path from "path";
+import { isPathWithinBoundary } from "./security";
+
+export interface LoadEnvFileOptions {
+  /**
+   * When set, the parent-directory candidate (`../.env`) is only considered
+   * if it lies within one of these roots. Prevents inheriting env vars from
+   * outside the open workspace in monorepos or multi-root layouts.
+   */
+  workspaceRoots?: string[];
+}
 
 /**
  * Parses a .env file from the given project directory and returns all
@@ -10,14 +20,24 @@ import path from "path";
  */
 export async function loadEnvFile(
   projectPath: string,
+  options: LoadEnvFileOptions = {},
 ): Promise<Record<string, string> | null> {
+  const parentEnvPath = path.join(projectPath, "..", ".env");
   const candidates = [
     path.join(projectPath, ".env"),
     path.join(projectPath, "src", ".env"),
-    path.join(projectPath, "..", ".env"),
+    parentEnvPath,
   ];
 
   for (const filePath of candidates) {
+    if (
+      filePath === parentEnvPath &&
+      options.workspaceRoots?.length &&
+      !isWithinAnyWorkspaceRoot(filePath, options.workspaceRoots)
+    ) {
+      continue;
+    }
+
     const parsed = await parseEnvFileAt(filePath);
     if (parsed && Object.keys(parsed).length > 0) {
       return parsed;
@@ -25,6 +45,16 @@ export async function loadEnvFile(
   }
 
   return null;
+}
+
+function isWithinAnyWorkspaceRoot(
+  candidatePath: string,
+  workspaceRoots: string[],
+): boolean {
+  const resolved = path.resolve(candidatePath);
+  return workspaceRoots.some((root) =>
+    isPathWithinBoundary(resolved, path.resolve(root)),
+  );
 }
 
 async function parseEnvFileAt(

@@ -57,6 +57,8 @@ export async function activate(context: vscode.ExtensionContext) {
     run: runTestsForProject,
     detect: detectPythonProject,
     isRunnableTestFile: isRunnablePythonTestFile,
+    runnableTestFileMessage:
+      "Open a Python test file (for example test_foo.py) before running this command.",
   });
 
   context.subscriptions.push(

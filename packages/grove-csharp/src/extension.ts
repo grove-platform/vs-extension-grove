@@ -66,6 +66,8 @@ export async function activate(context: vscode.ExtensionContext) {
     run: runTestsForProject,
     detect: detectCSharpProject,
     isRunnableTestFile: isRunnableCSharpTestFile,
+    runnableTestFileMessage:
+      "Open a C# test file (for example InsertTests.cs) before running this command.",
   });
 
   context.subscriptions.push(

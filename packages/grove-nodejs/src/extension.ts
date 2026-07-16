@@ -37,6 +37,8 @@ export async function activate(context: vscode.ExtensionContext) {
     run: runTestsForProject,
     detect: detectJestProject,
     isRunnableTestFile: isRunnableNodeTestFile,
+    runnableTestFileMessage:
+      "Open a Node.js test file (for example foo.test.js) before running this command.",
   });
 
   context.subscriptions.push(

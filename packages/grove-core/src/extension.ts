@@ -355,7 +355,10 @@ async function getStatus(): Promise<GroveStatus> {
     // Not connected — check if the active project has a .env with CONNECTION_STRING
     // and auto-connect from it (unless user explicitly disconnected)
     const { loadEnvFile, extractHost } = await import("./env-file");
-    const envVars = await loadEnvFile(activeProject.rootPath);
+    const workspaceRoots = vscode.workspace.workspaceFolders?.map(
+      (folder) => folder.uri.fsPath,
+    );
+    const envVars = await loadEnvFile(activeProject.rootPath, { workspaceRoots });
     if (envVars?.CONNECTION_STRING) {
       try {
         await mongoConnectionManager.connect(envVars.CONNECTION_STRING);
