@@ -83,7 +83,9 @@ Also:
 
 ## Integration with Grove Core
 
-Grove for Java is a **companion extension**. When users run **Grove: Run Tests** or **Grove: Run Current Test File** (the core commands), Grove Core delegates to this extension's Maven runner for Java projects.
+Grove for Java is a **companion extension**. It registers a Maven test runner with Grove Core and routes its own commands through Grove Core's shared test execution (`runGroveTests`), so project resolution, `.env` loading, trust checks, and output all use the unified **Grove Tests** channel.
+
+When users run **Grove: Run Tests** or **Grove: Run Current Test File** (the core commands), Grove Core delegates to this extension's Maven runner for Java projects.
 
 ## Development
 

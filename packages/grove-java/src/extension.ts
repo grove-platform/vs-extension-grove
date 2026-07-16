@@ -1,41 +1,7 @@
 import * as vscode from "vscode";
-import * as path from "path";
 import { runJavaTests, detectJavaProject } from "./test-runner";
-import { resolveJavaTestEnv } from "./env";
 import { isRunnableJavaTestFile } from "./test-file";
-import {
-  detectGroveProjects,
-  findProjectForFile,
-  profile,
-} from "@grove/shared";
-
-interface GroveCoreApi {
-  registerTestRunner(runner: {
-    language: string;
-    name: string;
-    run: (options: {
-      projectPath: string;
-      testFile?: string;
-      timeout?: number;
-      testNamePattern?: string;
-      env?: Record<string, string>;
-    }) => Promise<{
-      success: boolean;
-      total?: number;
-      passed?: number;
-      failed?: number;
-      skipped?: number;
-      output?: string;
-      duration: number;
-    }>;
-    detect: (projectPath: string) => Promise<boolean>;
-  }): void;
-}
-
-function getWorkspaceRoot(): string {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  return workspaceFolders?.[0]?.uri.fsPath || "";
-}
+import { type GroveCoreApi } from "@grove/shared";
 
 function getConfiguredMavenPath(): string | undefined {
   return (
@@ -61,10 +27,12 @@ function shouldSkipUtilitiesBuild(): boolean {
 }
 
 function runJavaWithConfiguredMaven(
+  extensionVersion: string,
   options: Parameters<typeof runJavaTests>[0],
 ): ReturnType<typeof runJavaTests> {
   return runJavaTests({
     ...options,
+    extensionVersion,
     timeout: options.timeout ?? getConfiguredTestTimeoutMs(),
     fallbackMavenPath: options.fallbackMavenPath ?? getConfiguredMavenPath(),
     skipUtilitiesBuild:
@@ -72,52 +40,12 @@ function runJavaWithConfiguredMaven(
   });
 }
 
-async function findProjectPathForFile(filePath: string): Promise<string> {
-  const workspaceRoot = getWorkspaceRoot();
-  if (!workspaceRoot) return "";
-
-  const projects = await detectGroveProjects(workspaceRoot);
-  const project = findProjectForFile(filePath, projects);
-
-  return project?.rootPath || workspaceRoot;
-}
-
-async function showTestResult(
-  result: Awaited<ReturnType<typeof runJavaTests>>,
-  outputChannel: vscode.OutputChannel,
-  header: string,
-): Promise<void> {
-  if (result.output) {
-    outputChannel.clear();
-    outputChannel.appendLine(header);
-    outputChannel.appendLine(`Duration: ${result.duration}ms`);
-    outputChannel.appendLine(`Success: ${result.success}`);
-    outputChannel.appendLine("");
-    outputChannel.appendLine(result.output);
-  }
-
-  if (result.success) {
-    const msg =
-      result.total > 0
-        ? `Tests passed: ${result.passed}/${result.total}`
-        : "Tests completed successfully";
-    vscode.window.showInformationMessage(msg);
-    return;
-  }
-
-  const message =
-    result.total === 0
-      ? "Java tests failed to run. Check output for details."
-      : `Tests failed: ${result.failed}/${result.total}`;
-
-  const action = await vscode.window.showErrorMessage(message, "Show Output");
-  if (action === "Show Output") {
-    outputChannel.show();
-  }
-}
-
 export async function activate(context: vscode.ExtensionContext) {
   console.log("Grove for Java extension activating...");
+
+  const extensionVersion = context.extension.packageJSON.version ?? "unknown";
+  const runTestsForProject = (options: Parameters<typeof runJavaTests>[0]) =>
+    runJavaWithConfiguredMaven(extensionVersion, options);
 
   const groveCore =
     vscode.extensions.getExtension<GroveCoreApi>(
@@ -133,7 +61,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const coreApi = await groveCore.activate();
 
-  if (!coreApi?.registerTestRunner) {
+  if (!coreApi?.registerTestRunner || !coreApi.runGroveTests) {
     vscode.window.showErrorMessage(
       "Grove Core API not available. Please update Grove Core.",
     );
@@ -143,40 +71,15 @@ export async function activate(context: vscode.ExtensionContext) {
   coreApi.registerTestRunner({
     language: "java",
     name: "JUnit (Maven)",
-    run: runJavaWithConfiguredMaven,
+    run: runTestsForProject,
     detect: detectJavaProject,
+    isRunnableTestFile: isRunnableJavaTestFile,
   });
 
-  const outputChannel = vscode.window.createOutputChannel("Grove Java Tests");
-  context.subscriptions.push(outputChannel);
-
   context.subscriptions.push(
-    vscode.commands.registerCommand("grove.java.runTests", async () => {
-      const activeFile = vscode.window.activeTextEditor?.document.uri.fsPath;
-      const projectPath = activeFile
-        ? await findProjectPathForFile(activeFile)
-        : getWorkspaceRoot();
-
-      if (!projectPath) {
-        vscode.window.showErrorMessage("No workspace folder open");
-        return;
-      }
-
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: "Running Java tests...",
-          cancellable: false,
-        },
-        async () => {
-          const env = await resolveJavaTestEnv(projectPath);
-          const result = await profile("Java.runJavaTests", () =>
-            runJavaWithConfiguredMaven({ projectPath, env }),
-          );
-          await showTestResult(result, outputChannel, "=== Java Test Results ===");
-        },
-      );
-    }),
+    vscode.commands.registerCommand("grove.java.runTests", () =>
+      coreApi.runGroveTests({ language: "java" }),
+    ),
 
     vscode.commands.registerCommand("grove.java.runTestFile", async () => {
       const editor = vscode.window.activeTextEditor;
@@ -185,42 +88,12 @@ export async function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      const filePath = editor.document.uri.fsPath;
-      if (
-        !isRunnableJavaTestFile(filePath, editor.document.uri.scheme)
-      ) {
-        vscode.window.showWarningMessage(
-          "Open a Java test file (for example TutorialTests.java under src/test/java) before running this command.",
-        );
-        return;
-      }
-
-      const projectPath = await findProjectPathForFile(filePath);
-      if (!projectPath) {
-        vscode.window.showErrorMessage("No workspace folder open");
-        return;
-      }
-
-      const testFile = path.relative(projectPath, filePath);
-
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: `Running tests for ${testFile}...`,
-          cancellable: false,
-        },
-        async () => {
-          const env = await resolveJavaTestEnv(projectPath);
-          const result = await profile("Java.runJavaTestFile", () =>
-            runJavaWithConfiguredMaven({ projectPath, testFile, env }),
-          );
-          await showTestResult(
-            result,
-            outputChannel,
-            `=== Java Test Results: ${testFile} ===`,
-          );
-        },
-      );
+      await coreApi.runGroveTests({
+        language: "java",
+        activeFilePath: editor.document.uri.fsPath,
+        documentScheme: editor.document.uri.scheme,
+        testFileScope: true,
+      });
     }),
   );
 

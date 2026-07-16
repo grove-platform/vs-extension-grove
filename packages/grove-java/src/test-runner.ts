@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import * as path from "path";
 import * as fs from "fs/promises";
+import { isPathWithinRealBoundary, killProcessTree } from "@grove/shared";
 import { resolveJavaTestEnv } from "./env";
 
 export interface TestRunOptions {
@@ -17,6 +18,8 @@ export interface TestRunOptions {
   fallbackMavenPath?: string;
   /** Skip installing utilities/comparison-library before test (default false) */
   skipUtilitiesBuild?: boolean;
+  /** Extension version from package.json (for output headers) */
+  extensionVersion?: string;
 }
 
 export interface TestResult {
@@ -31,7 +34,6 @@ export interface TestResult {
 
 const DEFAULT_TIMEOUT = 300_000;
 const MAX_TIMEOUT = 300_000;
-export const EXTENSION_VERSION = "0.0.2";
 
 function getSystemMavenBin(): string {
   return process.platform === "win32" ? "mvn.cmd" : "mvn";
@@ -182,11 +184,12 @@ function runMavenCommand(options: {
     const proc = spawn(mavenBin, args, {
       cwd,
       env: { ...process.env, CI: "true", ...env },
+      detached: process.platform !== "win32",
     });
 
     const timeoutId = setTimeout(() => {
       timedOut = true;
-      proc.kill("SIGTERM");
+      killProcessTree(proc);
     }, timeoutMs);
 
     const finish = (result: MavenRunResult) => {
@@ -297,15 +300,33 @@ export async function runJavaTests(
     mavenPath,
     fallbackMavenPath,
     skipUtilitiesBuild = false,
+    extensionVersion = "unknown",
   } = options;
   const effectiveTimeout = Math.min(timeout, MAX_TIMEOUT);
   const mavenBin = resolveMavenBin(mavenPath, fallbackMavenPath);
   const startTime = Date.now();
 
-  const envFromFile = await resolveJavaTestEnv(projectPath);
-  const env = { ...envFromFile, ...envOverride };
+  if (testFile) {
+    const resolvedTestFile = path.resolve(projectPath, testFile);
+    if (!(await isPathWithinRealBoundary(resolvedTestFile, projectPath))) {
+      return {
+        success: false,
+        total: 0,
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+        output: `Test file is outside the Grove project: ${testFile}`,
+        duration: 0,
+      };
+    }
+  }
 
-  let output = `Grove Java v${EXTENSION_VERSION}\nTimeout limit: ${effectiveTimeout / 1000}s\n`;
+  const env =
+    envOverride !== undefined
+      ? envOverride
+      : await resolveJavaTestEnv(projectPath);
+
+  let output = `Grove Java v${extensionVersion}\nTimeout limit: ${effectiveTimeout / 1000}s\n`;
   if (env.CONNECTION_STRING) {
     output += "MongoDB: CONNECTION_STRING is set\n";
   } else {
