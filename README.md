@@ -120,7 +120,7 @@ code --install-extension packages/grove-python/grove-platform-python-0.0.4.vsix
 ### Running in VS Code
 
 1. Open the repository in VS Code
-2. Press `F5` to launch the Extension Development Host
+2. Press `F5` to launch the Extension Development Host (create a local `.vscode/launch.json` if needed — see [VS Code extension debugging](https://code.visualstudio.com/api/working-with-extensions/testing-extension))
 3. The development instance will have all Grove extensions loaded
 
 ### Performance Profiler

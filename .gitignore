@@ -6,8 +6,7 @@ dist/
 
 # IDE files
 ## Visual Studio Code files
-.vscode/*
-!.vscode/launch.json
+.vscode
 
 ## JetBrains IDE files
 .idea/
