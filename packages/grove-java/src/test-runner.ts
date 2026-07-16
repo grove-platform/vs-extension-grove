@@ -247,10 +247,19 @@ export function parseMavenOutput(output: string): {
 } {
   const totals = { total: 0, passed: 0, failed: 0, skipped: 0 };
   const summary =
-    /Tests run:\s*(\d+),\s*Failures:\s*(\d+),\s*Errors:\s*(\d+),\s*Skipped:\s*(\d+)/gi;
+    /Tests run:\s*(\d+),\s*Failures:\s*(\d+),\s*Errors:\s*(\d+),\s*Skipped:\s*(\d+)/i;
 
   let matched = false;
-  for (const match of output.matchAll(summary)) {
+  for (const line of output.split("\n")) {
+    if (line.includes("Time elapsed")) {
+      continue;
+    }
+
+    const match = line.match(summary);
+    if (!match) {
+      continue;
+    }
+
     matched = true;
     const run = parseInt(match[1], 10);
     const failures = parseInt(match[2], 10);

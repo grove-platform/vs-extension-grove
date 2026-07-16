@@ -184,6 +184,15 @@ describe("parseMavenOutput", () => {
     expect(result).toEqual({ total: 5, passed: 4, failed: 1, skipped: 0 });
   });
 
+  it("should ignore per-class Surefire lines that include Time elapsed", () => {
+    const result = parseMavenOutput(`
+[ERROR] Tests run: 6, Failures: 0, Errors: 6, Skipped: 0, Time elapsed: 120.1 s <<< FAILURE! -- in aggregation.pipelines.TutorialTests
+[INFO] Results:
+[ERROR] Tests run: 6, Failures: 0, Errors: 6, Skipped: 0
+`);
+    expect(result).toEqual({ total: 6, passed: 0, failed: 6, skipped: 0 });
+  });
+
   it("should return zeros when no summary line found", () => {
     expect(parseMavenOutput("BUILD FAILURE")).toEqual({
       total: 0,
