@@ -1,0 +1,83 @@
+{
+  "name": "grove-platform-java",
+  "displayName": "Grove UI for Java",
+  "description": "Java (JUnit / Maven) support for Grove documentation testing",
+  "version": "0.0.2",
+  "publisher": "GrovePlatform",
+  "engines": {
+    "vscode": "^1.110.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Grove Java test commands are disabled in untrusted workspaces because mvn test executes project build targets."
+    }
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/snip.js"
+  ],
+  "main": "./dist/extension.js",
+  "extensionDependencies": [
+    "GrovePlatform.grove-platform-core"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "Grove Java",
+      "properties": {
+        "grove.java.utilitiesTimeoutSeconds": {
+          "type": "number",
+          "default": 180,
+          "minimum": 30,
+          "maximum": 300,
+          "description": "Maximum time in seconds to wait for the Maven utilities install (comparison-library) before tests run."
+        },
+        "grove.java.testTimeoutSeconds": {
+          "type": "number",
+          "default": 300,
+          "minimum": 30,
+          "maximum": 300,
+          "description": "Maximum time in seconds to wait for the Maven test phase."
+        },
+        "grove.java.mavenPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the mvn executable. Uses mvn on PATH when empty."
+        },
+        "grove.java.skipUtilitiesBuild": {
+          "type": "boolean",
+          "default": false,
+          "description": "Skip mvn install for utilities/comparison-library before running tests. Enable only when dependencies are already installed locally."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "grove.java.runTests",
+        "title": "Grove: Run Java Tests"
+      },
+      {
+        "command": "grove.java.runTestFile",
+        "title": "Grove: Run Current Java Test File"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "watch": "npm run build -- --watch",
+    "test": "vitest run",
+    "lint": "eslint src --ext ts",
+    "package": "pnpm run build && vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@grove/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.4.0",
+    "@types/vscode": "^1.110.0",
+    "esbuild": "^0.27.0",
+    "vitest": "^4.0.18"
+  }
+}

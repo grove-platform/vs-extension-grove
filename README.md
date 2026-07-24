@@ -21,10 +21,10 @@ Grove automatically detects code example projects (identified by `snip.js` files
 | **Grove for Node.js** | `grove-nodejs` | Jest/Vitest test runner for JavaScript/TypeScript projects                                  |
 | **Grove for Python**  | `grove-python` | pytest and unittest runners for Python projects                                             |
 | **Grove for C#**      | `grove-csharp` | `dotnet test` runner for C# / .NET projects                                                 |
+| **Grove for Java**    | `grove-java`   | JUnit / Maven test runner for Java projects (builds comparison-library locally)             |
 
 ### Planned Extensions
 - **Grove for Go** - Go test runner
-- **Grove for Java** - JUnit/Maven test runner
 
 ## Getting Started
 
@@ -52,7 +52,8 @@ grove-extension/
 │   ├── grove-core/       # Core extension
 │   ├── grove-nodejs/     # Node.js language extension
 │   ├── grove-python/     # Python language extension
-│   └── grove-csharp/     # C# language extension
+│   ├── grove-csharp/     # C# language extension
+│   └── grove-java/       # Java language extension
 ├── meta/
 │   ├── features.md       # Feature roadmap and ideas
 │   ├── discovery.md      # Initial project discovery notes
@@ -88,6 +89,8 @@ pnpm test
 pnpm --filter grove-platform-core build
 pnpm --filter grove-platform-nodejs build
 pnpm --filter grove-platform-python build
+pnpm --filter grove-platform-csharp build
+pnpm --filter grove-platform-java build
 pnpm --filter @grove/shared build
 
 # Watch mode (all packages)
@@ -97,27 +100,63 @@ pnpm watch
 pnpm --filter grove-platform-core test
 pnpm --filter grove-platform-nodejs test
 pnpm --filter grove-platform-python test
+pnpm --filter grove-platform-csharp test
+pnpm --filter grove-platform-java test
 ```
 
 ### Building VSIX for Local Installation
 
 ```bash
-# Package all extensions (grove-core + grove-nodejs + grove-python)
+# Package all extensions (grove-core + language extensions)
 pnpm package
 
-# Install extensions locally
-code --install-extension packages/grove-core/grove-core-0.0.2.vsix
-code --install-extension packages/grove-nodejs/grove-nodejs-0.0.15.vsix
+# Install extensions locally (versions match packages/*/package.json)
+code --install-extension packages/grove-core/grove-platform-core-0.0.24.vsix
+code --install-extension packages/grove-nodejs/grove-platform-nodejs-0.0.15.vsix
 code --install-extension packages/grove-python/grove-platform-python-0.0.4.vsix
+code --install-extension packages/grove-csharp/grove-platform-csharp-0.0.3.vsix
+code --install-extension packages/grove-java/grove-platform-java-0.0.2.vsix
 ```
 
-> **Note:** Grove Core alone provides project detection, Bluehawk preview, and RST navigation. To run tests, you also need a language extension (e.g., Grove for Node.js or Grove for Python).
+> **Note:** Grove Core alone provides project detection, Bluehawk preview, and RST navigation. To run tests, install Grove Core plus the language extension for your project (Node.js, Python, C#, or Java).
 
 ### Running in VS Code
 
 1. Open the repository in VS Code
-2. Press `F5` to launch the Extension Development Host
-3. The development instance will have all Grove extensions loaded
+2. Create a local `.vscode/launch.json` (not committed — paths vary by machine). Example for debugging Grove Core with a language extension against a docs checkout:
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Grove Core + Java",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--new-window",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/grove-core",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/grove-java",
+        "${input:groveTestWorkspace}"
+      ],
+      "outFiles": ["${workspaceFolder}/packages/*/dist/**/*.js"]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "groveTestWorkspace",
+      "type": "promptString",
+      "description": "Path to a Grove code-example-tests project",
+      "default": ""
+    }
+  ]
+}
+```
+
+Swap `grove-java` for `grove-nodejs`, `grove-python`, or `grove-csharp` as needed. See [VS Code extension debugging](https://code.visualstudio.com/api/working-with-extensions/testing-extension) for more options.
+
+3. Press `F5` to launch the Extension Development Host
+4. The development instance will have the configured Grove extensions loaded
 
 ### Performance Profiler
 
@@ -185,13 +224,14 @@ Grove uses a **core + language extensions** architecture:
 │  grove-core                                              │
 │  ├── Project Detection (via @grove/shared)               │
 │  ├── Test Runner API (registry for language runners)     │
+│  ├── Shared test execution (runGroveTests)               │
 │  ├── Bluehawk Preview                                    │
 │  ├── RST Literalinclude Providers                        │
 │  ├── MongoDB Connection Manager                          │
 │  └── Diagnostics & Language Status                       │
 ├─────────────────────────────────────────────────────────┤
-│  grove-nodejs              │  grove-python               │
-│  └── Jest Test Runner      │  └── pytest / unittest      │
+│  grove-nodejs  │  grove-python  │  grove-csharp  │  grove-java │
+│  Jest/Vitest   │  pytest/unittest│  dotnet test  │  Maven/JUnit │
 ├─────────────────────────────────────────────────────────┤
 │  @grove/shared (workspace package)                       │
 │  ├── Project Detection                                   │
@@ -201,7 +241,7 @@ Grove uses a **core + language extensions** architecture:
 └─────────────────────────────────────────────────────────┘
 ```
 
-Language extensions register their test runners with Grove Core's API, enabling the core `Grove: Run Tests` command to delegate to the appropriate runner.
+Language extensions register their test runners with Grove Core's API. Core commands (`Grove: Run Tests`, `Grove: Run Current Test File`) and language-specific commands route through shared test execution in Grove Core, which delegates to the appropriate runner.
 
 ## Contributing
 
@@ -210,6 +250,8 @@ See individual package READMEs for detailed development information:
 - [packages/grove-core/README.md](packages/grove-core/README.md)
 - [packages/grove-nodejs/README.md](packages/grove-nodejs/README.md)
 - [packages/grove-python/README.md](packages/grove-python/README.md)
+- [packages/grove-csharp/README.md](packages/grove-csharp/README.md)
+- [packages/grove-java/README.md](packages/grove-java/README.md)
 - [packages/shared/README.md](packages/shared/README.md)
 
 ## License

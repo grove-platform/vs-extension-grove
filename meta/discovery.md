@@ -31,7 +31,7 @@ All extensions use modern tooling:
 | **Grove for Node.js** | `GrovePlatform.grove-platform-nodejs`  | Jest runner, scaffolding, `@grove-nodejs` agent                                             |
 | **Grove for Python**  | `GrovePlatform.grove-platform-python`  | unittest/pytest runner, scaffolding, `@grove-python` agent                                  |
 | **Grove for Go**      | `GrovePlatform.grove-platform-go`      | go test runner, scaffolding, `@grove-go` agent                                              |
-| **Grove for Java**    | `GrovePlatform.grove-platform-java`    | JUnit runner, scaffolding, `@grove-java` agent                                              |
+| **Grove for Java**    | `GrovePlatform.grove-platform-java`    | JUnit / Maven runner (`mvn test`), builds comparison-library locally                        |
 | **Grove for C#**      | `GrovePlatform.grove-platform-csharp`  | `dotnet test` runner, scaffolding, `@grove-csharp` agent                                    |
 | **Grove for mongosh** | `GrovePlatform.grove-platform-mongosh` | Jest runner, shell scaffolding, `@grove-mongosh` agent                                      |
 
