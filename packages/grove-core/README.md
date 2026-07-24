@@ -250,6 +250,9 @@ interface GroveApi {
     projectPath: string,
   ): Promise<TestRunner | undefined>;
   runTests(options: TestRunOptions): Promise<TestResult>;
+
+  // Shared test execution (.env, UI connection, Grove Tests output)
+  runGroveTests(options: RunGroveTestsOptions): Promise<void>;
 }
 
 interface TestRunner {
@@ -257,22 +260,25 @@ interface TestRunner {
   name: string; // e.g., "Jest", "Python"
   run: (options: TestRunOptions) => Promise<TestResult>;
   detect: (projectPath: string) => Promise<boolean>;
+  isRunnableTestFile?: (filePath: string, scheme?: string) => boolean;
+  runnableTestFileMessage?: string;
 }
 
-interface TestRunOptions {
-  projectPath: string;
-  testFile?: string;
-  timeout?: number;
-  env?: Record<string, string>;
+interface RunGroveTestsOptions {
+  language?: string;
+  activeFilePath?: string;
+  documentScheme?: string;
+  testFileScope?: boolean;
   testNamePattern?: string;
 }
 ```
 
 Language extensions should:
 
-1. Declare `extensionDependencies: ["mongodb.grove-core"]` in `package.json`
-2. Access the API via `vscode.extensions.getExtension("mongodb.grove-core")?.exports`
+1. Declare `extensionDependencies: ["GrovePlatform.grove-platform-core"]` in `package.json`
+2. Access the API via `vscode.extensions.getExtension("GrovePlatform.grove-platform-core")?.activate()`
 3. Call `registerTestRunner()` during activation
+4. Route language-specific palette commands through `runGroveTests()` instead of calling the runner directly
 
 ## Dependencies
 

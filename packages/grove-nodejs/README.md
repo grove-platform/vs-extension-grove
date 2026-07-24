@@ -23,7 +23,7 @@ Grove for Node.js activates alongside Grove Core when a workspace contains a `sn
 | `grove.nodejs.runTests`    | Grove: Run Node.js Tests      | Run all tests in the current project |
 | `grove.nodejs.runTestFile` | Grove: Run Current Node.js Test File | Run tests in the active file only    |
 
-The language-specific commands above call `npm test` directly and use the Grove Node.js output channel. For Grove's shared test environment behavior (`.env` loading, MongoDB connection injection from the Grove UI, and masked connection strings), prefer the core commands **Grove: Run Tests** and **Grove: Run Current Test File**.
+The language-specific commands above route through Grove Core's `runGroveTests` API, so they use the same `.env` loading, MongoDB connection injection, connection-string masking, and Grove Tests output channel as **Grove: Run Tests** and **Grove: Run Current Test File**.
 
 ## Architecture
 
