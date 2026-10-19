@@ -4,3 +4,5 @@ allowBuilds:
   '@vscode/ripgrep': true
   '@vscode/vsce-sign': true
   keytar: true
+onlyBuiltDependencies:
+  - esbuild
